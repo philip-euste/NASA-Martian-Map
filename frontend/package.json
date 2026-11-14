@@ -36,6 +36,5 @@
   "build": "tsc --noEmit && vite build",
   "preview": "vite preview",
   "cf:preview": "wrangler pages dev dist",
-  "deploy": "npm run build && wrangler pages deploy dist"
-}
+  "deploy": "npm run build && wrangler pages deploy dist --project-name=nasa-martian-map"}
 }
