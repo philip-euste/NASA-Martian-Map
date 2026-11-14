@@ -3,14 +3,13 @@ NASAMartianMap
 ├── backend
 │   ├── main.py
 |   └── terrain_dem.py
-├── data-processing
-    ├── acquisition
-    |   └── discover_hirise_dtm.py
-    └── validation
-        ├── inspect_remote_dem.py
-        └── test_dem_coordinate.py
-├── datasets
-├── docs
+    ├── data-processing
+    |   ├── acquisition
+    |   |   └── discover_hirise_dtm.py
+    |   └── validation
+    |       ├── inspect_remote_dem.py
+    |       └── test_dem_coordinate.py
+    ├── datasets
 └── frontend
     ├── dist
     ├── node_modules
@@ -74,6 +73,8 @@ NASAMartianMap
         │   └── MissionContext.tsx
         ├── styles
         │   └── theme.css
+        ├── three\globe
+        │   └── MarsGlobe.tsx
         ├── types
         │   ├── assets.d.ts
         │   └── index.ts
