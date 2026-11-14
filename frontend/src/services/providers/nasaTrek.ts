@@ -103,7 +103,9 @@ function getElements(
   element: Element | Document,
   name: string
 ): Element[] {
-  return Array.from(element.getElementsByTagNameNS("*", name));
+  return Array.from(
+    element.getElementsByTagNameNS("*", name)
+  );
 }
 
 function getNumber(
@@ -112,11 +114,81 @@ function getNumber(
 ): number {
   const value = Number(getText(element, name));
 
-  if (!Number.isFinite(value)) {
+  if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`Invalid WMTS value: ${name}`);
   }
 
   return value;
+}
+
+function getTopLeftCoordinates(
+  element: Element,
+  supportedCRS: string
+): { x: number; y: number } {
+  const raw = getText(element, "TopLeftCorner");
+
+  if (!raw) {
+    throw new Error("Missing WMTS TopLeftCorner.");
+  }
+
+  const coordinates = raw
+    .split(/\s+/)
+    .map(Number);
+
+  if (
+    coordinates.length < 2 ||
+    !coordinates.every(Number.isFinite)
+  ) {
+    throw new Error("Invalid WMTS TopLeftCorner.");
+  }
+
+  const crs = supportedCRS.toLowerCase();
+
+  // EPSG:4326 has latitude/longitude axis order.
+  // CRS84 uses longitude/latitude axis order.
+  const isEPSG4326 =
+    crs.includes("4326") &&
+    !crs.includes("crs84");
+
+  const [x, y] = isEPSG4326
+    ? [coordinates[1], coordinates[0]]
+    : [coordinates[0], coordinates[1]];
+
+  // This globe renderer currently expects geographic degrees.
+  if (
+    Math.abs(x) > 360 ||
+    Math.abs(y) > 180
+  ) {
+    throw new Error(
+      `Unsupported WMTS coordinate system: ${supportedCRS}`
+    );
+  }
+
+  return { x, y };
+}
+
+function getMolaFallback(): TileLayerConfig {
+  return {
+    tileUrlTemplate:
+      NASA_LAYERS.mars_global_mola.tileUrlTemplate!,
+    zoomOffset: -1,
+    attribution: "NASA Mars Trek",
+    matrixSet: "MOLA fallback",
+    supportedCRS: "CRS84",
+    matrixIds: ["0"],
+    matrixLevels: [
+      {
+        id: "0",
+        matrixWidth: 2,
+        matrixHeight: 1,
+        tileWidth: 256,
+        tileHeight: 256,
+        scaleDenominator: 1,
+        topLeftX: -180,
+        topLeftY: 90,
+      },
+    ],
+  };
 }
 
 async function fetchCapabilities(
@@ -199,67 +271,50 @@ async function fetchCapabilities(
     );
   }
 
-  const supportedCRS = getText(
-    matrixSetDefinition,
-    "SupportedCRS"
-  );
+  const supportedCRS =
+    getText(matrixSetDefinition, "SupportedCRS");
+
+  if (!supportedCRS) {
+    throw new Error("WMTS matrix set has no SupportedCRS.");
+  }
 
   const matrixElements = getElements(
     matrixSetDefinition,
     "TileMatrix"
   );
 
-  const matrixLevels: TileMatrixLevel[] = matrixElements
-    .map((item) => {
-      const identifier = getText(item, "Identifier");
-      const topLeft = getText(item, "TopLeftCorner");
+  const matrixLevels: TileMatrixLevel[] =
+    matrixElements
+      .map((item) => {
+        const identifier = getText(item, "Identifier");
 
-      if (!identifier || !topLeft) {
-        throw new Error("Incomplete WMTS tile matrix.");
-      }
+        if (!identifier) {
+          throw new Error("Tile matrix has no identifier.");
+        }
 
-      const coordinates = topLeft
-        .split(/\s+/)
-        .map(Number);
-
-      if (
-        coordinates.length < 2 ||
-        !coordinates.every(Number.isFinite)
-      ) {
-        throw new Error(
-          `Invalid TopLeftCorner for matrix ${identifier}`
+        const topLeft = getTopLeftCoordinates(
+          item,
+          supportedCRS
         );
-      }
 
-      let [topLeftX, topLeftY] = coordinates;
-
-      // EPSG:4326 uses latitude, longitude axis order.
-      // CRS84 uses longitude, latitude axis order.
-      if (
-        supportedCRS?.includes("EPSG") &&
-        supportedCRS.includes("4326")
-      ) {
-        [topLeftX, topLeftY] = [
-          coordinates[1],
-          coordinates[0],
-        ];
-      }
-
-      return {
-        id: identifier,
-        matrixWidth: getNumber(item, "MatrixWidth"),
-        matrixHeight: getNumber(item, "MatrixHeight"),
-        tileWidth: getNumber(item, "TileWidth"),
-        tileHeight: getNumber(item, "TileHeight"),
-        scaleDenominator: getNumber(item, "ScaleDenominator"),
-        topLeftX,
-        topLeftY,
-      };
-    })
-    .sort(
-      (a, b) =>
-        b.scaleDenominator - a.scaleDenominator
-    );
+        return {
+          id: identifier,
+          matrixWidth: getNumber(item, "MatrixWidth"),
+          matrixHeight: getNumber(item, "MatrixHeight"),
+          tileWidth: getNumber(item, "TileWidth"),
+          tileHeight: getNumber(item, "TileHeight"),
+          scaleDenominator: getNumber(
+            item,
+            "ScaleDenominator"
+          ),
+          topLeftX: topLeft.x,
+          topLeftY: topLeft.y,
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.scaleDenominator - a.scaleDenominator
+      );
 
   if (matrixLevels.length === 0) {
     throw new Error("No tile matrix levels found.");
@@ -278,8 +333,9 @@ async function fetchCapabilities(
     tileResource?.getAttribute("template");
 
   const template =
-    advertisedTemplate ??
-    layer.tileUrlTemplate;
+    layer.static && layer.tileUrlTemplate
+      ? layer.tileUrlTemplate
+      : advertisedTemplate;
 
   if (!template) {
     throw new Error("No WMTS tile URL template found.");
@@ -299,7 +355,9 @@ async function fetchCapabilities(
     matrixSet: matrixSetId,
     supportedCRS,
     style: styleId,
-    matrixIds: matrixLevels.map((level) => level.id),
+    matrixIds: matrixLevels.map(
+      (level) => level.id
+    ),
     matrixLevels,
   };
 }
@@ -320,6 +378,22 @@ export const nasaTrekProvider: DataProvider = {
       throw new Error(`Unknown NASA layer: ${layerId}`);
     }
 
-    return fetchCapabilities(layer);
+    try {
+      return await fetchCapabilities(layer);
+    } catch (error) {
+      if (
+        layer.static &&
+        layer.tileUrlTemplate
+      ) {
+        console.warn(
+          "NASA capabilities unavailable; using static MOLA fallback.",
+          error
+        );
+
+        return getMolaFallback();
+      }
+
+      throw error;
+    }
   },
 };

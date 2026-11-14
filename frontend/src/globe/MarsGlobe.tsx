@@ -32,6 +32,10 @@ import {
   type TileMatrixLevel,
 } from "../services/dataProviders";
 
+// --------------------------------------------------
+// TYPES AND CONFIGURATION
+// --------------------------------------------------
+
 type Location = {
   name: string;
   latitude: number;
@@ -45,11 +49,17 @@ type DetailTile = {
   level: TileMatrixLevel;
   x: number;
   y: number;
+  prefetch: boolean;
 };
 
-type LoadedDetailTile = DetailTile & {
-  texture: THREE.Texture;
-};
+const BASE_RADIUS = 1;
+const DETAIL_RADIUS = 1.006;
+
+const MAX_VISIBLE_TILES = 48;
+const MAX_PREFETCH_TILES = 16;
+
+const TILE_CACHE_LIMIT = 96;
+const MAX_CONCURRENT_REQUESTS = 6;
 
 const LOCATIONS: Location[] = [
   {
@@ -105,27 +115,191 @@ const CATEGORY_LABELS: Record<MapLayerCategory, string> = {
   thermal: "Thermal and Infrared",
 };
 
-const BASE_RADIUS = 1;
-const DETAIL_RADIUS = 1.006;
+// --------------------------------------------------
+// TILE CACHE AND REQUEST CONCURRENCY
+// --------------------------------------------------
 
-const MAX_DETAIL_TILES = 24;
-const DETAIL_CONCURRENCY = 6;
+const bitmapCache = new Map<string, ImageBitmap>();
 
-const imageCache = new Map<
-  string,
-  Promise<HTMLImageElement>
->();
+type RequestWaiter = {
+  signal: AbortSignal;
+  resolve: (release: () => void) => void;
+  reject: (reason: unknown) => void;
+  onAbort: () => void;
+};
 
-const _direction = new THREE.Vector3();
-const _fullQuaternion = new THREE.Quaternion();
-const _stepQuaternion = new THREE.Quaternion();
+let activeRequests = 0;
+
+const requestWaiters: RequestWaiter[] = [];
+
+function releaseRequestSlot(): void {
+  activeRequests--;
+
+  while (requestWaiters.length > 0) {
+    const waiter = requestWaiters.shift()!;
+
+    waiter.signal.removeEventListener(
+      "abort",
+      waiter.onAbort
+    );
+
+    if (waiter.signal.aborted) {
+      continue;
+    }
+
+    activeRequests++;
+
+    waiter.resolve(releaseRequestSlot);
+
+    break;
+  }
+}
+
+function acquireRequestSlot(
+  signal: AbortSignal
+): Promise<() => void> {
+  if (signal.aborted) {
+    return Promise.reject(
+      new DOMException("Request aborted", "AbortError")
+    );
+  }
+
+  if (activeRequests < MAX_CONCURRENT_REQUESTS) {
+    activeRequests++;
+
+    return Promise.resolve(releaseRequestSlot);
+  }
+
+  return new Promise((resolve, reject) => {
+    const waiter: RequestWaiter = {
+      signal,
+      resolve,
+      reject,
+      onAbort: () => {
+        const index = requestWaiters.indexOf(waiter);
+
+        if (index !== -1) {
+          requestWaiters.splice(index, 1);
+        }
+
+        reject(
+          new DOMException(
+            "Request aborted",
+            "AbortError"
+          )
+        );
+      },
+    };
+
+    requestWaiters.push(waiter);
+
+    signal.addEventListener(
+      "abort",
+      waiter.onAbort,
+      { once: true }
+    );
+  });
+}
+
+function getCachedBitmap(
+  url: string
+): ImageBitmap | undefined {
+  const bitmap = bitmapCache.get(url);
+
+  if (!bitmap) {
+    return undefined;
+  }
+
+  // Move recently used entries to the end.
+  bitmapCache.delete(url);
+  bitmapCache.set(url, bitmap);
+
+  return bitmap;
+}
+
+function cacheBitmap(
+  url: string,
+  bitmap: ImageBitmap
+): void {
+  bitmapCache.delete(url);
+  bitmapCache.set(url, bitmap);
+
+  while (bitmapCache.size > TILE_CACHE_LIMIT) {
+    const oldestKey = bitmapCache.keys().next().value;
+
+    if (!oldestKey) break;
+
+    // Remove the cache reference. Do not close the bitmap:
+    // an active Three.js texture may still be using it.
+    bitmapCache.delete(oldestKey);
+  }
+}
+
+async function loadTileBitmap(
+  url: string,
+  signal: AbortSignal
+): Promise<ImageBitmap> {
+  const cached = getCachedBitmap(url);
+
+  if (cached) {
+    return cached;
+  }
+
+  const release = await acquireRequestSlot(signal);
+
+  try {
+    const response = await fetch(url, {
+      signal,
+      mode: "cors",
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Tile request failed: HTTP ${response.status}`
+      );
+    }
+
+    const blob = await response.blob();
+
+    if (signal.aborted) {
+      throw new DOMException(
+        "Request aborted",
+        "AbortError"
+      );
+    }
+
+    const bitmap = await createImageBitmap(blob);
+
+    if (signal.aborted) {
+      bitmap.close();
+
+      throw new DOMException(
+        "Request aborted",
+        "AbortError"
+      );
+    }
+
+    cacheBitmap(url, bitmap);
+
+    return bitmap;
+  } finally {
+    release();
+  }
+}
+
+// --------------------------------------------------
+// COORDINATE AND TILE UTILITIES
+// --------------------------------------------------
 
 function coordinatesToVector(
   latitude: number,
   longitude: number,
   radius = BASE_RADIUS
 ): THREE.Vector3 {
-  const lat = THREE.MathUtils.degToRad(latitude);
+  const lat = THREE.MathUtils.degToRad(
+    THREE.MathUtils.clamp(latitude, -90, 90)
+  );
+
   const lon = THREE.MathUtils.degToRad(longitude);
 
   return new THREE.Vector3(
@@ -133,37 +307,6 @@ function coordinatesToVector(
     radius * Math.sin(lat),
     -radius * Math.cos(lat) * Math.sin(lon)
   );
-}
-
-function loadImage(url: string): Promise<HTMLImageElement> {
-  const cached = imageCache.get(url);
-
-  if (cached) {
-    return cached;
-  }
-
-  const promise = new Promise<HTMLImageElement>(
-    (resolve, reject) => {
-      const image = new Image();
-
-      image.crossOrigin = "anonymous";
-
-      image.onload = () => resolve(image);
-
-      image.onerror = () => {
-        imageCache.delete(url);
-        reject(
-          new Error(`Failed to load NASA tile: ${url}`)
-        );
-      };
-
-      image.src = url;
-    }
-  );
-
-  imageCache.set(url, promise);
-
-  return promise;
 }
 
 function buildTileUrl(
@@ -178,200 +321,18 @@ function buildTileUrl(
     .replaceAll("{x}", String(x));
 }
 
-async function runLimited<T, R>(
-  items: T[],
-  concurrency: number,
-  worker: (item: T) => Promise<R>
-): Promise<PromiseSettledResult<R>[]> {
-  const results: PromiseSettledResult<R>[] =
-    new Array(items.length);
-
-  let nextIndex = 0;
-
-  async function runWorker() {
-    while (true) {
-      const index = nextIndex++;
-
-      if (index >= items.length) {
-        return;
-      }
-
-      try {
-        const value = await worker(items[index]);
-
-        results[index] = {
-          status: "fulfilled",
-          value,
-        };
-      } catch (reason) {
-        results[index] = {
-          status: "rejected",
-          reason,
-        };
-      }
-    }
-  }
-
-  const workers = Array.from(
-    {
-      length: Math.min(concurrency, items.length),
-    },
-    () => runWorker()
-  );
-
-  await Promise.all(workers);
-
-  return results;
-}
-
-function createCanvasTexture(
-  canvas: HTMLCanvasElement
-): THREE.CanvasTexture {
-  const texture = new THREE.CanvasTexture(canvas);
-
-  texture.mapping = THREE.UVMapping;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.ClampToEdgeWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.minFilter = THREE.LinearMipmapLinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.generateMipmaps = true;
-  texture.anisotropy = 4;
-  texture.needsUpdate = true;
-
-  return texture;
-}
-
-function createImageTexture(
-  image: HTMLImageElement
-): THREE.Texture {
-  const texture = new THREE.Texture(image);
-
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.ClampToEdgeWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.minFilter = THREE.LinearMipmapLinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.generateMipmaps = true;
-  texture.needsUpdate = true;
-
-  return texture;
-}
-
-async function loadGlobalPreview(
-  config: TileLayerConfig
-): Promise<THREE.CanvasTexture> {
-  const level = config.matrixLevels?.[0];
-
-  if (!level) {
-    throw new Error("NASA layer has no tile matrix metadata.");
-  }
-
-  const totalWidth =
-    level.matrixWidth * level.tileWidth;
-
-  const totalHeight =
-    level.matrixHeight * level.tileHeight;
-
-  if (
-    totalWidth <= 0 ||
-    totalHeight <= 0 ||
-    totalWidth > 4096 ||
-    totalHeight > 4096
-  ) {
-    throw new Error(
-      `Invalid global preview dimensions: ${totalWidth}x${totalHeight}`
-    );
-  }
-
-  const canvas = document.createElement("canvas");
-
-  canvas.width = totalWidth;
-  canvas.height = totalHeight;
-
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    throw new Error("Unable to create preview canvas.");
-  }
-
-  const tiles: {
-    url: string;
-    x: number;
-    y: number;
-  }[] = [];
-
-  for (let y = 0; y < level.matrixHeight; y++) {
-    for (let x = 0; x < level.matrixWidth; x++) {
-      tiles.push({
-        url: buildTileUrl(
-          config.tileUrlTemplate,
-          level.id,
-          x,
-          y
-        ),
-        x,
-        y,
-      });
-    }
-  }
-
-  const results = await runLimited(
-    tiles,
-    6,
-    (tile) => loadImage(tile.url)
-  );
-
-  let successfulTiles = 0;
-
-  results.forEach((result, index) => {
-    if (result.status !== "fulfilled") {
-      console.warn(
-        "Global preview tile failed:",
-        tiles[index].url,
-        result.reason
-      );
-
-      return;
-    }
-
-    const tile = tiles[index];
-
-    context.drawImage(
-      result.value,
-      tile.x * level.tileWidth,
-      tile.y * level.tileHeight,
-      level.tileWidth,
-      level.tileHeight
-    );
-
-    successfulTiles++;
-  });
-
-  if (successfulTiles === 0) {
-    throw new Error(
-      "NASA returned no usable global preview tiles."
-    );
-  }
-
-  console.log("Global preview loaded:", {
-    layer: config.matrixSet,
-    successfulTiles,
-    totalTiles: tiles.length,
-    width: canvas.width,
-    height: canvas.height,
-  });
-
-  return createCanvasTexture(canvas);
-}
-
-function getTileCoordinates(
+function getTileBounds(
   level: TileMatrixLevel,
   x: number,
   y: number
 ) {
-  const longitudeSpan = 360 / level.matrixWidth;
-  const latitudeSpan = 180 / level.matrixHeight;
+  // Mars Trek's EQ matrix is treated as a global
+  // equirectangular grid: 360 degrees by 180 degrees.
+  const longitudeSpan =
+    360 / level.matrixWidth;
+
+  const latitudeSpan =
+    180 / level.matrixHeight;
 
   const west =
     level.topLeftX + x * longitudeSpan;
@@ -391,87 +352,14 @@ function getTileCoordinates(
   };
 }
 
-function getVisibleTiles(
-  config: TileLayerConfig,
-  level: TileMatrixLevel,
-  cameraPosition: THREE.Vector3
-): DetailTile[] {
-  const visible: {
-    tile: DetailTile;
-    score: number;
-  }[] = [];
-
-  const cameraDirection =
-    cameraPosition.clone().normalize();
-
-  for (let y = 0; y < level.matrixHeight; y++) {
-    for (let x = 0; x < level.matrixWidth; x++) {
-      const bounds = getTileCoordinates(
-        level,
-        x,
-        y
-      );
-
-      const centerLatitude =
-        (bounds.north + bounds.south) / 2;
-
-      const centerLongitude =
-        (bounds.west + bounds.east) / 2;
-
-      const center = coordinatesToVector(
-        centerLatitude,
-        centerLongitude,
-        1
-      ).normalize();
-
-      const score = center.dot(cameraDirection);
-
-      // Skip tiles on the far side of the planet.
-      if (score < -0.08) {
-        continue;
-      }
-
-      const tile: DetailTile = {
-        key: `${level.id}/${x}/${y}`,
-        url: buildTileUrl(
-          config.tileUrlTemplate,
-          level.id,
-          x,
-          y
-        ),
-        level,
-        x,
-        y,
-      };
-
-      visible.push({
-        tile,
-        score,
-      });
-    }
-  }
-
-  visible.sort(
-    (a, b) => b.score - a.score
-  );
-
-  return visible
-    .slice(0, MAX_DETAIL_TILES)
-    .map((item) => item.tile);
-}
-
 function createTileGeometry(
   level: TileMatrixLevel,
   x: number,
   y: number
 ): THREE.BufferGeometry {
-  const bounds = getTileCoordinates(
-    level,
-    x,
-    y
-  );
+  const bounds = getTileBounds(level, x, y);
 
-  const segments = 16;
+  const segments = 12;
 
   const positions: number[] = [];
   const uvs: number[] = [];
@@ -507,7 +395,7 @@ function createTileGeometry(
         position.z
       );
 
-      // The top of the tile image is its northern edge.
+      // The top of the image corresponds to north.
       uvs.push(horizontal, 1 - vertical);
     }
   }
@@ -556,11 +444,487 @@ function createTileGeometry(
   return geometry;
 }
 
+// --------------------------------------------------
+// SCREEN-SPACE LEVEL OF DETAIL
+// --------------------------------------------------
+
+function chooseMatrixLevel(
+  levels: TileMatrixLevel[],
+  camera: THREE.Camera,
+  viewportHeight: number
+): TileMatrixLevel {
+  const perspectiveCamera =
+    camera as THREE.PerspectiveCamera;
+
+  const distance = Math.max(
+    camera.position.length(),
+    BASE_RADIUS + 0.01
+  );
+
+  const fovRadians = THREE.MathUtils.degToRad(
+    perspectiveCamera.fov
+  );
+
+  const focalPixels =
+    viewportHeight / (2 * Math.tan(fovRadians / 2));
+
+  const distanceToTangent = Math.sqrt(
+    Math.max(
+      0.001,
+      distance * distance -
+        BASE_RADIUS * BASE_RADIUS
+    )
+  );
+
+  const projectedPlanetDiameter =
+    (2 * BASE_RADIUS * focalPixels) /
+    distanceToTangent;
+
+  // Slightly oversample the visible globe to reduce blur.
+  const targetTextureWidth =
+    projectedPlanetDiameter * 1.15;
+
+  let bestLevel = levels[0];
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const level of levels) {
+    const availableTextureWidth =
+      level.matrixWidth * level.tileWidth;
+
+    const score = Math.abs(
+      Math.log2(
+        availableTextureWidth /
+          targetTextureWidth
+      )
+    );
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestLevel = level;
+    }
+  }
+
+  return bestLevel;
+}
+
+// --------------------------------------------------
+// CAMERA-FRUSTUM TILE SELECTION
+// --------------------------------------------------
+
+function getTileBoundingSphere(
+  level: TileMatrixLevel,
+  x: number,
+  y: number
+): THREE.Sphere {
+  const bounds = getTileBounds(level, x, y);
+
+  const points: THREE.Vector3[] = [];
+
+  const samples = 4;
+
+  for (let row = 0; row <= samples; row++) {
+    const vertical = row / samples;
+
+    const latitude =
+      bounds.north +
+      (bounds.south - bounds.north) * vertical;
+
+    for (
+      let column = 0;
+      column <= samples;
+      column++
+    ) {
+      const horizontal = column / samples;
+
+      const longitude =
+        bounds.west +
+        (bounds.east - bounds.west) * horizontal;
+
+      points.push(
+        coordinatesToVector(
+          latitude,
+          longitude,
+          DETAIL_RADIUS
+        )
+      );
+    }
+  }
+
+  const center = new THREE.Vector3();
+
+  for (const point of points) {
+    center.add(point);
+  }
+
+  center.divideScalar(points.length);
+
+  const radius = Math.max(
+    ...points.map((point) =>
+      point.distanceTo(center)
+    )
+  ) + 0.002;
+
+  return new THREE.Sphere(center, radius);
+}
+
+function getVisibleTiles(
+  config: TileLayerConfig,
+  camera: THREE.Camera,
+  viewportWidth: number,
+  viewportHeight: number
+): DetailTile[] {
+  const levels = config.matrixLevels;
+
+  if (!levels || levels.length === 0) {
+    return [];
+  }
+
+  const level = chooseMatrixLevel(
+    levels,
+    camera,
+    viewportHeight
+  );
+
+  camera.updateMatrixWorld();
+
+  const viewProjectionMatrix =
+    new THREE.Matrix4().multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse
+    );
+
+  const frustum = new THREE.Frustum();
+
+  frustum.setFromProjectionMatrix(
+    viewProjectionMatrix
+  );
+
+  const cameraDirection = camera.position
+    .clone()
+    .normalize();
+
+  const visible: {
+    tile: DetailTile;
+    score: number;
+  }[] = [];
+
+  for (
+    let y = 0;
+    y < level.matrixHeight;
+    y++
+  ) {
+    for (
+      let x = 0;
+      x < level.matrixWidth;
+      x++
+    ) {
+      const sphere = getTileBoundingSphere(
+        level,
+        x,
+        y
+      );
+
+      const centerDirection = sphere.center
+        .clone()
+        .normalize();
+
+      const score = centerDirection.dot(
+        cameraDirection
+      );
+
+      // Reject the far side of Mars.
+      if (score < -0.15) {
+        continue;
+      }
+
+      // Only request tiles intersecting the camera view.
+      if (!frustum.intersectsSphere(sphere)) {
+        continue;
+      }
+
+      visible.push({
+        score,
+        tile: {
+          key: `${level.id}/${x}/${y}`,
+          url: buildTileUrl(
+            config.tileUrlTemplate,
+            level.id,
+            x,
+            y
+          ),
+          level,
+          x,
+          y,
+          prefetch: false,
+        },
+      });
+    }
+  }
+
+  visible.sort(
+    (a, b) => b.score - a.score
+  );
+
+  const selectedVisible = visible
+    .slice(0, MAX_VISIBLE_TILES)
+    .map((item) => item.tile);
+
+  // Prefetch nearby tiles so small rotations are quicker.
+  const visibleKeys = new Set(
+    selectedVisible.map((tile) => tile.key)
+  );
+
+  const neighbors: DetailTile[] = [];
+  const neighborKeys = new Set<string>();
+
+  for (const tile of selectedVisible.slice(0, 16)) {
+    for (const offsetY of [-1, 0, 1]) {
+      for (const offsetX of [-1, 0, 1]) {
+        if (offsetX === 0 && offsetY === 0) {
+          continue;
+        }
+
+        const neighborY = tile.y + offsetY;
+
+        if (
+          neighborY < 0 ||
+          neighborY >= level.matrixHeight
+        ) {
+          continue;
+        }
+
+        // Longitude wraps around the planet.
+        const neighborX =
+          (tile.x + offsetX + level.matrixWidth) %
+          level.matrixWidth;
+
+        const key =
+          `${level.id}/${neighborX}/${neighborY}`;
+
+        if (
+          visibleKeys.has(key) ||
+          neighborKeys.has(key)
+        ) {
+          continue;
+        }
+
+        neighborKeys.add(key);
+
+        neighbors.push({
+          key,
+          url: buildTileUrl(
+            config.tileUrlTemplate,
+            level.id,
+            neighborX,
+            neighborY
+          ),
+          level,
+          x: neighborX,
+          y: neighborY,
+          prefetch: true,
+        });
+
+        if (
+          neighbors.length >= MAX_PREFETCH_TILES
+        ) {
+          break;
+        }
+      }
+
+      if (
+        neighbors.length >= MAX_PREFETCH_TILES
+      ) {
+        break;
+      }
+    }
+
+    if (
+      neighbors.length >= MAX_PREFETCH_TILES
+    ) {
+      break;
+    }
+  }
+
+  console.log("Mars tile selection:", {
+    matrix: level.id,
+    matrixWidth: level.matrixWidth,
+    matrixHeight: level.matrixHeight,
+    visibleTiles: selectedVisible.length,
+    prefetchedTiles: neighbors.length,
+    viewport: {
+      width: viewportWidth,
+      height: viewportHeight,
+    },
+  });
+
+  return [
+    ...selectedVisible,
+    ...neighbors,
+  ];
+}
+
+// --------------------------------------------------
+// GLOBAL PREVIEW
+// --------------------------------------------------
+
+async function loadGlobalPreview(
+  config: TileLayerConfig,
+  signal: AbortSignal
+): Promise<THREE.CanvasTexture> {
+  const level = config.matrixLevels?.[0];
+
+  if (!level) {
+    throw new Error(
+      "NASA layer has no tile matrix metadata."
+    );
+  }
+
+  const originalWidth =
+    level.matrixWidth * level.tileWidth;
+
+  const originalHeight =
+    level.matrixHeight * level.tileHeight;
+
+  if (
+    originalWidth <= 0 ||
+    originalHeight <= 0 ||
+    originalWidth > 8192 ||
+    originalHeight > 8192
+  ) {
+    throw new Error(
+      `Invalid preview dimensions: ${originalWidth}x${originalHeight}`
+    );
+  }
+
+  const scale = Math.min(
+    1,
+    2048 / originalWidth,
+    1024 / originalHeight
+  );
+
+  const canvas = document.createElement("canvas");
+
+  canvas.width = Math.max(
+    1,
+    Math.floor(originalWidth * scale)
+  );
+
+  canvas.height = Math.max(
+    1,
+    Math.floor(originalHeight * scale)
+  );
+
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error(
+      "Unable to create preview canvas."
+    );
+  }
+
+  const tiles: {
+    url: string;
+    x: number;
+    y: number;
+  }[] = [];
+
+  for (
+    let y = 0;
+    y < level.matrixHeight;
+    y++
+  ) {
+    for (
+      let x = 0;
+      x < level.matrixWidth;
+      x++
+    ) {
+      tiles.push({
+        url: buildTileUrl(
+          config.tileUrlTemplate,
+          level.id,
+          x,
+          y
+        ),
+        x,
+        y,
+      });
+    }
+  }
+
+  const results = await Promise.allSettled(
+    tiles.map(async (tile) => {
+      const bitmap = await loadTileBitmap(
+        tile.url,
+        signal
+      );
+
+      if (signal.aborted) {
+        throw new DOMException(
+          "Request aborted",
+          "AbortError"
+        );
+      }
+
+      context.drawImage(
+        bitmap,
+        tile.x * level.tileWidth * scale,
+        tile.y * level.tileHeight * scale,
+        level.tileWidth * scale,
+        level.tileHeight * scale
+      );
+    })
+  );
+
+  if (signal.aborted) {
+    throw new DOMException(
+      "Request aborted",
+      "AbortError"
+    );
+  }
+
+  const successfulTiles = results.filter(
+    (result) => result.status === "fulfilled"
+  ).length;
+
+  if (successfulTiles === 0) {
+    throw new Error(
+      "NASA returned no usable global preview tiles."
+    );
+  }
+
+  console.log("Global preview:", {
+    successfulTiles,
+    totalTiles: tiles.length,
+    width: canvas.width,
+    height: canvas.height,
+  });
+
+  const texture = new THREE.CanvasTexture(canvas);
+
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+
+  return texture;
+}
+
+// --------------------------------------------------
+// DETAIL TILE COMPONENTS
+// --------------------------------------------------
+
 function DetailTileMesh({
   tile,
 }: {
-  tile: LoadedDetailTile;
+  tile: DetailTile;
 }) {
+  const [texture, setTexture] =
+    useState<THREE.Texture | null>(null);
+
   const geometry = useMemo(
     () =>
       createTileGeometry(
@@ -568,15 +932,74 @@ function DetailTileMesh({
         tile.x,
         tile.y
       ),
-    [tile.level, tile.x, tile.y]
+    [
+      tile.level,
+      tile.x,
+      tile.y,
+    ]
   );
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    let active = true;
+    let loadedTexture: THREE.Texture | null = null;
+
+    loadTileBitmap(
+      tile.url,
+      controller.signal
+    )
+      .then((bitmap) => {
+        if (!active) return;
+
+        const nextTexture = new THREE.Texture(bitmap);
+
+        nextTexture.colorSpace = THREE.SRGBColorSpace;
+        nextTexture.wrapS = THREE.ClampToEdgeWrapping;
+        nextTexture.wrapT = THREE.ClampToEdgeWrapping;
+        nextTexture.minFilter =
+          THREE.LinearMipmapLinearFilter;
+        nextTexture.magFilter = THREE.LinearFilter;
+        nextTexture.generateMipmaps = true;
+        nextTexture.anisotropy = 4;
+        nextTexture.needsUpdate = true;
+
+        loadedTexture = nextTexture;
+
+        setTexture(nextTexture);
+      })
+      .catch((error: unknown) => {
+        if (
+          error instanceof DOMException &&
+          error.name === "AbortError"
+        ) {
+          return;
+        }
+
+        console.warn(
+          "Detail tile unavailable; retaining preview:",
+          tile.url,
+          error
+        );
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+
+      loadedTexture?.dispose();
+    };
+  }, [tile.url]);
 
   useEffect(() => {
     return () => {
       geometry.dispose();
-      tile.texture.dispose();
     };
-  }, [geometry, tile.texture]);
+  }, [geometry]);
+
+  if (!texture) {
+    return null;
+  }
 
   return (
     <mesh
@@ -584,7 +1007,7 @@ function DetailTileMesh({
       renderOrder={2}
     >
       <meshBasicMaterial
-        map={tile.texture}
+        map={texture}
         side={THREE.DoubleSide}
         toneMapped={false}
         polygonOffset
@@ -593,6 +1016,44 @@ function DetailTileMesh({
     </mesh>
   );
 }
+
+function TilePreloader({
+  tile,
+}: {
+  tile: DetailTile;
+}) {
+  useEffect(() => {
+    const controller = new AbortController();
+
+    loadTileBitmap(
+      tile.url,
+      controller.signal
+    ).catch((error: unknown) => {
+      if (
+        error instanceof DOMException &&
+        error.name === "AbortError"
+      ) {
+        return;
+      }
+
+      console.warn(
+        "Neighbor prefetch failed:",
+        tile.url,
+        error
+      );
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [tile.url]);
+
+  return null;
+}
+
+// --------------------------------------------------
+// MARS SURFACE
+// --------------------------------------------------
 
 function MarsSurface({
   layerId,
@@ -603,64 +1064,61 @@ function MarsSurface({
   layerName: string;
   onTextureLoaded: (message: string) => void;
 }) {
-  const { camera } = useThree();
+  const { camera, size } = useThree();
 
-  const [config, setConfig] =
-    useState<TileLayerConfig | null>(null);
+  const configRef =
+    useRef<TileLayerConfig | null>(null);
+
+  const lastSelectionKey = useRef("");
+
+  const lastUpdate = useRef(0);
 
   const [previewTexture, setPreviewTexture] =
     useState<THREE.CanvasTexture | null>(null);
 
-  const [detailTiles, setDetailTiles] =
-    useState<LoadedDetailTile[]>([]);
+  const [tileSelection, setTileSelection] =
+    useState<DetailTile[]>([]);
 
-  const [detailStatus, setDetailStatus] =
-    useState("");
-
-  const lastUpdate = useRef(0);
-
-  const activeConfig = useRef<TileLayerConfig | null>(
-    null
-  );
-
-  // Fetch NASA metadata and global preview.
+  // Load metadata and global preview.
   useEffect(() => {
+    const controller = new AbortController();
+
     let active = true;
 
     let loadedPreview: THREE.CanvasTexture | null =
       null;
 
-    activeConfig.current = null;
+    configRef.current = null;
+    lastSelectionKey.current = "";
 
-    setConfig(null);
     setPreviewTexture(null);
-    setDetailTiles([]);
-    setDetailStatus("");
+    setTileSelection([]);
 
     onTextureLoaded(`Loading ${layerName}...`);
 
     async function initialize() {
       const provider = getDataProvider("nasaTrek");
 
-      const nextConfig =
+      const config =
         await provider.getLayerConfig(layerId);
 
       if (!active) return;
 
       if (
-        !nextConfig.matrixLevels ||
-        nextConfig.matrixLevels.length === 0
+        !config.matrixLevels ||
+        config.matrixLevels.length === 0
       ) {
         throw new Error(
-          "NASA layer did not provide matrix levels."
+          "NASA layer has no matrix levels."
         );
       }
 
-      activeConfig.current = nextConfig;
-      setConfig(nextConfig);
+      configRef.current = config;
 
-      const preview =
-        await loadGlobalPreview(nextConfig);
+      const preview = await loadGlobalPreview(
+        config,
+        controller.signal
+      );
 
       if (!active) {
         preview.dispose();
@@ -672,15 +1130,22 @@ function MarsSurface({
       setPreviewTexture(preview);
 
       onTextureLoaded(
-        `${layerName} preview loaded`
+        `${layerName} preview loaded · streaming details`
       );
     }
 
     initialize().catch((error: unknown) => {
       if (!active) return;
 
+      if (
+        error instanceof DOMException &&
+        error.name === "AbortError"
+      ) {
+        return;
+      }
+
       console.error(
-        `Failed to initialize NASA layer ${layerId}:`,
+        `Failed to initialize ${layerId}:`,
         error
       );
 
@@ -691,192 +1156,67 @@ function MarsSurface({
 
     return () => {
       active = false;
-      activeConfig.current = null;
+      controller.abort();
+
+      configRef.current = null;
 
       loadedPreview?.dispose();
     };
-  }, [layerId, layerName, onTextureLoaded]);
+  }, [
+    layerId,
+    layerName,
+    onTextureLoaded,
+  ]);
 
-  // Determine the appropriate detail level as the camera zooms.
+  // Recalculate visible tiles after camera movement.
   useFrame(() => {
-    const currentConfig = activeConfig.current;
+    const config = configRef.current;
 
-    if (!currentConfig?.matrixLevels) return;
+    if (!config) return;
 
     const now = performance.now();
 
-    // Avoid recalculating tile visibility every frame.
-    if (now - lastUpdate.current < 500) {
+    if (now - lastUpdate.current < 350) {
       return;
     }
 
     lastUpdate.current = now;
 
-    const levels = currentConfig.matrixLevels;
-
-    if (levels.length < 2) {
-      setDetailTiles([]);
-      return;
-    }
-
-    const distance = camera.position.length();
-
-    // Move through higher matrix levels as the user zooms in.
-    const zoomProgress = Math.max(
-      0,
-      Math.log2(3.2 / distance)
+    const nextTiles = getVisibleTiles(
+      config,
+      camera,
+      size.width,
+      size.height
     );
 
-    const levelIndex = Math.min(
-      levels.length - 1,
-      Math.max(
-        1,
-        Math.floor(zoomProgress) + 1
-      )
-    );
-
-    const selectedLevel = levels[levelIndex];
-
-    const visibleTiles = getVisibleTiles(
-      currentConfig,
-      selectedLevel,
-      camera.position
-    );
-
-    const nextKeys = visibleTiles
+    const nextKey = nextTiles
       .map((tile) => tile.key)
       .join("|");
 
-    setDetailTiles((current) => {
-      const currentKeys = current
-        .map((tile) => tile.key)
-        .join("|");
-
-      if (currentKeys === nextKeys) {
-        return current;
-      }
-
-      return current;
-    });
-
-    setDetailStatus(
-      `${visibleTiles.length} detail tiles requested`
-    );
-
-    // Store requested tile list for the loading effect.
-    requestedTiles.current = visibleTiles;
-    setRequestVersion((version) => version + 1);
-  });
-
-  const requestedTiles = useRef<DetailTile[]>([]);
-  const [requestVersion, setRequestVersion] =
-    useState(0);
-
-  // Fetch visible detail tiles with limited concurrency.
-  useEffect(() => {
-    const currentConfig = activeConfig.current;
-
-    if (!currentConfig || requestVersion === 0) {
+    if (nextKey === lastSelectionKey.current) {
       return;
     }
 
-    let active = true;
+    lastSelectionKey.current = nextKey;
 
-    const requested = requestedTiles.current;
+    setTileSelection(nextTiles);
+  });
 
-    async function loadDetails() {
-      const results = await runLimited(
-        requested,
-        DETAIL_CONCURRENCY,
-        async (tile): Promise<LoadedDetailTile> => {
-          const image = await loadImage(tile.url);
+  const visibleTiles = tileSelection.filter(
+    (tile) => !tile.prefetch
+  );
 
-          return {
-            ...tile,
-            texture: createImageTexture(image),
-          };
-        }
-      );
-
-      if (!active) {
-        results.forEach((result) => {
-          if (result.status === "fulfilled") {
-            result.value.texture.dispose();
-          }
-        });
-
-        return;
-      }
-
-      const successful = results
-        .filter(
-          (
-            result
-          ): result is PromiseFulfilledResult<LoadedDetailTile> =>
-            result.status === "fulfilled"
-        )
-        .map((result) => result.value);
-
-      const failed = results.length - successful.length;
-
-      setDetailTiles((previous) => {
-        const nextMap = new Map(
-          successful.map((tile) => [
-            tile.key,
-            tile,
-          ])
-        );
-
-        // Preserve already loaded tiles still in the requested view.
-        for (const tile of previous) {
-          if (
-            requested.some(
-              (requestedTile) =>
-                requestedTile.key === tile.key
-            ) &&
-            !nextMap.has(tile.key)
-          ) {
-            nextMap.set(tile.key, tile);
-          }
-        }
-
-        const next = Array.from(nextMap.values());
-
-        // Dispose textures that are no longer displayed.
-        for (const tile of previous) {
-          if (!nextMap.has(tile.key)) {
-            tile.texture.dispose();
-          }
-        }
-
-        return next;
-      });
-
-      setDetailStatus(
-        failed > 0
-          ? `${successful.length} detail tiles loaded · ${failed} unavailable`
-          : `${successful.length} detail tiles loaded`
-      );
-    }
-
-    loadDetails().catch((error: unknown) => {
-      if (active) {
-        console.error(
-          "Detail tile loading failed:",
-          error
-        );
-      }
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [requestVersion]);
+  const prefetchTiles = tileSelection.filter(
+    (tile) => tile.prefetch
+  );
 
   return (
     <>
+      {/* Always keep the global preview beneath detail tiles. */}
       <mesh>
-        <sphereGeometry args={[BASE_RADIUS, 128, 128]} />
+        <sphereGeometry
+          args={[BASE_RADIUS, 128, 128]}
+        />
 
         <meshBasicMaterial
           key={previewTexture ? "preview" : "flat"}
@@ -891,8 +1231,17 @@ function MarsSurface({
         />
       </mesh>
 
-      {detailTiles.map((tile) => (
+      {/* Visible detail tiles load independently. */}
+      {visibleTiles.map((tile) => (
         <DetailTileMesh
+          key={tile.key}
+          tile={tile}
+        />
+      ))}
+
+      {/* Nearby tiles are cached before they are needed. */}
+      {prefetchTiles.map((tile) => (
+        <TilePreloader
           key={tile.key}
           tile={tile}
         />
@@ -900,6 +1249,10 @@ function MarsSurface({
     </>
   );
 }
+
+// --------------------------------------------------
+// LOCATION MARKERS
+// --------------------------------------------------
 
 function LocationMarker({
   location,
@@ -943,6 +1296,14 @@ function LocationMarker({
     </group>
   );
 }
+
+// --------------------------------------------------
+// GLOBE SCENE
+// --------------------------------------------------
+
+const _direction = new THREE.Vector3();
+const _fullQuaternion = new THREE.Quaternion();
+const _stepQuaternion = new THREE.Quaternion();
 
 function GlobeScene({
   selectedLocation,
@@ -1044,6 +1405,10 @@ function GlobeScene({
     </>
   );
 }
+
+// --------------------------------------------------
+// MAIN COMPONENT
+// --------------------------------------------------
 
 export default function MarsGlobe() {
   const [selectedLocation, setSelectedLocation] =
