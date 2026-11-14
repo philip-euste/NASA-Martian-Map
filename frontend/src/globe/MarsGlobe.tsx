@@ -1,3 +1,4 @@
+
 import {
   useCallback,
   useEffect,
@@ -30,11 +31,8 @@ import MarsSurface, {
   coordinatesToVector,
 } from "./MarsSurface";
 
-import { getDataProvider } from "../services/dataProviders";
-
 import {
   EXPLORATION_SITES,
-  type ExplorationSite,
 } from "../data/explorationSites";
 
 import "./MarsGlobe.css";
@@ -97,6 +95,7 @@ const CATEGORY_LABELS: Record<
 
 const direction = new THREE.Vector3();
 const rotation = new THREE.Quaternion();
+const stepRotation = new THREE.Quaternion();
 
 // ==========================================
 // LOCATION MARKER
@@ -187,9 +186,8 @@ function GlobeScene({
     const progress = 1 - Math.exp(-delta * 6);
 
     rotation.setFromUnitVectors(direction, goal);
-    rotation.slerp(new THREE.Quaternion(), 0);
 
-    const stepRotation = new THREE.Quaternion()
+    stepRotation
       .identity()
       .slerp(rotation, progress);
 
@@ -250,7 +248,7 @@ export default function MarsGlobe({
     useState<Location | null>(null);
 
   const [selectedLayerId, setSelectedLayerId] =
-    useState<MapLayerId>("mars_global_mola");
+    useState<MapLayerId>("mars_viking_global");
 
   const [textureStatus, setTextureStatus] =
     useState("Loading NASA imagery...");
@@ -327,17 +325,9 @@ export default function MarsGlobe({
         {selectedLayer.description}
       </div>
 
-      <div
-        className="mars-globe-canvas"
-        style={{
-          width: "100%",
-          height: "600px",
-          position: "relative",
-          overflow: "hidden",
-          background: "#05070d",
-          borderRadius: "12px",
-        }}
-      >
+      {/* Full-viewport canvas.
+          Positioning and dimensions are controlled by MarsGlobe.css. */}
+      <div className="mars-globe-canvas">
         <Canvas
           camera={{
             position: [0, 0, 3.2],
@@ -384,6 +374,14 @@ export default function MarsGlobe({
 
         {selectedLocation && (
           <div className="mars-globe-location">
+            <button
+              type="button"
+              aria-label="Close selected location"
+              onClick={() => setSelectedLocation(null)}
+            >
+              ×
+            </button>
+
             <h3>{selectedLocation.name}</h3>
 
             <p>{selectedLocation.description}</p>
