@@ -1,9 +1,9 @@
-
 import {
   useCallback,
   useEffect,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 
 import {
@@ -30,11 +30,20 @@ import MarsSurface, {
   coordinatesToVector,
 } from "./MarsSurface";
 
+import { getDataProvider } from "../services/dataProviders";
+
+import {
+  EXPLORATION_SITES,
+  type ExplorationSite,
+} from "../data/explorationSites";
+
+import "./MarsGlobe.css";
+
 // ==========================================
 // TYPES
 // ==========================================
 
-type Location = {
+export type Location = {
   name: string;
   latitude: number;
   longitude: number;
@@ -42,44 +51,16 @@ type Location = {
 };
 
 type MarsGlobeProps = {
-  selectedLocationName: string;
-  onLocationSelect: (name: string) => void;
+  renderLocationActions?: (
+    location: Location
+  ) => ReactNode;
 };
 
 // ==========================================
 // LOCATIONS
 // ==========================================
 
-const LOCATIONS: Location[] = [
-  {
-    name: "Jezero Crater",
-    latitude: 18.4,
-    longitude: 77.5,
-    description:
-      "Ancient lake basin and Perseverance rover exploration site.",
-  },
-  {
-    name: "Gale Crater",
-    latitude: -5.4,
-    longitude: 137.8,
-    description:
-      "Exploration region of the Curiosity rover.",
-  },
-  {
-    name: "Valles Marineris",
-    latitude: -13.9,
-    longitude: -59.2,
-    description:
-      "A vast canyon system near the Martian equator.",
-  },
-  {
-    name: "Olympus Mons",
-    latitude: 18.65,
-    longitude: -133.8,
-    description:
-      "One of the largest volcanoes in the Solar System.",
-  },
-];
+const LOCATIONS: Location[] = EXPLORATION_SITES;
 
 // ==========================================
 // LAYER CONFIGURATION
@@ -87,10 +68,7 @@ const LOCATIONS: Location[] = [
 
 const LAYER_OPTIONS = Object.entries(
   MAP_LAYERS
-) as [
-  MapLayerId,
-  MapLayer,
-][];
+) as [MapLayerId, MapLayer][];
 
 const LAYER_CATEGORIES: MapLayerCategory[] = [
   "basemap",
@@ -117,9 +95,8 @@ const CATEGORY_LABELS: Record<
 // CAMERA UTILITIES
 // ==========================================
 
-const _direction = new THREE.Vector3();
-const _fullQuaternion = new THREE.Quaternion();
-const _stepQuaternion = new THREE.Quaternion();
+const direction = new THREE.Vector3();
+const rotation = new THREE.Quaternion();
 
 // ==========================================
 // LOCATION MARKER
@@ -157,11 +134,7 @@ function LocationMarker({
         />
 
         <meshBasicMaterial
-          color={
-            selected
-              ? "#ffffff"
-              : "#ff9c52"
-          }
+          color={selected ? "#ffffff" : "#ff9c52"}
         />
       </mesh>
     </group>
@@ -187,13 +160,7 @@ function GlobeScene({
 }) {
   const { camera } = useThree();
 
-  const flyTo = useRef<THREE.Vector3 | null>(
-    null
-  );
-
-  // ========================================
-  // LOCATION CAMERA TARGET
-  // ========================================
+  const flyTo = useRef<THREE.Vector3 | null>(null);
 
   useEffect(() => {
     flyTo.current = selectedLocation
@@ -205,45 +172,30 @@ function GlobeScene({
       : null;
   }, [selectedLocation]);
 
-  // ========================================
-  // CAMERA ANIMATION
-  // ========================================
-
   useFrame((_, delta) => {
     const goal = flyTo.current;
 
     if (!goal) return;
 
-    _direction
-      .copy(camera.position)
-      .normalize();
+    direction.copy(camera.position).normalize();
 
-    if (_direction.dot(goal) > 0.99999) {
+    if (direction.dot(goal) > 0.99999) {
       flyTo.current = null;
       return;
     }
 
-    const t = 1 - Math.exp(-delta * 6);
+    const progress = 1 - Math.exp(-delta * 6);
 
-    _fullQuaternion.setFromUnitVectors(
-      _direction,
-      goal
-    );
+    rotation.setFromUnitVectors(direction, goal);
+    rotation.slerp(new THREE.Quaternion(), 0);
 
-    _stepQuaternion
+    const stepRotation = new THREE.Quaternion()
       .identity()
-      .slerp(_fullQuaternion, t);
+      .slerp(rotation, progress);
 
-    camera.position.applyQuaternion(
-      _stepQuaternion
-    );
-
+    camera.position.applyQuaternion(stepRotation);
     camera.lookAt(0, 0, 0);
   });
-
-  // ========================================
-  // SCENE
-  // ========================================
 
   return (
     <>
@@ -292,35 +244,18 @@ function GlobeScene({
 // ==========================================
 
 export default function MarsGlobe({
-  selectedLocationName,
-  onLocationSelect,
-}: MarsGlobeProps) {
+  renderLocationActions,
+}: MarsGlobeProps = {}) {
+  const [selectedLocation, setSelectedLocation] =
+    useState<Location | null>(null);
+
   const [selectedLayerId, setSelectedLayerId] =
     useState<MapLayerId>("mars_global_mola");
 
   const [textureStatus, setTextureStatus] =
     useState("Loading NASA imagery...");
 
-  // ========================================
-  // SELECTED LOCATION
-  // ========================================
-
-  const selectedLocation =
-    LOCATIONS.find(
-      (location) =>
-        location.name === selectedLocationName
-    ) ?? null;
-
-  // ========================================
-  // SELECTED LAYER
-  // ========================================
-
-  const selectedLayer =
-    MAP_LAYERS[selectedLayerId];
-
-  // ========================================
-  // CALLBACKS
-  // ========================================
+  const selectedLayer = MAP_LAYERS[selectedLayerId];
 
   const handleTextureLoaded = useCallback(
     (message: string) => {
@@ -331,20 +266,13 @@ export default function MarsGlobe({
 
   const handleSelectLocation = useCallback(
     (location: Location) => {
-      onLocationSelect(location.name);
+      setSelectedLocation(location);
     },
-    [onLocationSelect]
+    []
   );
-
-  // ========================================
-  // RENDER
-  // ========================================
 
   return (
     <div className="mars-globe">
-
-      {/* HEADER */}
-
       <div className="mars-globe-header">
         <div>
           <h2>Mars Explorer</h2>
@@ -364,23 +292,11 @@ export default function MarsGlobe({
                 event.target.value as MapLayerId
               );
             }}
-            style={{
-              display: "block",
-              minWidth: "230px",
-              padding: "9px 12px",
-              marginTop: "5px",
-              color: "#ffffff",
-              background: "#171c29",
-              border: "1px solid #424b5e",
-              borderRadius: "6px",
-            }}
           >
             {LAYER_CATEGORIES.map((category) => {
-              const categoryLayers =
-                LAYER_OPTIONS.filter(
-                  ([, layer]) =>
-                    layer.category === category
-                );
+              const categoryLayers = LAYER_OPTIONS.filter(
+                ([, layer]) => layer.category === category
+              );
 
               if (categoryLayers.length === 0) {
                 return null;
@@ -391,16 +307,11 @@ export default function MarsGlobe({
                   key={category}
                   label={CATEGORY_LABELS[category]}
                 >
-                  {categoryLayers.map(
-                    ([id, layer]) => (
-                      <option
-                        key={id}
-                        value={id}
-                      >
-                        {layer.name}
-                      </option>
-                    )
-                  )}
+                  {categoryLayers.map(([id, layer]) => (
+                    <option key={id} value={id}>
+                      {layer.name}
+                    </option>
+                  ))}
                 </optgroup>
               );
             })}
@@ -412,20 +323,9 @@ export default function MarsGlobe({
         </span>
       </div>
 
-      {/* LAYER DESCRIPTION */}
-
-      <div
-        className="mars-globe-layer-description"
-        style={{
-          margin: "8px 0 12px",
-          color: "#aeb8c9",
-          fontSize: "13px",
-        }}
-      >
+      <div className="mars-globe-layer-description">
         {selectedLayer.description}
       </div>
-
-      {/* GLOBE CANVAS */}
 
       <div
         className="mars-globe-canvas"
@@ -465,16 +365,12 @@ export default function MarsGlobe({
           />
         </Canvas>
 
-        {/* LOCATION BUTTONS */}
-
         <div className="mars-globe-controls">
           {LOCATIONS.map((location) => (
             <button
               key={location.name}
               type="button"
-              onClick={() =>
-                handleSelectLocation(location)
-              }
+              onClick={() => handleSelectLocation(location)}
               className={
                 selectedLocation?.name === location.name
                   ? "active"
@@ -486,17 +382,11 @@ export default function MarsGlobe({
           ))}
         </div>
 
-        {/* SELECTED LOCATION INFORMATION */}
-
         {selectedLocation && (
           <div className="mars-globe-location">
-            <h3>
-              {selectedLocation.name}
-            </h3>
+            <h3>{selectedLocation.name}</h3>
 
-            <p>
-              {selectedLocation.description}
-            </p>
+            <p>{selectedLocation.description}</p>
 
             <small>
               {selectedLocation.latitude.toFixed(2)}°
@@ -504,10 +394,14 @@ export default function MarsGlobe({
               {selectedLocation.longitude.toFixed(2)}°
               longitude
             </small>
+
+            {renderLocationActions && (
+              <div className="mars-globe-location-actions">
+                {renderLocationActions(selectedLocation)}
+              </div>
+            )}
           </div>
         )}
-
-        {/* INTERACTION HINT */}
 
         <div className="mars-globe-hint">
           Drag to rotate · Scroll to zoom
