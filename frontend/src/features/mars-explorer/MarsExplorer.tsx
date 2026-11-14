@@ -58,17 +58,15 @@ export default function MarsExplorer() {
               2D Map
             </button>
 
-            {hasExpedition && (
-              <button
-                type="button"
-                className={tabClass(false)}
-                aria-pressed={false}
-                onClick={() => setViewMode("jezero")}
-              >
-                <Compass size={13} aria-hidden="true" />
-                Expedition Sim
-              </button>
-            )}
+            <button
+              type="button"
+              className={tabClass(false)}
+              aria-pressed={false}
+              onClick={() => setViewMode("jezero")}
+            >
+              <Compass size={13} aria-hidden="true" />
+              {hasExpedition ? "Expedition Sim" : "3D Surface Walk"}
+            </button>
           </div>
 
           <MarsExplorerControls />

@@ -63,6 +63,8 @@ export interface KnowledgeGap {
   reason: string;
   relatedDatasetIds: string[];
   relatedObservationIds: string[];
+  relatedTargetId?: string;
+  significance?: string;
 }
 
 /* =========================================================
@@ -113,6 +115,9 @@ export interface MissionConfiguration {
   terrainPreferences: TerrainPreferences;
   sciencePriorities: string[];
   explorationStrategy: string;
+  equipment?: string[];
+  missionConstraints?: string[];
+  requireReturnToBase?: boolean;
 }
 
 /* =========================================================
@@ -147,11 +152,51 @@ export interface Route {
   elevationLossMeters?: number;
   terrainMetrics?: RouteTerrainMetrics;
   reachedTargetIds: string[];
+  returnRouteIncluded?: boolean;
+  returnDistanceMeters?: number;
+  estimatedDurationHours?: number;
+  measurementSource?:
+    | "HiRISE DEM + Spherical Geometry"
+    | "Spherical Geometry (Orbital Estimate)";
 }
 
 /* =========================================================
-   SIMULATION STATE
+   SIMULATION STATE & ASTRONAUT SYSTEMS
    ========================================================= */
+
+export interface SimulatedSample {
+  id: string;
+  name: string;
+  sampleType: "Regolith" | "Rock Core" | "Float Rock" | "Atmospheric Gas";
+  coordinates: Coordinates;
+  targetId?: string;
+  geologicalContext: string;
+  collectedAt: string;
+  isSimulated: true;
+}
+
+export interface SuitTelemetry {
+  oxygenPercent: number;
+  suitPressureKpa: number;
+  co2ScrubberPercent: number;
+  suitTemperatureCelsius: number;
+  ventilationNominal: boolean;
+  hydrationPercent: number;
+  batteryPercent: number;
+  commsStatus: "Nominal" | "Degraded" | "Relay Only";
+  dustExposureIndex: number;
+  readinessVerified: boolean;
+}
+
+export interface MarsEnvironmentConditions {
+  surfaceTempCelsius: number;
+  atmosphericPressurePa: number;
+  dustOpticalDepthTau: number;
+  visibilityKm: number;
+  radiationDoseRateMicroSvPerHour: number;
+  windSpeedMetersPerSec: number;
+  contingencyActive?: string | null;
+}
 
 export interface SimulationState {
   currentPosition: Coordinates | null;
@@ -159,6 +204,14 @@ export interface SimulationState {
   elapsedTimeSeconds: number;
   progressPercentage: number;
   isActive: boolean;
+  mode?: "free" | "mission";
+  returnedToBase?: boolean;
+  completedAt?: string | null;
+  distanceFromBaseMeters?: number;
+  totalTraverseMeters?: number;
+  simulatedSamples?: SimulatedSample[];
+  suit?: SuitTelemetry;
+  environment?: MarsEnvironmentConditions;
 }
 
 /* =========================================================
@@ -247,6 +300,7 @@ export interface ExpeditionReport {
   limitations: string[];
   conclusions: string[];
   recommendedInvestigations: string[];
+  simulatedSampleIds?: string[];
 
   generatedAt: string;
 }

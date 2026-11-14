@@ -335,11 +335,19 @@ export function JezeroExpeditionView() {
         requestedLatitude: targetCoordinates.latitude,
         requestedLongitude: targetCoordinates.longitude,
         withinDem: withinJezeroDem,
+        targets: mission.scientificTargets.map((t) => ({
+          id: t.id,
+          name: t.name,
+          latitude: t.coordinates.latitude,
+          longitude: t.coordinates.longitude,
+          kind: "target",
+        })),
       },
       "*"
     );
   }, [
     activeRegion?.id,
+    mission.scientificTargets,
     simulatorCoords.latitude,
     simulatorCoords.longitude,
     targetCoordinates.latitude,
