@@ -1,6 +1,5 @@
-
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars } from "@react-three/drei";
 import * as THREE from "three";
 
@@ -41,6 +40,13 @@ const LOCATIONS: Location[] = [
   },
 ];
 
+// Scratch objects for the camera animation (avoids per-frame allocation).
+const _dir = new THREE.Vector3();
+const _full = new THREE.Quaternion();
+const _step = new THREE.Quaternion();
+
+// Matches THREE.SphereGeometry with an equirectangular texture whose
+// center (u = 0.5) is lon 0: lon 0 -> +x, lon +90 -> -z, lon 180 -> -x.
 function coordinatesToVector(
   latitude: number,
   longitude: number,
@@ -50,9 +56,9 @@ function coordinatesToVector(
   const lon = THREE.MathUtils.degToRad(longitude);
 
   return new THREE.Vector3(
-    -radius * Math.cos(lat) * Math.sin(lon),
-    radius * Math.sin(lat),
     radius * Math.cos(lat) * Math.cos(lon),
+    radius * Math.sin(lat),
+    -radius * Math.cos(lat) * Math.sin(lon),
   );
 }
 
@@ -140,39 +146,20 @@ function MarsSurface({
     };
   }, [onTextureLoaded]);
 
-  if (!texture) {
-    return (
-      <mesh>
-        <sphereGeometry args={[1, 128, 128]} />
-        <meshBasicMaterial color="#b75c35" />
-      </mesh>
-    );
-  }
-
   return (
-    <>
-      {/* Main Mars sphere */}
-      <mesh>
-        <sphereGeometry args={[1, 128, 128]} />
-        <meshBasicMaterial
-          map={texture}
-          color="#ffffff"
-          side={THREE.DoubleSide}
-          toneMapped={false}
-        />
-      </mesh>
-
-      {/* Diagnostic plane: uses exactly the same texture */}
-      <mesh position={[1.7, 0, 0]}>
-        <planeGeometry args={[1.4, 0.7]} />
-        <meshBasicMaterial
-          map={texture}
-          color="#ffffff"
-          side={THREE.DoubleSide}
-          toneMapped={false}
-        />
-      </mesh>
-    </>
+    // The sphere has a handler so R3F raycasts against it; stopPropagation
+    // keeps markers on the far side from receiving clicks through the planet.
+    <mesh onClick={(event) => event.stopPropagation()}>
+      <sphereGeometry args={[1, 128, 128]} />
+      {/* key forces a new material when `map` goes null -> texture.
+          Assigning map later doesn't recompile the shader (no USE_MAP). */}
+      <meshBasicMaterial
+        key={texture ? "textured" : "flat"}
+        map={texture}
+        color={texture ? "#ffffff" : "#b75c35"}
+        toneMapped={false}
+      />
+    </mesh>
   );
 }
 
@@ -185,10 +172,7 @@ function LocationMarker({
   selected: boolean;
   onSelect: (location: Location) => void;
 }) {
-  const position = coordinatesToVector(
-    location.latitude,
-    location.longitude,
-  );
+  const position = coordinatesToVector(location.latitude, location.longitude);
 
   return (
     <group position={position}>
@@ -232,20 +216,39 @@ function GlobeScene({
   onSelectLocation: (location: Location) => void;
   onTextureLoaded: (message: string) => void;
 }) {
-  const controlsRef = useRef<any>(null);
+  const { camera } = useThree();
+  const flyTo = useRef<THREE.Vector3 | null>(null);
 
   useEffect(() => {
-    if (!selectedLocation || !controlsRef.current) return;
-
-    const target = coordinatesToVector(
-      selectedLocation.latitude,
-      selectedLocation.longitude,
-      1.8,
-    );
-
-    controlsRef.current.target.lerp(target, 0.35);
-    controlsRef.current.update();
+    flyTo.current = selectedLocation
+      ? coordinatesToVector(
+          selectedLocation.latitude,
+          selectedLocation.longitude,
+          1,
+        ).normalize()
+      : null;
   }, [selectedLocation]);
+
+  // Rotate the camera around the origin toward the goal direction.
+  // Rotation preserves distance, so the user's zoom level is kept.
+  useFrame((_, delta) => {
+    const goal = flyTo.current;
+    if (!goal) return;
+
+    _dir.copy(camera.position).normalize();
+
+    if (_dir.dot(goal) > 0.99999) {
+      flyTo.current = null;
+      return;
+    }
+
+    const t = 1 - Math.exp(-delta * 6);
+    _full.setFromUnitVectors(_dir, goal);
+    _step.identity().slerp(_full, t);
+
+    camera.position.applyQuaternion(_step);
+    camera.lookAt(0, 0, 0);
+  });
 
   return (
     <>
@@ -263,13 +266,16 @@ function GlobeScene({
       <Stars radius={80} depth={50} count={2500} factor={4} fade />
 
       <OrbitControls
-        ref={controlsRef}
         enablePan={false}
         enableZoom
         minDistance={1.5}
         maxDistance={5}
         rotateSpeed={0.5}
         zoomSpeed={0.7}
+        onStart={() => {
+          // User grabbed the globe: cancel any in-flight animation.
+          flyTo.current = null;
+        }}
       />
 
       <RendererDiagnostics />
