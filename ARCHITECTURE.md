@@ -2,9 +2,15 @@ NASAMartianMap
 ├── .venv
 ├── backend
 │   ├── main.py
-│   ├── data-processing
-│   ├── datasets
-│   └── docs
+|   └── terrain_dem.py
+├── data-processing
+    ├── acquisition
+    |   └── discover_hirise_dtm.py
+    └── validation
+        ├── inspect_remote_dem.py
+        └── test_dem_coordinate.py
+├── datasets
+├── docs
 └── frontend
     ├── dist
     ├── node_modules
@@ -14,12 +20,20 @@ NASAMartianMap
         ├── components\map
         │   └── MarsMap.tsx 
         ├── data
-        │   └── mapLayers.ts 
+        │   |── mapLayers.ts 
+        |   └── marsLocations.ts
         ├── features
         │   ├── planetary-explorer
         │   │   └── ExplorerPage.tsx
         │   └── welcome
         │       └── WelcomePage.tsx
+        ├── globe
+        │   ├── components
+        │   ├── utils
+        │   └── MarsGlobe.tsx
+        ├── mars_walking
+        │   ├── main.ts
+        │   └── style.css
         ├── services
         │   └── providers
         │       ├── nasaTrek.ts 

@@ -1,4 +1,3 @@
-// frontend/src/components/map/MarsMap.tsx
 
 import { useEffect, useState } from "react";
 import {
@@ -12,8 +11,7 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-import { MAP_LAYERS } from "../../data/mapLayers";
-import type { MapLayerId } from "../../data/mapLayers";
+import { MAP_LAYERS, type MapLayerId } from "../../data/mapLayers";
 
 import {
   getDataProvider,
@@ -34,12 +32,17 @@ interface SavedLocation extends Coordinates {
 
 interface MapControllerProps {
   layerId: MapLayerId;
-  focusLocation: SavedLocation | null;
+  focusLocation: Coordinates | null;
   resetCounter: number;
 }
 
 interface MapClickHandlerProps {
   onSelect: (coordinates: Coordinates) => void;
+}
+
+interface MarsMapProps {
+  focusLocation: Coordinates | null;
+  onLocationSelect: (coordinates: Coordinates) => void;
 }
 
 function MapController({
@@ -80,7 +83,10 @@ function MapClickHandler({
   return null;
 }
 
-export default function MarsMap() {
+export default function MarsMap({
+  focusLocation,
+  onLocationSelect,
+}: MarsMapProps) {
   const [selectedLayer, setSelectedLayer] =
     useState<MapLayerId>("mars_global_mola");
 
@@ -107,7 +113,7 @@ export default function MarsMap() {
   const [locationName, setLocationName] = useState("");
   const [opacity, setOpacity] = useState(1);
 
-  const [focusLocation, setFocusLocation] =
+  const [savedFocusLocation, setSavedFocusLocation] =
     useState<SavedLocation | null>(null);
 
   const [resetCounter, setResetCounter] = useState(0);
@@ -117,7 +123,6 @@ export default function MarsMap() {
 
   const layer = MAP_LAYERS[selectedLayer];
 
-  // Retrieve real DEM elevation whenever a map location is selected.
   useEffect(() => {
     if (!coordinates) {
       setElevation(null);
@@ -199,6 +204,11 @@ export default function MarsMap() {
     };
   }, [selectedLayer, layer.provider]);
 
+  function selectCoordinates(nextCoordinates: Coordinates): void {
+    setCoordinates(nextCoordinates);
+    onLocationSelect(nextCoordinates);
+  }
+
   function saveLocation(): void {
     if (!coordinates) return;
 
@@ -242,7 +252,7 @@ export default function MarsMap() {
   }
 
   function resetView(): void {
-    setFocusLocation(null);
+    setSavedFocusLocation(null);
     setResetCounter((current) => current + 1);
   }
 
@@ -268,7 +278,7 @@ export default function MarsMap() {
             setSelectedLayer(
               event.target.value as MapLayerId
             );
-            setFocusLocation(null);
+            setSavedFocusLocation(null);
           }}
         >
           {Object.values(MAP_LAYERS).map((item) => (
@@ -278,7 +288,7 @@ export default function MarsMap() {
           ))}
         </select>
 
-        <button onClick={resetView}>
+        <button type="button" onClick={resetView}>
           Reset View
         </button>
       </div>
@@ -308,11 +318,13 @@ export default function MarsMap() {
         >
           <MapController
             layerId={selectedLayer}
-            focusLocation={focusLocation}
+            focusLocation={
+              focusLocation ?? savedFocusLocation
+            }
             resetCounter={resetCounter}
           />
 
-          <MapClickHandler onSelect={setCoordinates} />
+          <MapClickHandler onSelect={selectCoordinates} />
 
           {tileConfig && (
             <TileLayer
@@ -445,6 +457,7 @@ export default function MarsMap() {
           />
 
           <button
+            type="button"
             onClick={saveLocation}
             style={{ marginLeft: "8px" }}
           >
@@ -488,14 +501,16 @@ export default function MarsMap() {
 
               <div>
                 <button
+                  type="button"
                   onClick={() =>
-                    setFocusLocation(location)
+                    setSavedFocusLocation(location)
                   }
                 >
                   Go to
                 </button>
 
                 <button
+                  type="button"
                   onClick={() =>
                     removeLocation(location.id)
                   }
