@@ -24,7 +24,7 @@ export interface MapLayer {
   description: string;
   provider: "nasaTrek";
   category: MapLayerCategory;
-  coverage: "global";
+  coverage: "global" | "regional";
   center: [number, number];
   zoom: number;
   /** Identifies whether this layer is strictly a visualization basemap/hillshade. */
@@ -33,6 +33,19 @@ export interface MapLayer {
 
 export const MAP_LAYERS = {
   // BASEMAPS & SHADED-RELIEF VISUALIZATIONS
+
+  jezero_hirise: {
+    id: "jezero_hirise",
+    name: "Jezero Crater HiRISE Orthomosaic (25 cm)",
+    description:
+      "Controlled high-resolution 25 cm/pixel visible mosaic of Jezero Crater Western Delta and floor (JEZ_hirise_soc_006).",
+    provider: "nasaTrek",
+    category: "basemap",
+    coverage: "regional",
+    center: [18.45, 77.45],
+    zoom: 7,
+    visualizationOnly: false,
+  },
 
   mars_global_mola: {
     id: "mars_global_mola",

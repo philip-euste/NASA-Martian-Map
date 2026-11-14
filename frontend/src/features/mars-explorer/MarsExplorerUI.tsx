@@ -248,6 +248,14 @@ export function MarsExplorerLocationPanel({
           )}
         </button>
 
+        <Link
+          to="/mission/investigate"
+          className="mx-btn mx-btn--secondary mx-btn--block"
+        >
+          <FlaskConical size={15} aria-hidden="true" />
+          Log Observation in Investigation
+        </Link>
+
         {site && (
           <Link
             to={`/explorer/location/${site.id}`}

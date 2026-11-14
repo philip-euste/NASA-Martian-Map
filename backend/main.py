@@ -566,3 +566,86 @@ def get_meda_observations(
         },
         "observations": observations,
     }
+
+
+# =========================================================
+# PERSEVERANCE ROVER SURFACE IMAGERY
+# =========================================================
+
+ROVER_IMAGERY_FILE = (
+    BACKEND_DIR
+    / "datasets"
+    / "rover_imagery"
+    / "processed"
+    / "perseverance_surface_imagery.json"
+)
+
+if not ROVER_IMAGERY_FILE.is_file():
+    ROVER_IMAGERY_FILE = (
+        BACKEND_DIR.parent
+        / "frontend"
+        / "public"
+        / "data"
+        / "perseverance_surface_imagery.json"
+    )
+
+
+@app.get("/api/rover/perseverance/images")
+def get_perseverance_surface_images(
+    camera: str = Query(default="ALL"),
+    sol: str = Query(default="ALL"),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=12, ge=1, le=100),
+):
+    if not ROVER_IMAGERY_FILE.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Perseverance surface imagery catalog not found on server.",
+        )
+
+    try:
+        with open(ROVER_IMAGERY_FILE, "r", encoding="utf-8") as f:
+            catalog = json.load(f)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to load Perseverance surface imagery: {e}",
+        )
+
+    items = catalog.get("items", [])
+
+    # Filter by camera
+    if camera != "ALL":
+        cam_upper = camera.upper()
+        items = [
+            img for img in items
+            if img.get("cameraGroup") == cam_upper or img.get("instrument") == cam_upper
+        ]
+
+    # Filter by Sol
+    if sol != "ALL":
+        try:
+            sol_int = int(sol)
+            items = [img for img in items if img.get("sol") == sol_int]
+        except ValueError:
+            pass
+
+    total_matching = len(items)
+    total_pages = max(1, (total_matching + per_page - 1) // per_page)
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    page_items = items[start_idx:end_idx]
+
+    return {
+        "items": page_items,
+        "totalMatching": total_matching,
+        "page": page,
+        "perPage": per_page,
+        "totalPages": total_pages,
+        "hasMore": page < total_pages,
+        "availableSols": catalog.get("availableSols", []),
+        "summaryByCamera": catalog.get("summaryByCamera", {}),
+        "retrievalMode": "live_backend",
+        "retrievalLabel": "FastAPI Marswalk Server",
+        "sourceAttribution": "NASA/JPL-Caltech Mars 2020 Raw Images Archive",
+    }

@@ -47,6 +47,14 @@ export interface MarsExplorerContextValue {
   setSelectedLayerId: (layerId: MapLayerId) => void;
   opacity: number;
   setOpacity: (opacity: number) => void;
+  overlayLayerId: MapLayerId | null;
+  setOverlayLayerId: (layerId: MapLayerId | null) => void;
+  overlayOpacity: number;
+  setOverlayOpacity: (opacity: number) => void;
+  showGeologyOverlay: boolean;
+  setShowGeologyOverlay: (show: boolean) => void;
+  geologyOpacity: number;
+  setGeologyOpacity: (opacity: number) => void;
   tileConfig: TileLayerConfig | null;
   layerLoading: boolean;
   layerError: string | null;

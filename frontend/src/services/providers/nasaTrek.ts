@@ -17,6 +17,9 @@ interface NasaLayerDefinition {
 }
 
 const NASA_LAYERS: Record<MapLayerId, NasaLayerDefinition> = {
+  jezero_hirise: {
+    id: "JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd",
+  },
   mars_global_mola: {
     id: "Mars_MGS_MOLA_ClrShade_merge_global_463m",
     static: true,

@@ -1,5 +1,5 @@
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -8,12 +8,14 @@ import {
   useMapEvents,
   CircleMarker,
   Tooltip,
+  GeoJSON,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import { MAP_LAYERS, type MapLayerId } from "../../data/mapLayers";
 import {
+  getDataProvider,
   type TileLayerConfig,
   type TileMatrixLevel,
 } from "../../services/dataProviders";
@@ -363,6 +365,10 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
     layerError,
     retryLayer,
     opacity,
+    overlayLayerId,
+    overlayOpacity,
+    showGeologyOverlay,
+    geologyOpacity,
     focusCoordinates,
     focusRequestVersion,
     updateCameraFocus,
@@ -380,6 +386,45 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
   } = useMarsExplorer();
 
   const layer = MAP_LAYERS[selectedLayerId];
+
+  const [overlayTileConfig, setOverlayTileConfig] = useState<TileLayerConfig | null>(null);
+  useEffect(() => {
+    if (!overlayLayerId) {
+      setOverlayTileConfig(null);
+      return;
+    }
+    const targetLayer = MAP_LAYERS[overlayLayerId];
+    if (!targetLayer) return;
+    let cancelled = false;
+    getDataProvider(targetLayer.provider)
+      .getLayerConfig(overlayLayerId)
+      .then((cfg) => {
+        if (!cancelled) setOverlayTileConfig(cfg);
+      })
+      .catch(() => {
+        if (!cancelled) setOverlayTileConfig(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [overlayLayerId]);
+
+  const [geologyGeoJson, setGeologyGeoJson] = useState<any>(null);
+  useEffect(() => {
+    if (!showGeologyOverlay) return;
+    let cancelled = false;
+    fetch("/data/jezero_geology_sim3464.geojson")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setGeologyGeoJson(data);
+      })
+      .catch(() => {
+        if (!cancelled) setGeologyGeoJson(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showGeologyOverlay]);
 
   useEffect(() => {
     if (!focusSiteId) return;
@@ -459,6 +504,47 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
               opacity={opacity}
             />
           ) : null}
+
+          {/* Secondary Overlay Layer (Multi-layer blending) */}
+          {overlayLayerId && overlayTileConfig?.matrixLevels?.length ? (
+            <WmtsTileLayer
+              key={`overlay-${overlayLayerId}`}
+              config={overlayTileConfig}
+              opacity={overlayOpacity}
+            />
+          ) : overlayLayerId && overlayTileConfig ? (
+            <TileLayer
+              key={`overlay-${overlayLayerId}`}
+              url={overlayTileConfig.tileUrlTemplate}
+              attribution={overlayTileConfig.attribution}
+              zoomOffset={overlayTileConfig.zoomOffset}
+              noWrap
+              opacity={overlayOpacity}
+            />
+          ) : null}
+
+          {/* USGS Jezero Geologic Units Overlay */}
+          {showGeologyOverlay && geologyGeoJson && (
+            <GeoJSON
+              key={`usgs-geology-${geologyOpacity}`}
+              data={geologyGeoJson}
+              style={(feature) => ({
+                color: feature?.properties?.stroke_color || "#3b82f6",
+                weight: 2,
+                fillColor: feature?.properties?.color || "#3b82f6",
+                fillOpacity: geologyOpacity,
+              })}
+              onEachFeature={(feature, layer) => {
+                if (feature.properties) {
+                  const p = feature.properties;
+                  layer.bindTooltip(
+                    `<strong>${p.unit_code}</strong>: ${p.unit_name}<br/><span style="font-size:11px;color:#cbd5e1">${p.lithology}</span>`,
+                    { sticky: true, className: "mx-site-label" }
+                  );
+                }
+              }}
+            />
+          )}
 
           {EXPLORATION_SITES.map((site) => {
             const active =

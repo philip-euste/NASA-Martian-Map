@@ -1,0 +1,171 @@
+{
+  "type": "FeatureCollection",
+  "name": "USGS_SIM3464_Jezero_Geology",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "unit_code": "HpHd_scarp",
+        "unit_name": "Western Delta Scarp Formation",
+        "stratigraphic_age": "Late Noachian – Early Hesperian (~3.7 Ga)",
+        "lithology": "Fine-grained rhythmic phyllosilicate-bearing mudstone and clay-siltstone lamina",
+        "interpretation": "Low-energy standing lacustrine lake deposition at the western delta foreset scarp",
+        "dominant_minerals": ["Fe/Mg Smectite Clay", "Mg-Carbonate", "Hydrated Silica"],
+        "trafficability": "Moderate hazard — steep 15°–25° scarp slopes with boulder talus",
+        "color": "#3b82f6",
+        "stroke_color": "#1d4ed8"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.395, 18.442],
+            [77.418, 18.448],
+            [77.424, 18.462],
+            [77.415, 18.476],
+            [77.398, 18.472],
+            [77.390, 18.455],
+            [77.395, 18.442]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "unit_code": "HpHd_top",
+        "unit_name": "Western Delta Topset Formation",
+        "stratigraphic_age": "Early Hesperian (~3.6–3.7 Ga)",
+        "lithology": "Coarse- to medium-grained cross-bedded sandstones and conglomerate channel ridges",
+        "interpretation": "Subaerial to shallow-water distributary fluvial channels and delta plain bedforms",
+        "dominant_minerals": ["Plagioclase", "Pyroxene", "Detrital Clays", "Sulfates"],
+        "trafficability": "High trafficability — planar sandstone benches with minor ripple bedforms",
+        "color": "#60a5fa",
+        "stroke_color": "#2563eb"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.352, 18.435],
+            [77.395, 18.442],
+            [77.398, 18.472],
+            [77.370, 18.485],
+            [77.345, 18.468],
+            [77.352, 18.435]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "unit_code": "HNcf_f",
+        "unit_name": "Crater Floor Fractured Unit (Séítah Formation)",
+        "stratigraphic_age": "Noachian – Early Hesperian (~3.8 Ga)",
+        "lithology": "Coarse crystalline olivine-rich basaltic cumulate with polygonal cooling fractures",
+        "interpretation": "Igneous lava lake pond or shallow differentiated sill, aqueously altered by early groundwater",
+        "dominant_minerals": ["Olivine (Fo50-Fo70)", "Augite Pyroxene", "Carbonate Coatings"],
+        "trafficability": "Extreme trafficability hazard — loose aeolian sand dunes and razor-sharp fractured bedrock",
+        "color": "#d97706",
+        "stroke_color": "#b45309"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.425, 18.410],
+            [77.468, 18.418],
+            [77.465, 18.452],
+            [77.420, 18.446],
+            [77.425, 18.410]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "unit_code": "Cc_b",
+        "unit_name": "Belva Crater Ejecta and Rim Breccia",
+        "stratigraphic_age": "Amazonian / Copernican (<1.0 Ga)",
+        "lithology": "Heterogeneous polymict impact breccia and excavated sub-delta blocks",
+        "interpretation": "Recent impact event punching through delta strata into deeper crater floor units",
+        "dominant_minerals": ["Excavated Megabreccia", "Fractured Clasts", "Impact Melt Glass"],
+        "trafficability": "Severe hazard — meter-scale boulder fields and steep crater rim escarpments",
+        "color": "#a855f7",
+        "stroke_color": "#7e22ce"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.418, 18.455],
+            [77.442, 18.458],
+            [77.445, 18.478],
+            [77.422, 18.475],
+            [77.418, 18.455]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "unit_code": "Hcf_m",
+        "unit_name": "Marginal Carbonate Bench Unit",
+        "stratigraphic_age": "Noachian – Early Hesperian (~3.8 Ga)",
+        "lithology": "Stromatolitic or laminated magnesium-carbonate and hydrated silica benches",
+        "interpretation": "Nearshore lacustrine precipitation bench or spring deposit fringing inner crater wall",
+        "dominant_minerals": ["Magnesite / Mg-Carbonate", "Hydrated Silica", "Talc"],
+        "trafficability": "Moderate trafficability — terraced benches with localized steep slopes",
+        "color": "#ec4899",
+        "stroke_color": "#be185d"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.340, 18.420],
+            [77.365, 18.428],
+            [77.350, 18.490],
+            [77.325, 18.480],
+            [77.340, 18.420]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "unit_code": "Npl_cr",
+        "unit_name": "Jezero Crater Rim Basement Complex",
+        "stratigraphic_age": "Middle to Late Noachian (>3.9 Ga)",
+        "lithology": "Ancient brecciated crustal rocks with localized hydrothermal clay veins",
+        "interpretation": "Pre-impact Isidis Basin and Jezero Crater impact rim bedrock",
+        "dominant_minerals": ["Low-Ca Pyroxene", "Plagioclase", "Fe/Mg Smectites", "Chlorite"],
+        "trafficability": "Impassable for rovers — relief exceeds 500 meters with vertical cliffs",
+        "color": "#64748b",
+        "stroke_color": "#334155"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [77.300, 18.390],
+            [77.490, 18.390],
+            [77.490, 18.410],
+            [77.320, 18.410],
+            [77.300, 18.390]
+          ]
+        ]
+      }
+    }
+  ]
+}
