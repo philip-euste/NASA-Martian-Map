@@ -1,5 +1,4 @@
-// frontend/src/features/planetary-explorer/LocationPage.tsx
-// Location Information page (Figma: Location Information — Desktop).
+
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -23,7 +22,10 @@ import {
   EXPLORATION_SITES,
   getSiteById,
 } from "../../data/explorationSites";
-import { marsDemProvider, type DemElevation } from "../../services/providers/marsDem";
+import {
+  marsDemProvider,
+  type DemElevation,
+} from "../../services/providers/marsDem";
 import { useMission } from "../../state/mission/MissionContext";
 import {
   buildRegion,
@@ -34,6 +36,23 @@ import {
 } from "../mission/missionHelpers";
 import PerseveranceImageryPanel from "../mission/PerseveranceImageryPanel";
 import type { Observation } from "../../types";
+
+function getElevationSourceLabel(elevation: DemElevation): string {
+  if (elevation.isFallback) {
+    return "Local CTX DEM";
+  }
+
+  switch (elevation.source?.toUpperCase()) {
+    case "HIRISE":
+      return "HiRISE Digital Terrain Model";
+    case "MOLA":
+      return "MOLA Global Topography";
+    case "CTX":
+      return "CTX Digital Terrain Model";
+    default:
+      return elevation.source ?? "Unknown source";
+  }
+}
 
 export default function LocationPage() {
   const { siteId } = useParams<{ siteId: string }>();
@@ -51,10 +70,16 @@ export default function LocationPage() {
     setActiveImageIndex(0);
   }, [siteId]);
 
-  // Query real DEM elevation for this site's coordinates.
+  // Retrieve elevation from the FastAPI DEM endpoint.
   useEffect(() => {
-    if (!site) return;
+    if (!site) {
+      setElevation(null);
+      setElevationLoading(false);
+      setElevationError(null);
+      return;
+    }
 
+    const selectedSite = site;
     let cancelled = false;
 
     async function loadElevation() {
@@ -65,18 +90,21 @@ export default function LocationPage() {
       try {
         const result = await marsDemProvider.getElevation(
           {
-            latitude: site!.latitude,
-            longitude: site!.longitude,
+            latitude: selectedSite.latitude,
+            longitude: selectedSite.longitude,
           },
           { forceRetry: elevationRetryCount > 0 }
         );
+
         if (!cancelled) {
           setElevation(result);
         }
       } catch (err: unknown) {
         if (!cancelled) {
           setElevationError(
-            err instanceof Error ? err.message : "Unable to retrieve elevation."
+            err instanceof Error
+              ? err.message
+              : "Unable to retrieve elevation."
           );
         }
       } finally {
@@ -87,6 +115,7 @@ export default function LocationPage() {
     }
 
     loadElevation();
+
     return () => {
       cancelled = true;
     };
@@ -100,7 +129,10 @@ export default function LocationPage() {
             icon={<Compass size={26} />}
             title="Location not found"
             action={
-              <Link to="/explorer?view=map" className="mx-btn mx-btn--primary">
+              <Link
+                to="/explorer?view=map"
+                className="mx-btn mx-btn--primary"
+              >
                 <ArrowLeft size={16} aria-hidden="true" />
                 Back to Mars map
               </Link>
@@ -114,32 +146,48 @@ export default function LocationPage() {
     );
   }
 
-  const coordinates = { latitude: site.latitude, longitude: site.longitude };
-  const isRegion = mission.region?.id === site.id;
+  // Stable reference after the not-found guard.
+  const selectedSite = site;
+
+  const coordinates = {
+    latitude: selectedSite.latitude,
+    longitude: selectedSite.longitude,
+  };
+
+  const isRegion = mission.region?.id === selectedSite.id;
   const isTarget = hasTargetAt(mission.scientificTargets, coordinates);
-  const activeImage = site.images[activeImageIndex];
+  const activeImage = selectedSite.images[activeImageIndex];
 
   const siteObservations = mission.selectedObservations.filter(
     (obs) =>
       obs.coordinates &&
-      Math.abs(obs.coordinates.latitude - site.latitude) < 2 &&
-      Math.abs(obs.coordinates.longitude - site.longitude) < 2
+      Math.abs(obs.coordinates.latitude - selectedSite.latitude) < 2 &&
+      Math.abs(obs.coordinates.longitude - selectedSite.longitude) < 2
   );
 
   function startInvestigationAtSite(): void {
-    if (!site) return;
     setRegion(
-      buildRegion(site.id, site.name, coordinates, site.description)
+      buildRegion(
+        selectedSite.id,
+        selectedSite.name,
+        coordinates,
+        selectedSite.description
+      )
     );
     navigate("/mission/investigate");
   }
 
   function addSiteAsTarget(): void {
-    if (!site || isTarget) return;
+    if (isTarget) return;
+
     updateMission({
       scientificTargets: [
         ...toMutable(mission.scientificTargets),
-        buildTarget(site.name, coordinates, site.description),
+        buildTarget(
+          selectedSite.name,
+          coordinates,
+          selectedSite.description
+        ),
       ],
     });
   }
@@ -154,31 +202,33 @@ export default function LocationPage() {
       }
     >
       <main className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 lg:px-14">
-        {/* Breadcrumb (Figma: <- Mars map / Jezero Crater) */}
+        {/* Breadcrumb */}
         <nav
           className="mb-6 flex flex-wrap items-center justify-between gap-4"
           aria-label="Breadcrumb"
         >
           <div className="flex items-center gap-2 text-sm">
             <Link
-              to={`/explorer?view=map&site=${site.id}`}
+              to={`/explorer?view=map&site=${selectedSite.id}`}
               className="inline-flex items-center gap-2 text-mx-muted no-underline hover:text-mx-text"
             >
               <ArrowLeft size={15} aria-hidden="true" />
               Mars map
             </Link>
+
             <span className="text-mx-dim">/</span>
-            <span className="font-medium text-mx-text">{site.name}</span>
+            <span className="font-medium text-mx-text">
+              {selectedSite.name}
+            </span>
           </div>
 
-          {/* Quick site switcher */}
           <div className="flex flex-wrap gap-1.5">
             {EXPLORATION_SITES.map((item) => (
               <Link
                 key={item.id}
                 to={`/explorer/location/${item.id}`}
                 className={`mx-chip no-underline ${
-                  item.id === site.id ? "mx-chip--active" : ""
+                  item.id === selectedSite.id ? "mx-chip--active" : ""
                 }`}
               >
                 {item.name}
@@ -187,9 +237,9 @@ export default function LocationPage() {
           </div>
         </nav>
 
-        {/* Main 2-column grid (Figma: Gallery left, Metadata & actions right) */}
+        {/* Main content */}
         <div className="grid gap-10 lg:grid-cols-12 lg:gap-12">
-          {/* Left column: Hero image + thumbnail gallery */}
+          {/* Location imagery */}
           <section className="lg:col-span-7" aria-label="Location imagery">
             <div className="relative overflow-hidden rounded-[10px] border border-mx-border bg-mx-panel">
               {activeImage ? (
@@ -201,24 +251,23 @@ export default function LocationPage() {
               ) : (
                 <ImagePending
                   className="aspect-[16/10] border-0"
-                  label={`${site.name} — Surface & Orbital Imagery Pending`}
-                  detail={`Supply licensed NASA/JPL photographs in public/images/locations/${site.id}/ to populate this gallery.`}
+                  label={`${selectedSite.name} — Surface & Orbital Imagery Pending`}
+                  detail={`Supply licensed NASA/JPL photographs in public/images/locations/${selectedSite.id}/ to populate this gallery.`}
                 />
               )}
 
               <span className="mx-mono absolute bottom-3 right-3 rounded bg-mx-bg/90 px-2.5 py-1 text-[11px] text-mx-text">
-                {site.images.length > 0
+                {selectedSite.images.length > 0
                   ? `${String(activeImageIndex + 1).padStart(2, "0")} / ${String(
-                      site.images.length
+                      selectedSite.images.length
                     ).padStart(2, "0")}`
                   : "00 / 00"}
               </span>
             </div>
 
-            {/* Thumbnail strip (Figma: 3 cards below hero) */}
-            {site.images.length > 0 ? (
+            {selectedSite.images.length > 0 ? (
               <div className="mt-3.5 grid grid-cols-3 gap-3">
-                {site.images.map((image, idx) => (
+                {selectedSite.images.map((image, idx) => (
                   <button
                     key={image.src}
                     type="button"
@@ -234,6 +283,7 @@ export default function LocationPage() {
                       alt={image.caption}
                       className="aspect-[16/9] w-full object-cover"
                     />
+
                     <span className="absolute bottom-2 left-2 rounded bg-mx-bg/85 px-2 py-0.5 text-[11px] text-mx-text">
                       {image.caption}
                     </span>
@@ -258,65 +308,122 @@ export default function LocationPage() {
             )}
 
             <p className="mx-eyebrow mt-3 text-mx-dim">
-              {site.name} · Surface &amp; orbital views · NASA / JPL
+              {selectedSite.name} · Surface &amp; orbital views · NASA / JPL
             </p>
           </section>
 
-          {/* Right column: Location information & actions */}
-          <section className="flex flex-col lg:col-span-5" aria-label="Location details">
-            <p className="mx-eyebrow">{site.regionLabel} / Mars</p>
+          {/* Location information */}
+          <section
+            className="flex flex-col lg:col-span-5"
+            aria-label="Location details"
+          >
+            <p className="mx-eyebrow">{selectedSite.regionLabel} / Mars</p>
+
             <h1 className="mx-display m-0 mt-2 text-4xl sm:text-5xl">
-              {site.name}
+              {selectedSite.name}
             </h1>
 
             <p className="mx-mono m-0 mt-3 inline-flex items-center gap-2 text-mx-muted">
-              <MapPin size={14} className="text-mx-accent" aria-hidden="true" />
-              {formatCoordinates(site.latitude, site.longitude)}
+              <MapPin
+                size={14}
+                className="text-mx-accent"
+                aria-hidden="true"
+              />
+              {formatCoordinates(
+                selectedSite.latitude,
+                selectedSite.longitude
+              )}
             </p>
 
+            {/* Elevation information */}
             <div className="my-6 grid grid-cols-2 gap-6 border-y border-mx-border py-4">
               <div>
                 <DataField
-                  label={
-                    elevation?.isFallback
-                      ? "Elevation (Local Jezero DEM)"
-                      : "Elevation"
-                  }
+                  label="Elevation"
                   value={
                     elevationLoading
                       ? "Querying DEM…"
                       : elevation
-                        ? `${elevation.elevation.toFixed(0)} ${elevation.unit}`
+                        ? `${elevation.elevation.toFixed(2)} ${elevation.unit}`
                         : undefined
                   }
                   fallback={
                     elevationError
-                      ? "Outside regional DEM coverage"
+                      ? "Elevation query failed"
                       : "Not available"
                   }
                 />
+
+                {elevation && (
+                  <div className="mt-2 space-y-1">
+                    <p className="mx-mono text-[11px] text-mx-accent">
+                      {getElevationSourceLabel(elevation)}
+                    </p>
+
+                    {elevation.resolution_meters != null && (
+                      <p className="mx-mono text-[10px] text-mx-dim">
+                        Resolution: approximately{" "}
+                        {elevation.resolution_meters.toLocaleString()} m/pixel
+                      </p>
+                    )}
+
+                    {elevation.vertical_reference && (
+                      <p className="mx-mono text-[10px] text-mx-dim">
+                        Vertical reference: {elevation.vertical_reference}
+                      </p>
+                    )}
+
+                    <p className="break-all text-[10px] text-mx-dim">
+                      Dataset: {elevation.product_id}
+                    </p>
+
+                    {elevation.isFallback && (
+                      <p className="text-[10px] text-mx-dim">
+                        Local fallback dataset
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {elevationError && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      marsDemProvider.resetBackendCooldown();
-                      setElevationRetryCount((c) => c + 1);
-                    }}
-                    className="mt-1.5 text-[11px] font-mono text-mx-accent hover:underline"
-                  >
-                    Retry DEM query
-                  </button>
+                  <div className="mt-2">
+                    <p className="text-[10px] text-mx-dim">
+                      {elevationError}
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        marsDemProvider.resetBackendCooldown();
+                        setElevationRetryCount((count) => count + 1);
+                      }}
+                      className="mt-1.5 text-[11px] font-mono text-mx-accent hover:underline"
+                    >
+                      Retry DEM query
+                    </button>
+                  </div>
                 )}
               </div>
-              <DataField label="Terrain Type" value={site.terrainType} />
+
+              <DataField
+                label="Terrain Type"
+                value={selectedSite.terrainType}
+              />
             </div>
 
+            {/* About */}
             <div>
-              <h2 className="mx-heading m-0 text-base">About This Location</h2>
-              <p className="mx-body m-0 mt-2.5">{site.description}</p>
+              <h2 className="mx-heading m-0 text-base">
+                About This Location
+              </h2>
+
+              <p className="mx-body m-0 mt-2.5">
+                {selectedSite.description}
+              </p>
             </div>
 
-            {site.significance && (
+            {/* Scientific significance */}
+            {selectedSite.significance && (
               <div className="mt-6">
                 <h2 className="mx-heading m-0 flex items-center gap-2 text-base">
                   <ScanSearch
@@ -326,11 +433,14 @@ export default function LocationPage() {
                   />
                   Scientific Significance
                 </h2>
-                <p className="mx-body m-0 mt-2.5">{site.significance}</p>
+
+                <p className="mx-body m-0 mt-2.5">
+                  {selectedSite.significance}
+                </p>
               </div>
             )}
 
-            {/* Actions (Figma: primary orange CTA + secondary Back to Map) */}
+            {/* Actions */}
             <div className="mt-8 flex flex-col gap-3">
               <button
                 type="button"
@@ -340,6 +450,7 @@ export default function LocationPage() {
                 {isRegion
                   ? "Continue Scientific Investigation"
                   : "Investigate This Region"}
+
                 <ArrowUpRight size={16} aria-hidden="true" />
               </button>
 
@@ -352,17 +463,19 @@ export default function LocationPage() {
                 >
                   {isTarget ? (
                     <>
-                      <Check size={15} aria-hidden="true" /> Target Added
+                      <Check size={15} aria-hidden="true" />
+                      Target Added
                     </>
                   ) : (
                     <>
-                      <Target size={15} aria-hidden="true" /> Add as Target
+                      <Target size={15} aria-hidden="true" />
+                      Add as Target
                     </>
                   )}
                 </button>
 
                 <Link
-                  to={`/explorer?view=map&site=${site.id}`}
+                  to={`/explorer?view=map&site=${selectedSite.id}`}
                   className="mx-btn mx-btn--secondary"
                 >
                   <ArrowLeft size={15} aria-hidden="true" />
@@ -375,7 +488,12 @@ export default function LocationPage() {
                 onClick={() => {
                   if (!isRegion) {
                     setRegion(
-                      buildRegion(site.id, site.name, coordinates, site.description)
+                      buildRegion(
+                        selectedSite.id,
+                        selectedSite.name,
+                        coordinates,
+                        selectedSite.description
+                      )
                     );
                   }
                 }}
@@ -388,8 +506,8 @@ export default function LocationPage() {
           </section>
         </div>
 
-        {/* T-2.3: Perseverance Surface Imagery Catalog for Jezero Crater */}
-        {site.id === "jezero-crater" && (
+        {/* Perseverance surface imagery */}
+        {selectedSite.id === "jezero-crater" && (
           <div className="mt-12">
             <PerseveranceImageryPanel
               onLogObservationWithImage={(params) => {
@@ -410,6 +528,7 @@ export default function LocationPage() {
                   },
                   surfaceImage: params.surfaceImage,
                 };
+
                 updateMission({
                   selectedObservations: [
                     ...toMutable(mission.selectedObservations),
@@ -421,7 +540,7 @@ export default function LocationPage() {
           </div>
         )}
 
-        {/* Observation details & recorded mission context for this site */}
+        {/* Recorded observations */}
         <section
           className="mt-12 border-t border-mx-border pt-8"
           aria-labelledby="site-observations-heading"
@@ -429,10 +548,15 @@ export default function LocationPage() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="mx-eyebrow">Observation details</p>
-              <h2 id="site-observations-heading" className="mx-heading m-0 mt-1 text-lg">
-                Recorded observations near {site.name}
+
+              <h2
+                id="site-observations-heading"
+                className="mx-heading m-0 mt-1 text-lg"
+              >
+                Recorded observations near {selectedSite.name}
               </h2>
             </div>
+
             <Link
               to="/mission/investigate"
               className="mx-btn mx-btn--secondary mx-btn--sm"
@@ -448,7 +572,7 @@ export default function LocationPage() {
               title="No observations logged for this location yet"
             >
               Record orbital or surface observations in the Scientific
-              Investigation workspace to associate them with {site.name}.
+              Investigation workspace to associate them with {selectedSite.name}.
             </EmptyState>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -457,7 +581,11 @@ export default function LocationPage() {
                   <span className="mx-eyebrow mx-eyebrow--accent">
                     {obs.source}
                   </span>
-                  <h3 className="mx-heading m-0 mt-1 text-base">{obs.name}</h3>
+
+                  <h3 className="mx-heading m-0 mt-1 text-base">
+                    {obs.name}
+                  </h3>
+
                   {obs.description && (
                     <p className="mx-body m-0 mt-1.5 text-[13px]">
                       {obs.description}
