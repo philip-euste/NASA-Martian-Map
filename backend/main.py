@@ -19,10 +19,10 @@ from terrain_dem import router as terrain_dem_router
 # CONFIGURATION
 # =========================================================
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BACKEND_DIR = Path(__file__).resolve().parent
 
 MEDA_PROCESSED_DIR = (
-    PROJECT_ROOT
+    BACKEND_DIR
     / "datasets"
     / "meda"
     / "processed"
@@ -464,7 +464,7 @@ def get_meda_products():
             continue
 
         report_paths = sorted(
-            sensor_dir.glob("sol_*/*_REPORT.json")
+            sensor_dir.glob("sol_*/ *_REPORT.json".replace(" ", ""))
         )
 
         for report_path in report_paths:

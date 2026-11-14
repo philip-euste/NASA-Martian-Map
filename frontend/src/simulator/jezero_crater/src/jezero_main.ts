@@ -191,6 +191,31 @@ scene.add(sun);
 
 const controls = new PointerLockControls(camera, renderer.domElement);
 
+// Reduce mouse sensitivity to prevent abrupt vertical camera movement.
+controls.pointerSpeed = 0.25;
+
+// Prevent extreme vertical rotation and camera flipping.
+controls.minPolarAngle = 0.15;
+controls.maxPolarAngle = Math.PI - 0.15;
+
+const MAX_DELTA = 250;
+document.addEventListener("mousemove", (ev) => {
+  if (Math.abs(ev.movementX) > MAX_DELTA || Math.abs(ev.movementY) > MAX_DELTA) {
+    ev.stopImmediatePropagation();
+  }
+}, true);
+
+let _lastMove = performance.now();
+document.addEventListener("mousemove", (ev) => {
+  if (!controls.isLocked) return;
+  const now = performance.now();
+  const gap = now - _lastMove;
+  _lastMove = now;
+  if (Math.abs(ev.movementY) > 60 || Math.abs(ev.movementX) > 60 || gap > 50) {
+    console.log("dx", ev.movementX, "dy", ev.movementY, "gap ms", gap.toFixed(0));
+  }
+}, true);
+
 // ------------------------------------------------------------ state
 let M: Manifest;
 let overview: Uint16Array;
@@ -1533,6 +1558,7 @@ function closeMap() {
 }
 
 // ------------------------------------------------------------ input & messaging
+
 document.addEventListener("keydown", (e) => {
   keys.add(e.code);
 
