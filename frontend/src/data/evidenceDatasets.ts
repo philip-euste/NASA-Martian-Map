@@ -557,34 +557,34 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
   },
   {
     id: "crism_jezero_vnir",
-    name: "CRISM Targeted VNIR Spectral Observations (Catalog Reference)",
+    name: "CRISM Targeted VNIR Spectral Observations (Jezero Delta)",
     instrument: "CRISM (Compact Reconnaissance Imaging Spectrometer for Mars)",
     mission: "Mars Reconnaissance Orbiter (MRO)",
     category: "composition",
     mapCategory: "composition",
     description:
-      "Targeted visible and near-infrared (0.36–3.92 µm) imaging spectroscopy capable of resolving diagnostic vibrational absorption bands of hydrated phyllosilicates and carbonates in Jezero Crater.",
+      "Targeted visible and near-infrared (0.36–3.92 µm) imaging spectroscopy resolving diagnostic vibrational absorption bands of hydrated phyllosilicates (smectite) and carbonates in Jezero Crater.",
     measurementProvided:
-      "VNIR spectral reflectance (I/F) across 544 channels detecting 1.9 µm H₂O, 2.28–2.31 µm Fe/Mg-OH (smectite clay), and 2.3 / 2.5 µm Mg-carbonate overtones.",
+      "VNIR spectral reflectance (I/F) across 544 channels detecting 1.4 µm OH, 1.9 µm H₂O, 2.296 µm Fe/Mg-OH (smectite clay), and 2.30 / 2.51 µm Mg-carbonate overtones.",
     spatialResolutionLabel: "18–36 m/pixel (Targeted Full/Half Resolution)",
     resolutionMeters: 18,
     geographicCoverage:
-      "Targeted Footprints · Jezero Western Delta & Margin (e.g., HRL000040FF, FRT00005C5E)",
+      "Targeted Footprints · Jezero Western Delta & Margin (FRT00005C5E, HRL000040FF, FRT0000B204)",
     temporalCoverage: "2006–2023 (MRO CRISM Science Operations)",
     scientificPurpose:
       "Support mineralogical investigation of Fe/Mg-smectite phyllosilicates in bottomset/foreset delta beds vs. Mg-carbonate and olivine margin units.",
     suitability: "Direct Quantitative Analysis",
     limitations: [
-      "INTEGRATION STATUS: Documented reference entry only — interactive CRISM hyperspectral cubes and parameter maps (MTRDR) are NOT currently integrated in this application.",
+      "INTEGRATION STATUS: Active interactive spectral inspection integrated (MRO CRISM MTRDR cubes FRT00005C5E, HRL000040FF, FRT0000B204).",
       "Even at 18 m/pixel, orbital VNIR spectroscopy cannot determine whether Jezero delta phyllosilicates formed authigenically in situ or were transported as detrital grains from the Nili Fossae watershed, nor can it resolve millimeter-scale laminations.",
+      "Definitive confirmation of sustained standing water vs. episodic flooding requires in-situ textural/isotopic contact analysis (Perseverance or EVA sampling).",
     ],
     sourceReference:
       "NASA PDS Geosciences Node (urn:nasa:pds:crism_mtrdr; Ehlmann et al., 2008; Goudge et al., 2015; Horgan et al., 2020)",
     pdsProductId: "urn:nasa:pds:crism_mtrdr",
-    available: false,
-    integrationStatus: "documented_not_integrated",
-    integrationStatusLabel:
-      INTEGRATION_STATUS_LABELS.documented_not_integrated,
+    available: true,
+    integrationStatus: "integrated_active",
+    integrationStatusLabel: INTEGRATION_STATUS_LABELS.integrated_active,
   },
   {
     id: "omega_vnir_regional",

@@ -1,3 +1,4 @@
+
 import {
   useCallback,
   useEffect,
@@ -33,6 +34,7 @@ import { useOptionalMarsExplorer } from "../features/mars-explorer/useMarsExplor
 import { MarsExplorerLocationPanel } from "../features/mars-explorer/MarsExplorerUI";
 import {
   sameCoords,
+  type ExplorerNavigationAction,
   type SavedLocation,
 } from "../features/mars-explorer/marsExplorer.types";
 import type { Coordinates } from "../types";
@@ -79,6 +81,11 @@ const CATEGORY_LABELS: Record<MapLayerCategory, string> = {
 const direction = new THREE.Vector3();
 const rotation = new THREE.Quaternion();
 const stepRotation = new THREE.Quaternion();
+
+const MIN_GLOBE_DISTANCE = 1.42;
+const MAX_GLOBE_DISTANCE = 5;
+const DEFAULT_GLOBE_DISTANCE = 3.2;
+const GLOBE_ZOOM_STEP = 0.35;
 
 function PointMarker({
   coordinates,
@@ -145,6 +152,8 @@ function GlobeScene({
   sharedConfig,
   focusCoordinates,
   focusRequestVersion,
+  navigationAction,
+  navigationActionVersion,
   initialDistance,
   sites,
   savedLocations,
@@ -163,6 +172,8 @@ function GlobeScene({
   sharedConfig?: TileLayerConfig | null;
   focusCoordinates: Coordinates;
   focusRequestVersion: number;
+  navigationAction: ExplorerNavigationAction | null;
+  navigationActionVersion: number;
   initialDistance: number;
   sites: Location[];
   savedLocations: SavedLocation[];
@@ -196,15 +207,14 @@ function GlobeScene({
     null
   );
 
-  // Keep the newest focus values available without making ordinary
-  // camera-coordinate updates trigger the fly-to effect.
+  const lastNavigationVersionRef = useRef(0);
+
   const latestFocusRef = useRef(focusCoordinates);
   const latestDistanceRef = useRef(initialDistance);
 
   latestFocusRef.current = focusCoordinates;
   latestDistanceRef.current = initialDistance;
 
-  // Initialize the camera only once.
   useEffect(() => {
     if (initializedRef.current) return;
 
@@ -220,8 +230,6 @@ function GlobeScene({
     camera.lookAt(0, 0, 0);
   }, [camera, focusCoordinates, initialDistance]);
 
-  // Only a deliberate focus request should trigger a fly-to.
-  // Camera updates caused by OrbitControls must not trigger this effect.
   useEffect(() => {
     const focus = latestFocusRef.current;
 
@@ -236,6 +244,59 @@ function GlobeScene({
       3.4
     );
   }, [focusRequestVersion]);
+
+  useEffect(() => {
+    if (navigationActionVersion === lastNavigationVersionRef.current) {
+      return;
+    }
+
+    lastNavigationVersionRef.current = navigationActionVersion;
+
+    const currentDirection = camera.position.clone().normalize();
+    const currentDistance = camera.position.length();
+
+    switch (navigationAction) {
+      case "zoom-in": {
+        const nextDistance = THREE.MathUtils.clamp(
+          currentDistance - GLOBE_ZOOM_STEP,
+          MIN_GLOBE_DISTANCE,
+          MAX_GLOBE_DISTANCE
+        );
+
+        flyToDirection.current = currentDirection;
+        flyToDistance.current = nextDistance;
+        break;
+      }
+
+      case "zoom-out": {
+        const nextDistance = THREE.MathUtils.clamp(
+          currentDistance + GLOBE_ZOOM_STEP,
+          MIN_GLOBE_DISTANCE,
+          MAX_GLOBE_DISTANCE
+        );
+
+        flyToDirection.current = currentDirection;
+        flyToDistance.current = nextDistance;
+        break;
+      }
+
+      case "reset": {
+        const focus = latestFocusRef.current;
+
+        flyToDirection.current = coordinatesToVector(
+          focus.latitude,
+          focus.longitude,
+          1
+        ).normalize();
+
+        flyToDistance.current = DEFAULT_GLOBE_DISTANCE;
+        break;
+      }
+
+      default:
+        break;
+    }
+  }, [camera, navigationAction, navigationActionVersion]);
 
   useFrame((_, delta) => {
     const goal = flyToDirection.current;
@@ -280,8 +341,6 @@ function GlobeScene({
       }
     }
 
-    // Report camera movement less frequently and only when
-    // the position or distance has changed meaningfully.
     const now = performance.now();
 
     if (now - lastReportRef.current < 250) {
@@ -391,8 +450,8 @@ function GlobeScene({
       <OrbitControls
         enablePan={false}
         enableZoom
-        minDistance={1.42}
-        maxDistance={5}
+        minDistance={MIN_GLOBE_DISTANCE}
+        maxDistance={MAX_GLOBE_DISTANCE}
         rotateSpeed={0.5}
         zoomSpeed={0.75}
         onStart={() => {
@@ -409,7 +468,6 @@ export default function MarsGlobe({
 }: MarsGlobeProps = {}) {
   const shared = useOptionalMarsExplorer();
 
-  // Keep the latest context available to stable callbacks.
   const sharedRef = useRef(shared);
   sharedRef.current = shared;
 
@@ -432,7 +490,7 @@ export default function MarsGlobe({
     useState(1);
 
   const distanceRef = useRef(
-    shared?.globeDistance ?? 3.2
+    shared?.globeDistance ?? DEFAULT_GLOBE_DISTANCE
   );
 
   const cameraCoordsRef = useRef<Coordinates>(
@@ -449,8 +507,6 @@ export default function MarsGlobe({
     ? shared.textureStatus
     : localStatus;
 
-  // Stable callback: context object changes will not restart
-  // MarsSurface's NASA texture initialization effect.
   const handleTextureLoaded = useCallback(
     (message: string) => {
       const currentShared = sharedRef.current;
@@ -522,7 +578,6 @@ export default function MarsGlobe({
     []
   );
 
-  // Avoid unnecessary context updates while the camera is moving.
   const handleCameraUpdate = useCallback(
     (
       coordinates: Coordinates,
@@ -680,7 +735,7 @@ export default function MarsGlobe({
       <div className="mars-globe-canvas">
         <Canvas
           camera={{
-            position: [0, 0, 3.2],
+            position: [0, 0, DEFAULT_GLOBE_DISTANCE],
             fov: 45,
             near: 0.05,
             far: 200,
@@ -703,8 +758,10 @@ export default function MarsGlobe({
             sharedConfig={shared?.tileConfig}
             focusCoordinates={focusCoordinates}
             focusRequestVersion={focusRequestVersion}
+            navigationAction={shared?.navigationAction ?? null}
+            navigationActionVersion={shared?.navigationActionVersion ?? 0}
             initialDistance={
-              shared?.globeDistance ?? 3.2
+              shared?.globeDistance ?? DEFAULT_GLOBE_DISTANCE
             }
             sites={LOCATIONS}
             savedLocations={savedLocations}
@@ -721,40 +778,6 @@ export default function MarsGlobe({
             onTextureLoaded={handleTextureLoaded}
           />
         </Canvas>
-
-        <div className="mars-globe-controls">
-          {LOCATIONS.map((location) => (
-            <button
-              key={location.name}
-              type="button"
-              onClick={() => handleSelectSite(location)}
-              className={
-                selectedKind === "site" &&
-                selectedSiteName === location.name
-                  ? "active"
-                  : ""
-              }
-            >
-              {location.name}
-            </button>
-          ))}
-
-          {savedLocations.map((location) => (
-            <button
-              key={location.id}
-              type="button"
-              onClick={() => handleSelectSaved(location)}
-              className={
-                selectedKind === "saved" &&
-                selectedSavedId === location.id
-                  ? "active"
-                  : ""
-              }
-            >
-              {location.name}
-            </button>
-          ))}
-        </div>
 
         {shared ? (
           <MarsExplorerLocationPanel mode="globe" />

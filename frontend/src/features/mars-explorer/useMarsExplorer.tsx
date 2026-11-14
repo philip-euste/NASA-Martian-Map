@@ -1,3 +1,4 @@
+
 import {
   createContext,
   useCallback,
@@ -27,6 +28,7 @@ import type { Coordinates, TemporalMode } from "../../types";
 import {
   normalizeCoordinates,
   sameCoords,
+  type ExplorerNavigationAction,
   type ExplorerViewMode,
   type MarsExplorerContextValue,
   type SavedLocation,
@@ -91,6 +93,10 @@ export function MarsExplorerProvider({
 
   const [selectedLayerId, setSelectedLayerIdState] = useState<MapLayerId>("mars_viking_global");
   const [opacity, setOpacity] = useState(1);
+  const [overlayLayerId, setOverlayLayerId] = useState<MapLayerId | null>(null);
+  const [overlayOpacity, setOverlayOpacity] = useState(0.65);
+  const [showGeologyOverlay, setShowGeologyOverlay] = useState(false);
+  const [geologyOpacity, setGeologyOpacity] = useState(0.55);
   const [tileConfig, setTileConfig] = useState<TileLayerConfig | null>(null);
   const [layerLoading, setLayerLoading] = useState(false);
   const [layerError, setLayerError] = useState<string | null>(null);
@@ -110,6 +116,18 @@ export function MarsExplorerProvider({
   const [focusRequestVersion, setFocusRequestVersion] = useState(1);
   const [globeDistance, setGlobeDistance] = useState(3.2);
   const [mapZoom, setMapZoom] = useState(initialSiteId ? 4 : 2);
+
+  const [navigationAction, setNavigationAction] =
+    useState<ExplorerNavigationAction | null>(null);
+  const [navigationActionVersion, setNavigationActionVersion] = useState(0);
+
+  const requestNavigationAction = useCallback(
+    (action: ExplorerNavigationAction) => {
+      setNavigationAction(action);
+      setNavigationActionVersion((version) => version + 1);
+    },
+    []
+  );
 
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>(loadInitialSavedLocations);
   const [locationNameDraft, setLocationNameDraft] = useState("");
@@ -600,7 +618,8 @@ export function MarsExplorerProvider({
     setMapZoom(2);
     setGlobeDistance(3.2);
     setFocusRequestVersion((v) => v + 1);
-  }, [selectedLayerId]);
+    requestNavigationAction("reset");
+  }, [requestNavigationAction, selectedLayerId]);
 
   const setTemporalMode = useCallback(
     (mode: TemporalMode) => {
@@ -780,6 +799,14 @@ export function MarsExplorerProvider({
       setSelectedLayerId,
       opacity,
       setOpacity,
+      overlayLayerId,
+      setOverlayLayerId,
+      overlayOpacity,
+      setOverlayOpacity,
+      showGeologyOverlay,
+      setShowGeologyOverlay,
+      geologyOpacity,
+      setGeologyOpacity,
       tileConfig,
       layerLoading,
       layerError,
@@ -794,6 +821,10 @@ export function MarsExplorerProvider({
       setGlobeDistance,
       mapZoom,
       setMapZoom,
+
+      navigationAction,
+      navigationActionVersion,
+      requestNavigationAction,
 
       selectedLocation,
       selectSite,
@@ -856,10 +887,13 @@ export function MarsExplorerProvider({
       layerLoading,
       locationNameDraft,
       mapZoom,
+      navigationAction,
+      navigationActionVersion,
       opacity,
       openSelectedInGlobe,
       openSelectedInMap,
       removeLocation,
+      requestNavigationAction,
       resetExplorerView,
       retryElevation,
       retryLayer,

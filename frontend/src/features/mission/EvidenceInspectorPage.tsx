@@ -34,6 +34,7 @@ import type { DerivedAnalysis, ScientificInterpretation } from "../../types";
 import MissionLayout from "./MissionLayout";
 import MedaEnvironmentalPanel from "./MedaEnvironmentalPanel";
 import PerseveranceImageryPanel from "./PerseveranceImageryPanel";
+import CrismSpectralPanel from "./CrismSpectralPanel";
 import { createId, toMutable } from "./missionHelpers";
 
 export default function EvidenceInspectorPage() {
@@ -652,6 +653,10 @@ export default function EvidenceInspectorPage() {
               </section>
 
               {/* 2. Derived Measurements */}
+              {activeObservation.datasetId === "crism_jezero_vnir" && (
+                <CrismSpectralPanel />
+              )}
+
               {activeObservation.datasetId === "m2020_meda_env" && (
                 <MedaEnvironmentalPanel
                   onLogDerivedMeasurement={(params) => {

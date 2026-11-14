@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState } from "react";
 import {
   MapContainer,
@@ -7,13 +8,14 @@ import {
   useMapEvents,
   CircleMarker,
   Tooltip,
+  GeoJSON,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Crosshair, Globe, Minus, Plus } from "lucide-react";
 
 import { MAP_LAYERS, type MapLayerId } from "../../data/mapLayers";
 import {
+  getDataProvider,
   type TileLayerConfig,
   type TileMatrixLevel,
 } from "../../services/dataProviders";
@@ -38,15 +40,13 @@ interface MapControllerProps {
   layerId: MapLayerId;
   focusCoordinates: Coordinates;
   focusRequestVersion: number;
-  resetCounter: number;
+  navigationAction: "zoom-in" | "zoom-out" | "reset" | null;
+  navigationActionVersion: number;
+  onZoomOutToGlobe: (coordinates: Coordinates) => void;
 }
 
 interface MapClickHandlerProps {
   onSelect: (coordinates: Coordinates) => void;
-}
-
-interface MapReferenceProps {
-  onMapReady: (map: L.Map) => void;
 }
 
 interface MapViewportSyncProps {
@@ -71,11 +71,13 @@ function getMatrixForZoom(
   const available = levels.filter(
     (level) => level.matrixWidth <= 2 ** (zoom + 1)
   );
+
   if (available.length === 0) {
     return levels.reduce((smallest, current) =>
       current.matrixWidth < smallest.matrixWidth ? current : smallest
     );
   }
+
   return available.reduce((largest, current) =>
     current.matrixWidth > largest.matrixWidth ? current : largest
   );
@@ -202,53 +204,61 @@ function WmtsTileLayer({ config, opacity }: WmtsTileLayerProps) {
   return null;
 }
 
-function MapReference({ onMapReady }: MapReferenceProps) {
-  const map = useMap();
-
-  useEffect(() => {
-    onMapReady(map);
-
-    const invalidate = () => {
-      map.invalidateSize({ pan: false, animate: false });
-    };
-
-    const frame = requestAnimationFrame(invalidate);
-    const secondFrame = requestAnimationFrame(invalidate);
-    const observer = new ResizeObserver(invalidate);
-    observer.observe(map.getContainer());
-
-    return () => {
-      cancelAnimationFrame(frame);
-      cancelAnimationFrame(secondFrame);
-      observer.disconnect();
-    };
-  }, [map, onMapReady]);
-
-  return null;
-}
-
 function MapController({
   layerId,
   focusCoordinates,
   focusRequestVersion,
-  resetCounter,
+  navigationAction,
+  navigationActionVersion,
+  onZoomOutToGlobe,
 }: MapControllerProps) {
   const map = useMap();
   const lastFocusVersionRef = useRef<number>(-1);
-  const lastResetRef = useRef<number>(resetCounter);
+  const lastNavigationVersionRef = useRef<number>(0);
 
   useEffect(() => {
-    const layer = MAP_LAYERS[layerId];
+    if (navigationActionVersion !== lastNavigationVersionRef.current) {
+      lastNavigationVersionRef.current = navigationActionVersion;
 
-    if (resetCounter !== lastResetRef.current) {
-      lastResetRef.current = resetCounter;
-      map.setView(layer.center, Math.max(layer.zoom, 3), { animate: true });
-      return;
+      switch (navigationAction) {
+        case "zoom-in":
+          map.zoomIn();
+          return;
+
+        case "zoom-out":
+          if (map.getZoom() <= MAP_ZOOM_OUT_TO_GLOBE_THRESHOLD) {
+            const center = map.getCenter();
+            const normalized = normalizeCoordinates({
+              latitude: center.lat,
+              longitude: center.lng,
+            });
+
+            onZoomOutToGlobe(
+              normalized ?? focusCoordinates
+            );
+          } else {
+            map.zoomOut();
+          }
+          return;
+
+        case "reset": {
+          const layer = MAP_LAYERS[layerId];
+          lastFocusVersionRef.current = focusRequestVersion;
+          map.setView(
+            layer.center,
+            Math.max(layer.zoom, 3),
+            { animate: true }
+          );
+          return;
+        }
+      }
     }
 
     if (focusRequestVersion !== lastFocusVersionRef.current) {
       lastFocusVersionRef.current = focusRequestVersion;
+
       const valid = normalizeCoordinates(focusCoordinates);
+
       if (valid) {
         const nextZoom = Math.max(map.getZoom(), 4);
         map.flyTo([valid.latitude, valid.longitude], nextZoom, {
@@ -256,7 +266,15 @@ function MapController({
         });
       }
     }
-  }, [layerId, focusCoordinates, focusRequestVersion, resetCounter, map]);
+  }, [
+    layerId,
+    focusCoordinates,
+    focusRequestVersion,
+    navigationAction,
+    navigationActionVersion,
+    onZoomOutToGlobe,
+    map,
+  ]);
 
   return null;
 }
@@ -273,10 +291,12 @@ function MapViewportSync({
         latitude: center.lat,
         longitude: center.lng,
       });
+
       if (normalized) {
         onMoveFocus(normalized);
       }
     },
+
     zoomend() {
       onZoomChange(map.getZoom());
     },
@@ -287,23 +307,34 @@ function MapViewportSync({
     let zoomOutWheelAccum = 0;
 
     const handleWheel = (event: WheelEvent) => {
-      if (event.deltaY > 0 && map.getZoom() <= MAP_ZOOM_OUT_TO_GLOBE_THRESHOLD) {
+      if (
+        event.deltaY > 0 &&
+        map.getZoom() <= MAP_ZOOM_OUT_TO_GLOBE_THRESHOLD
+      ) {
         zoomOutWheelAccum += event.deltaY;
+
         if (zoomOutWheelAccum >= 90) {
           zoomOutWheelAccum = 0;
+
           const center = map.getCenter();
           const normalized = normalizeCoordinates({
             latitude: center.lat,
             longitude: center.lng,
           });
-          onZoomOutToGlobe(normalized ?? { latitude: 0, longitude: 0 });
+
+          onZoomOutToGlobe(
+            normalized ?? { latitude: 0, longitude: 0 }
+          );
         }
       } else {
         zoomOutWheelAccum = 0;
       }
     };
 
-    container.addEventListener("wheel", handleWheel, { passive: true });
+    container.addEventListener("wheel", handleWheel, {
+      passive: true,
+    });
+
     return () => {
       container.removeEventListener("wheel", handleWheel);
     };
@@ -334,11 +365,17 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
     layerError,
     retryLayer,
     opacity,
+    overlayLayerId,
+    overlayOpacity,
+    showGeologyOverlay,
+    geologyOpacity,
     focusCoordinates,
     focusRequestVersion,
     updateCameraFocus,
     mapZoom,
     setMapZoom,
+    navigationAction,
+    navigationActionVersion,
     selectedLocation,
     selectSite,
     selectCustomCoordinates,
@@ -348,37 +385,56 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
     triggerZoomOutToGlobe,
   } = useMarsExplorer();
 
-  const [resetCounter, setResetCounter] = useState(0);
-  const [map, setMap] = useState<L.Map | null>(null);
-
   const layer = MAP_LAYERS[selectedLayerId];
+
+  const [overlayTileConfig, setOverlayTileConfig] = useState<TileLayerConfig | null>(null);
+  useEffect(() => {
+    if (!overlayLayerId) {
+      setOverlayTileConfig(null);
+      return;
+    }
+    const targetLayer = MAP_LAYERS[overlayLayerId];
+    if (!targetLayer) return;
+    let cancelled = false;
+    getDataProvider(targetLayer.provider)
+      .getLayerConfig(overlayLayerId)
+      .then((cfg) => {
+        if (!cancelled) setOverlayTileConfig(cfg);
+      })
+      .catch(() => {
+        if (!cancelled) setOverlayTileConfig(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [overlayLayerId]);
+
+  const [geologyGeoJson, setGeologyGeoJson] = useState<any>(null);
+  useEffect(() => {
+    if (!showGeologyOverlay) return;
+    let cancelled = false;
+    fetch("/data/jezero_geology_sim3464.geojson")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setGeologyGeoJson(data);
+      })
+      .catch(() => {
+        if (!cancelled) setGeologyGeoJson(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showGeologyOverlay]);
 
   useEffect(() => {
     if (!focusSiteId) return;
+
     const site = getSiteById(focusSiteId);
+
     if (site) {
       selectSite(site, { focus: true });
     }
   }, [focusSiteId, selectSite]);
-
-  function handleZoomOutButton() {
-    if (!map) return;
-    if (map.getZoom() <= MAP_ZOOM_OUT_TO_GLOBE_THRESHOLD) {
-      const center = map.getCenter();
-      triggerZoomOutToGlobe(
-        normalizeCoordinates({
-          latitude: center.lat,
-          longitude: center.lng,
-        }) ?? focusCoordinates
-      );
-      return;
-    }
-    map.zoomOut();
-  }
-
-  function handleResetView() {
-    setResetCounter((current) => current + 1);
-  }
 
   return (
     <section className="mx-map relative h-full min-h-0 w-full">
@@ -387,7 +443,10 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
         style={{ background: "#141215" }}
       >
         <MapContainer
-          center={[focusCoordinates.latitude, focusCoordinates.longitude]}
+          center={[
+            focusCoordinates.latitude,
+            focusCoordinates.longitude,
+          ]}
           zoom={Math.max(mapZoom, 3)}
           minZoom={1}
           maxZoom={12}
@@ -408,13 +467,13 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
         >
           <AttributionControl prefix={false} />
 
-          <MapReference onMapReady={setMap} />
-
           <MapController
             layerId={selectedLayerId}
             focusCoordinates={focusCoordinates}
             focusRequestVersion={focusRequestVersion}
-            resetCounter={resetCounter}
+            navigationAction={navigationAction}
+            navigationActionVersion={navigationActionVersion}
+            onZoomOutToGlobe={triggerZoomOutToGlobe}
           />
 
           <MapViewportSync
@@ -445,6 +504,47 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
               opacity={opacity}
             />
           ) : null}
+
+          {/* Secondary Overlay Layer (Multi-layer blending) */}
+          {overlayLayerId && overlayTileConfig?.matrixLevels?.length ? (
+            <WmtsTileLayer
+              key={`overlay-${overlayLayerId}`}
+              config={overlayTileConfig}
+              opacity={overlayOpacity}
+            />
+          ) : overlayLayerId && overlayTileConfig ? (
+            <TileLayer
+              key={`overlay-${overlayLayerId}`}
+              url={overlayTileConfig.tileUrlTemplate}
+              attribution={overlayTileConfig.attribution}
+              zoomOffset={overlayTileConfig.zoomOffset}
+              noWrap
+              opacity={overlayOpacity}
+            />
+          ) : null}
+
+          {/* USGS Jezero Geologic Units Overlay */}
+          {showGeologyOverlay && geologyGeoJson && (
+            <GeoJSON
+              key={`usgs-geology-${geologyOpacity}`}
+              data={geologyGeoJson}
+              style={(feature) => ({
+                color: feature?.properties?.stroke_color || "#3b82f6",
+                weight: 2,
+                fillColor: feature?.properties?.color || "#3b82f6",
+                fillOpacity: geologyOpacity,
+              })}
+              onEachFeature={(feature, layer) => {
+                if (feature.properties) {
+                  const p = feature.properties;
+                  layer.bindTooltip(
+                    `<strong>${p.unit_code}</strong>: ${p.unit_name}<br/><span style="font-size:11px;color:#cbd5e1">${p.lithology}</span>`,
+                    { sticky: true, className: "mx-site-label" }
+                  );
+                }
+              }}
+            />
+          )}
 
           {EXPLORATION_SITES.map((site) => {
             const active =
@@ -533,61 +633,6 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
           )}
         </MapContainer>
 
-        {/* 2D Map Navigation Toolbar */}
-        <div className="mx-map-overlay left-4 top-[176px] flex flex-col gap-2 sm:left-6">
-          <div
-            className="flex flex-col gap-2"
-            role="toolbar"
-            aria-label="2D map navigation tools"
-            aria-orientation="vertical"
-          >
-            <button
-              type="button"
-              className="mx-icon-btn"
-              aria-label="Zoom in"
-              title="Zoom in"
-              onClick={() => map?.zoomIn()}
-            >
-              <Plus size={17} />
-            </button>
-
-            <button
-              type="button"
-              className="mx-icon-btn"
-              aria-label="Zoom out"
-              title={
-                mapZoom <= MAP_ZOOM_OUT_TO_GLOBE_THRESHOLD
-                  ? "Zoom out to 3D Globe"
-                  : "Zoom out"
-              }
-              onClick={handleZoomOutButton}
-            >
-              <Minus size={17} />
-            </button>
-
-            <button
-              type="button"
-              className="mx-icon-btn"
-              aria-label="Reset map view"
-              title="Reset regional view"
-              onClick={handleResetView}
-            >
-              <Crosshair size={17} />
-            </button>
-
-            <button
-              type="button"
-              className="mx-icon-btn"
-              aria-label="Switch to 3D Mars Globe"
-              title="Switch to 3D Mars Globe"
-              onClick={() => triggerZoomOutToGlobe(focusCoordinates)}
-            >
-              <Globe size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* Bottom-left coordinate readout */}
         <div className="pointer-events-none absolute bottom-4 left-4 z-[1040] hidden items-center gap-3 rounded-md border border-mx-border bg-mx-bg/90 px-3 py-1.5 backdrop-blur sm:left-6 md:flex">
           <span className="mx-mono text-[11px] text-mx-text">
             {formatCoordinates(
@@ -600,18 +645,20 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
           </span>
         </div>
 
-        {/* Unified Selected Location Panel (2D Map mode) */}
         <MarsExplorerLocationPanel mode="map" />
 
-        {/* Map status & layer recovery messages */}
         <div className="mx-map-status">
-          {layerLoading && <p className="mx-chip">Loading map layer...</p>}
+          {layerLoading && (
+            <p className="mx-chip">Loading map layer...</p>
+          )}
+
           {layerError && (
             <div
               className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-mx-bg/95 px-3.5 py-2 text-xs text-mx-text shadow-lg backdrop-blur"
               role="alert"
             >
               <span>{layerError}</span>
+
               <button
                 type="button"
                 onClick={retryLayer}
@@ -619,6 +666,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
               >
                 Retry Layer
               </button>
+
               {selectedLayerId !== "mars_global_mola" && (
                 <button
                   type="button"
@@ -630,6 +678,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
               )}
             </div>
           )}
+
           {statusMessage && (
             <p className="mx-chip" role="status">
               {statusMessage}
@@ -641,7 +690,11 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
   );
 }
 
-export default function MarsMap({ focusSiteId }: { focusSiteId?: string }) {
+export default function MarsMap({
+  focusSiteId,
+}: {
+  focusSiteId?: string;
+}) {
   const explorer = useOptionalMarsExplorer();
 
   if (!explorer) {

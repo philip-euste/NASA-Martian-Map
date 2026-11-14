@@ -1,3 +1,4 @@
+
 import type { ExplorationSite } from "../../data/explorationSites";
 import type { MapLayerId } from "../../data/mapLayers";
 import type { TileLayerConfig } from "../../services/dataProviders";
@@ -5,6 +6,7 @@ import type { DemElevation } from "../../services/providers/marsDem";
 import type { Coordinates, TemporalMode, TemporalState } from "../../types";
 
 export type ExplorerViewMode = "globe" | "map" | "jezero";
+export type ExplorerNavigationAction = "zoom-in" | "zoom-out" | "reset";
 
 export interface SavedLocation extends Coordinates {
   id: number;
@@ -45,6 +47,14 @@ export interface MarsExplorerContextValue {
   setSelectedLayerId: (layerId: MapLayerId) => void;
   opacity: number;
   setOpacity: (opacity: number) => void;
+  overlayLayerId: MapLayerId | null;
+  setOverlayLayerId: (layerId: MapLayerId | null) => void;
+  overlayOpacity: number;
+  setOverlayOpacity: (opacity: number) => void;
+  showGeologyOverlay: boolean;
+  setShowGeologyOverlay: (show: boolean) => void;
+  geologyOpacity: number;
+  setGeologyOpacity: (opacity: number) => void;
   tileConfig: TileLayerConfig | null;
   layerLoading: boolean;
   layerError: string | null;
@@ -59,6 +69,10 @@ export interface MarsExplorerContextValue {
   setGlobeDistance: (distance: number) => void;
   mapZoom: number;
   setMapZoom: (zoom: number) => void;
+
+  navigationAction: ExplorerNavigationAction | null;
+  navigationActionVersion: number;
+  requestNavigationAction: (action: ExplorerNavigationAction) => void;
 
   selectedLocation: SelectedExplorerLocation | null;
   selectSite: (site: ExplorationSite, options?: { focus?: boolean }) => void;

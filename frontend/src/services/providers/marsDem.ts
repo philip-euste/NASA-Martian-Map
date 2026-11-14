@@ -1,15 +1,13 @@
+
 // frontend/src/services/providers/marsDem.ts
-// Client for the FastAPI Mars DEM router (backend/terrain_dem.py) with
-// request timeouts, response caching, cooldown protection, and automatic
-// fallback to the verified local USGS/NASA Mars 2020 Jezero CTX DEM
-// (/jezero/manifest.json + /jezero/overview.u16) when the backend or remote
-// HiRISE COG service is unavailable.
+// Remote HiRISE elevation lookup with global MOLA fallback.
+// Local Jezero CTX overview remains available if the backend is offline.
 
 import type { Coordinates } from "../../types";
 import { reportBackendStatus } from "../connectionStatus";
 
 const DEFAULT_API_BASE = "http://127.0.0.1:8000";
-const REQUEST_TIMEOUT_MS = 7000;
+const REQUEST_TIMEOUT_MS = 20000;
 const BACKEND_FAILURE_COOLDOWN_MS = 15000;
 
 function getApiBaseUrl(): string {
@@ -29,6 +27,7 @@ export interface DemInfo {
   readonly elevation_unit: string;
   readonly vertical_reference: string;
   readonly access: string;
+  readonly sources?: readonly string[];
 }
 
 export interface DemElevation {
@@ -41,6 +40,9 @@ export interface DemElevation {
   readonly elevation: number;
   readonly unit: string;
   readonly product_id: string;
+  readonly source?: "HiRISE" | "MOLA" | "CTX" | string;
+  readonly resolution_meters?: number;
+  readonly vertical_reference?: string;
   readonly isFallback?: boolean;
 }
 
@@ -60,9 +62,12 @@ export interface DemElevationWindow {
     readonly column: number;
   };
   readonly resolution: readonly [number, number];
+  readonly resolution_meters?: number;
   readonly elevations: readonly (readonly (number | null)[])[];
   readonly unit: string;
   readonly product_id: string;
+  readonly source?: "HiRISE" | "MOLA" | "CTX" | string;
+  readonly vertical_reference?: string;
   readonly isFallback?: boolean;
 }
 
@@ -98,6 +103,7 @@ interface LocalJezeroDemAsset {
 
 let cachedLocalDemPromise: Promise<LocalJezeroDemAsset | null> | null = null;
 let backendOfflineUntil = 0;
+
 const elevationCache = new Map<string, DemElevation>();
 
 function getCoordinateCacheKey(coords: Coordinates): string {
@@ -110,6 +116,7 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     return await fetch(url, { signal: controller.signal });
   } finally {
@@ -124,22 +131,22 @@ async function loadLocalJezeroDem(): Promise<LocalJezeroDemAsset | null> {
 
   cachedLocalDemPromise = (async () => {
     try {
-      if (typeof fetch === "function") {
-        const [manifestRes, overviewRes] = await Promise.all([
-          fetchWithTimeout("/jezero/manifest.json", 5000),
-          fetchWithTimeout("/jezero/overview.u16", 5000),
-        ]);
-        if (manifestRes.ok && overviewRes.ok) {
-          const manifest = (await manifestRes.json()) as LocalJezeroManifest;
-          const buffer = await overviewRes.arrayBuffer();
-          return {
-            manifest,
-            overview: new Uint16Array(buffer),
-          };
-        }
+      const [manifestRes, overviewRes] = await Promise.all([
+        fetchWithTimeout("/jezero/manifest.json", 5000),
+        fetchWithTimeout("/jezero/overview.u16", 5000),
+      ]);
+
+      if (manifestRes.ok && overviewRes.ok) {
+        const manifest = (await manifestRes.json()) as LocalJezeroManifest;
+        const buffer = await overviewRes.arrayBuffer();
+
+        return {
+          manifest,
+          overview: new Uint16Array(buffer),
+        };
       }
     } catch {
-      // Ignore fallback load failure
+      // Local fallback is optional.
     }
 
     cachedLocalDemPromise = null;
@@ -168,6 +175,7 @@ function isWithinLocalManifest(
 ): boolean {
   const { westLonDeg, eastLonDeg, southLatDeg, northLatDeg } =
     getManifestProj(manifest);
+
   return (
     coords.longitude >= westLonDeg &&
     coords.longitude <= eastLonDeg &&
@@ -181,12 +189,14 @@ function sampleLocalJezeroElevation(
   coords: Coordinates
 ): DemElevation | null {
   const { manifest, overview } = asset;
+
   if (!isWithinLocalManifest(manifest, coords)) {
     return null;
   }
 
   const { westLonDeg, eastLonDeg, southLatDeg, northLatDeg } =
     getManifestProj(manifest);
+
   const u = (coords.longitude - westLonDeg) / (eastLonDeg - westLonDeg);
   const v = (northLatDeg - coords.latitude) / (northLatDeg - southLatDeg);
 
@@ -197,6 +207,7 @@ function sampleLocalJezeroElevation(
     Math.max(fullCol / manifest.overview.step, 0),
     manifest.overview.cols - 1
   );
+
   const ovRow = Math.min(
     Math.max(fullRow / manifest.overview.step, 0),
     manifest.overview.rows - 1
@@ -206,10 +217,12 @@ function sampleLocalJezeroElevation(
   const r0 = Math.floor(ovRow);
   const c1 = Math.min(c0 + 1, manifest.overview.cols - 1);
   const r1 = Math.min(r0 + 1, manifest.overview.rows - 1);
+
   const fx = ovCol - c0;
   const fy = ovRow - r0;
 
   const stride = manifest.overview.cols;
+
   const q00 = overview[r0 * stride + c0] ?? 0;
   const q10 = overview[r0 * stride + c1] ?? q00;
   const q01 = overview[r1 * stride + c0] ?? q00;
@@ -231,12 +244,16 @@ function sampleLocalJezeroElevation(
     elevation: Number(elevationMeters.toFixed(2)),
     unit: "metres",
     product_id: "M20_JezeroCrater_CTXDEM_20m (Local Fallback)",
+    source: "CTX",
+    resolution_meters: 20,
+    vertical_reference: "MOLA areoid",
     isFallback: true,
   };
 }
 
 class BackendUnavailableError extends Error {
   readonly statusCode?: number;
+
   constructor(message: string, statusCode?: number) {
     super(message);
     this.name = "BackendUnavailableError";
@@ -250,20 +267,23 @@ async function fetchJson<T>(
 ): Promise<T> {
   if (!options?.forceRetry && Date.now() < backendOfflineUntil) {
     throw new BackendUnavailableError(
-      "Backend DEM service is temporarily unreachable (cooldown active)."
+      "Backend DEM service is temporarily unreachable."
     );
   }
 
   let response: Response;
+
   try {
     response = await fetchWithTimeout(`${getApiBaseUrl()}${path}`);
   } catch (err: unknown) {
     backendOfflineUntil = Date.now() + BACKEND_FAILURE_COOLDOWN_MS;
+
     const isTimeout =
       err instanceof Error &&
       (err.name === "AbortError" ||
         err.message.toLowerCase().includes("abort") ||
         err.message.toLowerCase().includes("timeout"));
+
     throw new BackendUnavailableError(
       isTimeout
         ? "The backend elevation service timed out."
@@ -273,13 +293,15 @@ async function fetchJson<T>(
 
   if (!response.ok) {
     let detail = `DEM request failed (${response.status})`;
+
     try {
       const body = (await response.json()) as { detail?: string };
+
       if (body?.detail) {
         detail = body.detail;
       }
     } catch {
-      // keep default message
+      // Keep default error message.
     }
 
     if (response.status >= 500) {
@@ -292,6 +314,7 @@ async function fetchJson<T>(
 
   backendOfflineUntil = 0;
   reportBackendStatus("online", null);
+
   return (await response.json()) as T;
 }
 
@@ -306,32 +329,45 @@ export class MarsDemProvider {
 
   async getInfo(options?: { forceRetry?: boolean }): Promise<DemInfo> {
     try {
-      return await fetchJson<DemInfo>("/api/terrain/dem/info", options);
+      return await fetchJson<DemInfo>(
+        "/api/terrain/dem/info",
+        options
+      );
     } catch (err: unknown) {
       const localAsset = await loadLocalJezeroDem();
+
       if (localAsset) {
         reportBackendStatus(
           "fallback",
-          "Using local Jezero CTX DEM (backend DEM service offline)"
+          "Using local Jezero CTX DEM because the backend is offline."
         );
+
         return {
           product_id: "M20_JezeroCrater_CTXDEM_20m (Local Fallback)",
           width: localAsset.manifest.cols,
           height: localAsset.manifest.rows,
           bands: 1,
           data_type: "uint16 (quantized elevation)",
-          crs: getManifestProj(localAsset.manifest).name ?? "Equirectangular Mars 2000",
-          resolution: [localAsset.manifest.cellX, localAsset.manifest.cellZ],
+          crs:
+            getManifestProj(localAsset.manifest).name ??
+            "Equirectangular Mars 2000",
+          resolution: [
+            localAsset.manifest.cellX,
+            localAsset.manifest.cellZ,
+          ],
           nodata: null,
           elevation_unit: "metres",
-          vertical_reference: "Mars 2000",
-          access: "Local Verified Jezero CTX DEM Fallback",
+          vertical_reference: "MOLA areoid",
+          access: "Local Jezero CTX DEM fallback",
+          sources: ["CTX"],
         };
       }
+
       reportBackendStatus(
         "offline",
-        "Backend DEM service is currently unavailable"
+        "Backend DEM service is currently unavailable."
       );
+
       throw err instanceof Error
         ? err
         : new Error("Unable to retrieve DEM metadata.");
@@ -343,9 +379,14 @@ export class MarsDemProvider {
     options?: { forceRetry?: boolean }
   ): Promise<DemElevation> {
     const cacheKey = getCoordinateCacheKey(coordinates);
+
     if (!options?.forceRetry) {
       const cached = elevationCache.get(cacheKey);
-      if (cached && (!cached.isFallback || Date.now() < backendOfflineUntil)) {
+
+      if (
+        cached &&
+        (!cached.isFallback || Date.now() < backendOfflineUntil)
+      ) {
         return cached;
       }
     }
@@ -356,49 +397,54 @@ export class MarsDemProvider {
     });
 
     let backendErr: unknown = null;
+
     try {
-      const primary = await fetchJson<DemElevation>(
+      const result = await fetchJson<DemElevation>(
         `/api/terrain/dem/elevation?${params.toString()}`,
         options
       );
-      elevationCache.set(cacheKey, primary);
-      return primary;
+
+      elevationCache.set(cacheKey, result);
+      return result;
     } catch (err: unknown) {
       backendErr = err;
     }
 
-    // Attempt local verified Jezero CTX DEM fallback
-    const localAsset = await loadLocalJezeroDem();
-    if (localAsset) {
-      const fallbackSample = sampleLocalJezeroElevation(
-        localAsset,
-        coordinates
-      );
-      if (fallbackSample) {
-        if (backendErr instanceof BackendUnavailableError) {
+    // Use the local Jezero dataset only if the backend is unavailable.
+    // A normal coverage miss should be handled by the backend's MOLA fallback.
+    if (backendErr instanceof BackendUnavailableError) {
+      const localAsset = await loadLocalJezeroDem();
+
+      if (localAsset) {
+        const fallbackSample = sampleLocalJezeroElevation(
+          localAsset,
+          coordinates
+        );
+
+        if (fallbackSample) {
           reportBackendStatus(
             "fallback",
-            "Using local Jezero CTX DEM (backend DEM service offline)"
+            "Using local Jezero CTX DEM because the backend is offline."
           );
-        }
-        elevationCache.set(cacheKey, fallbackSample);
-        return fallbackSample;
-      }
-    }
 
-    if (backendErr instanceof BackendUnavailableError) {
+          elevationCache.set(cacheKey, fallbackSample);
+          return fallbackSample;
+        }
+      }
+
       reportBackendStatus(
         "offline",
-        "Backend DEM service is offline; coordinate outside local Jezero DEM"
+        "Backend DEM service is offline and this coordinate is outside local Jezero coverage."
       );
+
       throw new Error(
-        "Elevation data unavailable: the backend DEM service is offline and this location is outside the local Jezero Crater DEM."
+        "Elevation unavailable. The backend is offline and this location is outside the local Jezero dataset."
       );
     }
 
-    throw new Error(
-      "This location is outside available high-resolution DEM coverage (Jezero Crater region: 17.58°N–19.29°N, 76.99°E–78.49°E)."
-    );
+    throw backendErr instanceof Error
+      ? backendErr
+      : new Error("Unable to retrieve elevation.");
   }
 
   async getElevationWindow(
@@ -420,78 +466,99 @@ export class MarsDemProvider {
         options
       );
     } catch (err: unknown) {
-      const localAsset = await loadLocalJezeroDem();
-      if (localAsset && isWithinLocalManifest(localAsset.manifest, coordinates)) {
-        const centerSample = sampleLocalJezeroElevation(localAsset, coordinates);
-        if (centerSample) {
-          const { manifest } = localAsset;
-          const proj = getManifestProj(manifest);
-          const lonStep =
-            (proj.eastLonDeg - proj.westLonDeg) /
-            Math.max(1, manifest.cols - 1);
-          const latStep =
-            (proj.northLatDeg - proj.southLatDeg) /
-            Math.max(1, manifest.rows - 1);
-
-          const halfW = Math.floor(width / 2);
-          const halfH = Math.floor(height / 2);
-          const elevations: (number | null)[][] = [];
-
-          for (let r = 0; r < height; r++) {
-            const rowValues: (number | null)[] = [];
-            const lat = coordinates.latitude + (halfH - r) * latStep;
-            for (let c = 0; c < width; c++) {
-              const lon = coordinates.longitude + (c - halfW) * lonStep;
-              const s = sampleLocalJezeroElevation(localAsset, {
-                latitude: lat,
-                longitude: lon,
-              });
-              rowValues.push(s ? s.elevation : null);
-            }
-            elevations.push(rowValues);
-          }
-
-          if (err instanceof BackendUnavailableError) {
-            reportBackendStatus(
-              "fallback",
-              "Using local Jezero CTX DEM (backend DEM service offline)"
-            );
-          }
-
-          return {
-            center: {
-              longitude: coordinates.longitude,
-              latitude: coordinates.latitude,
-              projected_x: centerSample.projected_x,
-              projected_y: centerSample.projected_y,
-            },
-            dimensions: { width, height },
-            pixel_origin: {
-              row: Math.max(0, centerSample.row - halfH),
-              column: Math.max(0, centerSample.column - halfW),
-            },
-            resolution: [manifest.cellX, manifest.cellZ],
-            elevations,
-            unit: "metres",
-            product_id: "M20_JezeroCrater_CTXDEM_20m (Local Fallback)",
-            isFallback: true,
-          };
-        }
+      if (!(err instanceof BackendUnavailableError)) {
+        throw err instanceof Error
+          ? err
+          : new Error("Unable to retrieve terrain window.");
       }
 
-      if (err instanceof BackendUnavailableError) {
+      const localAsset = await loadLocalJezeroDem();
+
+      if (
+        !localAsset ||
+        !isWithinLocalManifest(localAsset.manifest, coordinates)
+      ) {
         reportBackendStatus(
           "offline",
-          "Backend DEM service is currently unavailable"
+          "Backend DEM service is offline and this coordinate is outside local Jezero coverage."
         );
+
         throw new Error(
-          "Terrain window unavailable: backend DEM service is offline and this coordinate is outside local Jezero Crater DEM coverage."
+          "Terrain window unavailable. The backend is offline and this coordinate is outside local Jezero coverage."
         );
       }
 
-      throw new Error(
-        "Requested terrain window lies outside available DEM coverage."
+      const centerSample = sampleLocalJezeroElevation(
+        localAsset,
+        coordinates
       );
+
+      if (!centerSample) {
+        throw new Error("Unable to sample the local Jezero dataset.");
+      }
+
+      const { manifest } = localAsset;
+      const proj = getManifestProj(manifest);
+
+      const lonStep =
+        (proj.eastLonDeg - proj.westLonDeg) /
+        Math.max(1, manifest.cols - 1);
+
+      const latStep =
+        (proj.northLatDeg - proj.southLatDeg) /
+        Math.max(1, manifest.rows - 1);
+
+      const halfW = Math.floor(width / 2);
+      const halfH = Math.floor(height / 2);
+
+      const elevations: (number | null)[][] = [];
+
+      for (let row = 0; row < height; row++) {
+        const rowValues: (number | null)[] = [];
+        const latitude =
+          coordinates.latitude + (halfH - row) * latStep;
+
+        for (let col = 0; col < width; col++) {
+          const longitude =
+            coordinates.longitude + (col - halfW) * lonStep;
+
+          const sample = sampleLocalJezeroElevation(localAsset, {
+            latitude,
+            longitude,
+          });
+
+          rowValues.push(sample ? sample.elevation : null);
+        }
+
+        elevations.push(rowValues);
+      }
+
+      reportBackendStatus(
+        "fallback",
+        "Using local Jezero CTX DEM because the backend is offline."
+      );
+
+      return {
+        center: {
+          longitude: coordinates.longitude,
+          latitude: coordinates.latitude,
+          projected_x: centerSample.projected_x,
+          projected_y: centerSample.projected_y,
+        },
+        dimensions: { width, height },
+        pixel_origin: {
+          row: Math.max(0, centerSample.row - halfH),
+          column: Math.max(0, centerSample.column - halfW),
+        },
+        resolution: [manifest.cellX, manifest.cellZ],
+        resolution_meters: 20,
+        elevations,
+        unit: "metres",
+        product_id: "M20_JezeroCrater_CTXDEM_20m (Local Fallback)",
+        source: "CTX",
+        vertical_reference: "MOLA areoid",
+        isFallback: true,
+      };
     }
   }
 }

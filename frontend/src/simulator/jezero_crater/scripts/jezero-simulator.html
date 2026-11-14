@@ -203,18 +203,27 @@
 
       #proximity-prompt {
         position: fixed;
-        bottom: 92px;
+        bottom: 112px;
         left: 50%;
         transform: translateX(-50%);
         z-index: 6;
-        padding: 10px 16px;
+        padding: 9px 16px;
         border: 1px solid #f47738;
-        border-radius: 8px;
-        background: rgba(20, 18, 21, 0.94);
+        border-radius: 999px;
+        background: rgba(16, 14, 17, 0.92);
         color: #f3efea;
         font-size: 12px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
         text-align: center;
+        backdrop-filter: blur(8px);
+      }
+
+      /* When hosted inside MarswalkPage.tsx, the parent Helmet HUD renders all telemetry */
+      body.hosted-visor #status,
+      body.hosted-visor #hud,
+      body.hosted-visor #open-map,
+      body.hosted-visor #credit {
+        display: none !important;
       }
 
       #open-map {
@@ -244,38 +253,111 @@
         inset: 0;
         z-index: 20;
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 12px;
-        padding: 24px;
-        background: rgba(14, 12, 15, 0.94);
+        padding: 20px;
+        background: rgba(10, 9, 11, 0.76);
+        backdrop-filter: blur(8px);
+      }
+
+      .map-modal-card {
+        width: min(92vw, 940px);
+        max-height: 86vh;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 16px 18px;
+        border: 1px solid #45404a;
+        border-radius: 12px;
+        background: rgba(22, 20, 24, 0.96);
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
       }
 
       .map-heading {
-        width: min(90vw, 1000px);
+        width: 100%;
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
+        gap: 10px;
+      }
+
+      .map-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 10px;
+        border: 1px solid #2e2a2f;
+        border-radius: 8px;
+        background: rgba(14, 12, 15, 0.85);
+        font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .map-zoom-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .map-zoom-controls button {
+        padding: 5px 10px;
+        font-size: 11px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .map-legend {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
         gap: 12px;
+        color: #c8c1b8;
+        font-size: 11px;
+      }
+
+      .legend-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 5px;
+      }
+
+      .map-canvas-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border: 1px solid #45404a;
+        border-radius: 8px;
+        background: #0d0806;
       }
 
       #map-canvas {
         display: block;
-        max-width: 90vw;
-        max-height: 70vh;
-        border: 1px solid #45404a;
-        border-radius: 6px;
+        max-width: 100%;
+        max-height: 58vh;
         cursor: crosshair;
+      }
+
+      .map-footer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
       }
 
       #map-info {
         color: #d8b48f;
-        font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+        font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace;
       }
 
       .map-actions {
         display: flex;
+        flex-wrap: wrap;
         gap: 8px;
       }
 
@@ -345,23 +427,46 @@
       </div>
     </div>
 
-    <div id="map-panel" class="hidden">
-      <div class="map-heading">
-        <div>
-          <div class="eyebrow">JEZERO CRATER DEM</div>
-          <strong>Surface Navigation &amp; Target Map</strong>
+    <div id="map-panel" class="hidden" role="dialog" aria-modal="true" aria-label="Jezero Crater Surface Navigation and Target Map">
+      <div class="map-modal-card">
+        <div class="map-heading">
+          <div>
+            <div class="eyebrow">JEZERO CRATER DEM · INTERACTIVE TACTICAL MAP [M]</div>
+            <strong style="font-size: 16px;">Surface Navigation, Route &amp; Target Map</strong>
+          </div>
+
+          <div class="map-actions">
+            <button id="map-go" type="button" disabled>Deploy / Teleport to Selection</button>
+            <button id="map-close" class="secondary" type="button">Close Map [M]</button>
+          </div>
         </div>
 
-        <div class="map-actions">
-          <button id="map-go" type="button" disabled>Deploy / Teleport Here</button>
-          <button id="map-close" class="secondary" type="button">Close [M]</button>
+        <div class="map-toolbar">
+          <div class="map-zoom-controls">
+            <button id="map-zoom-out" class="secondary" type="button" title="Zoom out">−</button>
+            <span id="map-zoom-label" style="min-width: 52px; text-align: center; color: #f3efea;">1.0×</span>
+            <button id="map-zoom-in" class="secondary" type="button" title="Zoom in">+</button>
+            <button id="map-zoom-reset" class="secondary" type="button" title="Reset zoom and pan">Reset 1:1</button>
+            <button id="map-center-player" class="secondary" type="button" title="Center map on astronaut">Center on Astronaut</button>
+          </div>
+
+          <div class="map-legend">
+            <span><i class="legend-dot" style="background: #ffd36b;"></i>Astronaut &amp; Heading</span>
+            <span><i class="legend-dot" style="background: #38bdf8;"></i>Habitat Base</span>
+            <span><i class="legend-dot" style="background: #f47738;"></i>Target / Waypoint</span>
+            <span><i class="legend-dot" style="background: #10b981;"></i>Visited</span>
+          </div>
         </div>
-      </div>
 
-      <canvas id="map-canvas"></canvas>
+        <div class="map-canvas-wrap">
+          <canvas id="map-canvas"></canvas>
+        </div>
 
-      <div id="map-info">
-        Click any location on the DEM map (cyan = landmarks, orange = mission targets, gold = astronaut).
+        <div class="map-footer">
+          <div id="map-info">
+            Scroll wheel to zoom · Drag to pan · Click any location or target beacon to inspect &amp; teleport.
+          </div>
+        </div>
       </div>
     </div>
 

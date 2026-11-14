@@ -31,7 +31,9 @@ import { isWithinJezeroDemBounds } from "../mars-explorer/marsExplorer.types";
 import { marsDemProvider } from "../../services/providers/marsDem";
 import { useMission } from "../../state/mission/MissionContext";
 import type { Coordinates, Route, Waypoint } from "../../types";
+import { identifyGeologicUnitAt } from "../../utils/jezeroStratigraphy";
 import MissionLayout from "./MissionLayout";
+import RouteStratigraphyProfile from "./RouteStratigraphyProfile";
 import {
   calculateMarsSurfaceDistanceMeters,
   calculateRouteDistanceMeters,
@@ -111,6 +113,39 @@ export default function RoutePlannerPage() {
 
   function removeDraftWaypoint(id: string): void {
     setDraftWaypoints((current) => current.filter((wp) => wp.id !== id));
+  }
+
+  function loadJezeroStratigraphicReferenceTraverse(): void {
+    const presetWaypoints: Waypoint[] = [
+      {
+        id: createId("wp"),
+        name: "Octavia E. Butler Habitat (Crater Floor)",
+        coordinates: { latitude: 18.4447, longitude: 77.4508 },
+        visited: false,
+      },
+      {
+        id: createId("wp"),
+        name: "Séítah Olivine Cumulate Outcrop",
+        coordinates: { latitude: 18.4295, longitude: 77.439 },
+        visited: false,
+      },
+      {
+        id: createId("wp"),
+        name: "Western Delta Foreset Scarp (Smectite Clay)",
+        coordinates: { latitude: 18.4585, longitude: 77.4052 },
+        visited: false,
+      },
+      {
+        id: createId("wp"),
+        name: "Western Delta Topset Channel Ridge",
+        coordinates: { latitude: 18.46, longitude: 77.375 },
+        visited: false,
+      },
+    ];
+    setDraftWaypoints(presetWaypoints);
+    if (!routeName.trim()) {
+      setRouteName("Jezero Floor-to-Delta Stratigraphic Traverse");
+    }
   }
 
   const draftDistanceInfo = calculateRouteDistanceMeters(
@@ -339,6 +374,30 @@ export default function RoutePlannerPage() {
               onAddWaypoint={addWaypoint}
             />
           </div>
+
+          {/* Curiosity-style Stratigraphic Cross-Section & Hazard Profile */}
+          <RouteStratigraphyProfile
+            waypoints={
+              draftWaypoints.length >= 2
+                ? draftWaypoints
+                : (selectedRoute?.waypoints ?? draftWaypoints)
+            }
+            includeReturnLeg={
+              draftWaypoints.length >= 2
+                ? includeReturnLeg
+                : (selectedRoute?.returnRouteIncluded ?? includeReturnLeg)
+            }
+            preferredSlopeDegrees={
+              mission.configuration?.terrainPreferences.preferredSlopeDegrees ??
+              15
+            }
+            routeTitle={
+              draftWaypoints.length >= 2
+                ? routeName.trim() || "Draft Route"
+                : (selectedRoute?.name ?? "Draft Route")
+            }
+            onLoadReferenceTraverse={loadJezeroStratigraphicReferenceTraverse}
+          />
 
           {/* Route comparison panel */}
           <section className="mx-panel p-6" aria-label="Route comparison">
@@ -590,35 +649,51 @@ export default function RoutePlannerPage() {
                   </p>
                 ) : (
                   <ol className="m-0 flex max-h-52 list-none flex-col gap-2 overflow-auto p-0">
-                    {draftWaypoints.map((wp, idx) => (
-                      <li
-                        key={wp.id}
-                        className="flex items-center justify-between gap-2 rounded border border-mx-border bg-mx-bg px-3 py-2 text-xs"
-                      >
-                        <div>
-                          <span className="mx-mono mr-2 text-mx-accent">
-                            {String(idx + 1).padStart(2, "0")}
-                          </span>
-                          <strong className="text-mx-text">
-                            {wp.name ?? `Waypoint ${idx + 1}`}
-                          </strong>
-                          <span className="mx-mono block text-[11px] text-mx-dim">
-                            {formatCoordinates(
-                              wp.coordinates.latitude,
-                              wp.coordinates.longitude
-                            )}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeDraftWaypoint(wp.id)}
-                          className="text-mx-muted hover:text-mx-text"
-                          aria-label={`Remove ${wp.name ?? "waypoint"}`}
+                    {draftWaypoints.map((wp, idx) => {
+                      const wpUnit = identifyGeologicUnitAt(wp.coordinates);
+                      return (
+                        <li
+                          key={wp.id}
+                          className="flex items-center justify-between gap-2 rounded border border-mx-border bg-mx-bg px-3 py-2 text-xs"
                         >
-                          <Trash2 size={13} />
-                        </button>
-                      </li>
-                    ))}
+                          <div>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="mx-mono text-mx-accent">
+                                {String(idx + 1).padStart(2, "0")}
+                              </span>
+                              <strong className="text-mx-text">
+                                {wp.name ?? `Waypoint ${idx + 1}`}
+                              </strong>
+                              <span
+                                className="rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold"
+                                style={{
+                                  backgroundColor: `${wpUnit.color}22`,
+                                  color: wpUnit.color,
+                                  border: `1px solid ${wpUnit.color}55`,
+                                }}
+                              >
+                                {wpUnit.unit_code}
+                              </span>
+                            </div>
+                            <span className="mx-mono mt-0.5 block text-[11px] text-mx-dim">
+                              {formatCoordinates(
+                                wp.coordinates.latitude,
+                                wp.coordinates.longitude
+                              )}{" "}
+                              · {wpUnit.unit_name}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeDraftWaypoint(wp.id)}
+                            className="text-mx-muted hover:text-mx-text"
+                            aria-label={`Remove ${wp.name ?? "waypoint"}`}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ol>
                 )}
               </div>

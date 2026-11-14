@@ -40,6 +40,7 @@ import type { Observation, UserHypothesis } from "../../types";
 import MissionLayout from "./MissionLayout";
 import MedaEnvironmentalPanel from "./MedaEnvironmentalPanel";
 import PerseveranceImageryPanel from "./PerseveranceImageryPanel";
+import CrismSpectralPanel from "./CrismSpectralPanel";
 import {
   buildRegion,
   buildTarget,
@@ -100,6 +101,7 @@ export default function InvestigationPage() {
   const [showHypotheses, setShowHypotheses] = useState(false);
   const [showMedaInspector, setShowMedaInspector] = useState(false);
   const [showRoverImagery, setShowRoverImagery] = useState(false);
+  const [showCrismInspector, setShowCrismInspector] = useState(false);
 
   // Observation draft state — default to first selected empirical evidence dataset
   const defaultEvidenceId =
@@ -956,6 +958,58 @@ export default function InvestigationPage() {
                   />
                 </div>
               )}
+
+              {/* T-3.3: CRISM Targeted VNIR Hyperspectral Inspector */}
+              <div className="mt-4 border-t border-mx-border pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="mx-heading m-0 text-sm flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                      MRO CRISM Targeted Spectral Analysis (Jezero Delta)
+                    </h3>
+                    <p className="mx-body m-0 mt-0.5 text-xs text-mx-muted">
+                      Inspect diagnostic 2.296 µm Fe/Mg smectite clay and Mg-carbonate absorption curves to test delta aqueous lacustrine deposition.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCrismInspector((prev) => !prev)}
+                    className="mx-btn mx-btn--secondary mx-btn--sm"
+                  >
+                    {showCrismInspector ? (
+                      <>
+                        <ChevronUp size={14} aria-hidden="true" /> Hide CRISM Inspector
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown size={14} aria-hidden="true" /> Inspect CRISM Spectra
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {(showCrismInspector || selectedDatasetIds.has("crism_jezero_vnir")) && (
+                  <div className="mt-4">
+                    <CrismSpectralPanel
+                      onRecordObservation={(newObs) => {
+                        const crismEntry = EVIDENCE_DATASETS_BY_ID["crism_jezero_vnir"];
+                        const nextDatasets = toMutable(mission.selectedDatasets);
+                        if (crismEntry && !nextDatasets.some((d) => d.id === crismEntry.id)) {
+                          nextDatasets.push(toMissionDataset(crismEntry));
+                        }
+                        updateMission({
+                          selectedObservations: [
+                            ...toMutable(mission.selectedObservations),
+                            newObs,
+                          ],
+                          selectedDatasets: nextDatasets,
+                        });
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </section>
 

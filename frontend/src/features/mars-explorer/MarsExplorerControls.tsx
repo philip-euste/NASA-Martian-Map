@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import {
   Bookmark,
@@ -28,19 +29,23 @@ export default function MarsExplorerControls() {
     setSelectedLayerId,
     opacity,
     setOpacity,
-
+    overlayLayerId,
+    setOverlayLayerId,
+    overlayOpacity,
+    setOverlayOpacity,
+    showGeologyOverlay,
+    setShowGeologyOverlay,
+    geologyOpacity,
+    setGeologyOpacity,
     searchQuery,
     setSearchQuery,
     searchOpen,
     setSearchOpen,
     searchResults,
-
     savedLocations,
     goToSavedLocation,
     removeLocation,
-
     selectSite,
-
     temporal,
     todayUTC,
     setTemporalMode,
@@ -68,8 +73,8 @@ export default function MarsExplorerControls() {
 
   return (
     <>
-      {/* Shared search and dataset controls */}
-      <div className="absolute left-4 top-20 z-[1100] flex w-[min(360px,calc(100vw-32px))] flex-col gap-2 sm:left-6">
+      {/* Search and location controls: upper-left */}
+      <div className="mx-explorer-search-controls">
         <div className="flex min-w-0 items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Search
@@ -96,7 +101,7 @@ export default function MarsExplorerControls() {
             />
 
             {searchOpen && (
-              <div className="mx-panel mx-panel--floating mx-scroll absolute left-0 right-0 top-[calc(100%+6px)] max-h-72 overflow-auto p-1.5">
+              <div className="mx-panel mx-panel--floating mx-scroll absolute left-0 right-0 top-[calc(100%+6px)] z-[1300] max-h-72 overflow-auto p-1.5">
                 {searchResults.sites.length === 0 &&
                   searchResults.saved.length === 0 && (
                     <p className="m-0 px-3 py-2.5 text-[13px] text-mx-dim">
@@ -115,7 +120,6 @@ export default function MarsExplorerControls() {
                     <span className="text-[13px] text-mx-text">
                       {site.name}
                     </span>
-
                     <span className="mx-mono text-[11px] text-mx-dim">
                       {site.terrainType}
                     </span>
@@ -133,7 +137,6 @@ export default function MarsExplorerControls() {
                     <span className="text-[13px] text-mx-text">
                       {location.name}
                     </span>
-
                     <span className="mx-mono text-[11px] text-mx-dim">
                       Saved
                     </span>
@@ -156,7 +159,6 @@ export default function MarsExplorerControls() {
             }}
           >
             <Bookmark size={16} />
-
             {savedLocations.length > 0 && (
               <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-mx-accent px-1 text-[10px] font-semibold text-[#1a0f08]">
                 {savedLocations.length}
@@ -189,85 +191,12 @@ export default function MarsExplorerControls() {
           </span>
         </div>
 
-        {layersOpen && (
-          <div className="mx-panel mx-panel--floating w-full p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="mx-eyebrow mx-eyebrow--accent">
-                Dataset layer
-              </span>
-
-              <button
-                type="button"
-                className="text-mx-muted hover:text-mx-text"
-                aria-label="Close layers"
-                onClick={() => setLayersOpen(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <label htmlFor="mars-shared-layer" className="mx-label">
-              Surface layer
-            </label>
-
-            <select
-              id="mars-shared-layer"
-              className="mx-input"
-              value={selectedLayerId}
-              onChange={(event) =>
-                setSelectedLayerId(
-                  event.target.value as MapLayerId
-                )
-              }
-            >
-              {Object.values(MAP_LAYERS).map((layer) => (
-                <option key={layer.id} value={layer.id}>
-                  {layer.name}
-                </option>
-              ))}
-            </select>
-
-            <p className="mx-body m-0 mt-3 text-[13px]">
-              {selectedLayer.description}
-            </p>
-
-            <div className="mt-4">
-              <label
-                htmlFor="mars-shared-opacity"
-                className="mx-label flex justify-between"
-              >
-                <span>Map layer opacity</span>
-                <span className="mx-mono text-mx-muted">
-                  {Math.round(opacity * 100)}%
-                </span>
-              </label>
-
-              <input
-                id="mars-shared-opacity"
-                className="mx-range"
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={opacity}
-                onChange={(event) =>
-                  setOpacity(Number(event.target.value))
-                }
-              />
-              <p className="mx-body m-0 mt-1 text-[11px] text-mx-dim">
-                Opacity applies to the 2D map layer.
-              </p>
-            </div>
-          </div>
-        )}
-
         {savedOpen && (
-          <div className="mx-panel mx-panel--floating w-full">
+          <div className="mx-panel mx-panel--floating mx-explorer-floating-panel">
             <div className="mx-panel__header !py-3">
               <span className="mx-eyebrow mx-eyebrow--accent">
                 Saved Locations ({savedLocations.length})
               </span>
-
               <button
                 type="button"
                 className="text-mx-muted hover:text-mx-text"
@@ -278,7 +207,7 @@ export default function MarsExplorerControls() {
               </button>
             </div>
 
-            <div className="mx-scroll max-h-80 overflow-auto p-2">
+            <div className="mx-scroll max-h-64 overflow-auto p-2">
               {savedLocations.length === 0 ? (
                 <p className="m-0 px-2 py-3 text-[13px] text-mx-dim">
                   No saved locations yet. Select a point and save it
@@ -298,7 +227,6 @@ export default function MarsExplorerControls() {
                       <strong className="block truncate text-[13px] font-medium text-mx-text">
                         {location.name}
                       </strong>
-
                       <span className="mx-mono text-[11px] text-mx-dim">
                         {location.latitude.toFixed(5)}°,{" "}
                         {location.longitude.toFixed(5)}°
@@ -321,7 +249,176 @@ export default function MarsExplorerControls() {
         )}
       </div>
 
-      {/* Shared temporal controls */}
+      {/* Dataset controls: upper-right, separate from navigation */}
+      {layersOpen && (
+        <div className="mx-panel mx-panel--floating mx-explorer-layer-panel max-h-[85vh] overflow-y-auto">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="mx-eyebrow mx-eyebrow--accent">
+              Worldview Multi-Layer Stack
+            </span>
+            <button
+              type="button"
+              className="text-mx-muted hover:text-mx-text"
+              aria-label="Close layers"
+              onClick={() => setLayersOpen(false)}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Primary Base Layer */}
+          <div className="space-y-2 border-b border-mx-border pb-3.5">
+            <label htmlFor="mars-shared-layer" className="mx-label flex justify-between">
+              <span>Primary Base Layer</span>
+              <span className="text-[11px] text-mx-accent">
+                {selectedLayer.coverage === "regional" ? "Regional Hi-Res" : "Global"}
+              </span>
+            </label>
+
+            <select
+              id="mars-shared-layer"
+              className="mx-input text-xs"
+              value={selectedLayerId}
+              onChange={(event) =>
+                setSelectedLayerId(event.target.value as MapLayerId)
+              }
+            >
+              {Object.values(MAP_LAYERS).map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name} {l.coverage === "regional" ? "★" : ""}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-mx-muted">Base Opacity</span>
+              <span className="mx-mono text-mx-text">{Math.round(opacity * 100)}%</span>
+            </div>
+            <input
+              id="mars-shared-opacity"
+              className="mx-range"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={opacity}
+              onChange={(event) => setOpacity(Number(event.target.value))}
+            />
+          </div>
+
+          {/* Secondary Blended Layer */}
+          <div className="mt-3.5 space-y-2 border-b border-mx-border pb-3.5">
+            <label htmlFor="mars-overlay-layer" className="mx-label flex justify-between">
+              <span>Comparative Overlay Layer</span>
+              <span className="text-[10px] text-mx-muted">MULTI-SENSOR BLEND</span>
+            </label>
+
+            <select
+              id="mars-overlay-layer"
+              className="mx-input text-xs"
+              value={overlayLayerId ?? ""}
+              onChange={(event) => {
+                const val = event.target.value;
+                setOverlayLayerId(val ? (val as MapLayerId) : null);
+              }}
+            >
+              <option value="">(None — Single Layer View)</option>
+              {Object.values(MAP_LAYERS).map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+
+            {overlayLayerId && (
+              <>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-mx-muted">Blend Opacity</span>
+                  <span className="mx-mono text-mx-accent">
+                    {Math.round(overlayOpacity * 100)}%
+                  </span>
+                </div>
+                <input
+                  id="mars-overlay-opacity"
+                  className="mx-range"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={overlayOpacity}
+                  onChange={(event) => setOverlayOpacity(Number(event.target.value))}
+                />
+              </>
+            )}
+          </div>
+
+          {/* USGS Geologic Units Vector Layer */}
+          <div className="mt-3.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-mx-text">
+                USGS Jezero Geology (SIM 3464)
+              </span>
+              <button
+                type="button"
+                className={`mx-btn mx-btn--xs ${
+                  showGeologyOverlay
+                    ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
+                    : "mx-btn--secondary"
+                }`}
+                onClick={() => setShowGeologyOverlay(!showGeologyOverlay)}
+              >
+                {showGeologyOverlay ? "Active" : "Disabled"}
+              </button>
+            </div>
+
+            {showGeologyOverlay && (
+              <div className="space-y-2 rounded border border-mx-border bg-mx-surface/60 p-2 text-xs">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-mx-muted">Polygon Fill Opacity</span>
+                  <span className="mx-mono text-mx-text">
+                    {Math.round(geologyOpacity * 100)}%
+                  </span>
+                </div>
+                <input
+                  className="mx-range"
+                  type="range"
+                  min="0.1"
+                  max="0.9"
+                  step="0.05"
+                  value={geologyOpacity}
+                  onChange={(event) => setGeologyOpacity(Number(event.target.value))}
+                />
+
+                <div className="mt-2 space-y-1 text-[11px]">
+                  <span className="mx-eyebrow text-[10px]">Stratigraphic Legend</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                    <span>HpHd_scarp: Western Delta Scarp (Lacustrine Mudstone)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-300" />
+                    <span>HpHd_top: Western Delta Topset (Fluvial Sandstone)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-600" />
+                    <span>HNcf_f: Crater Floor Fractured / Séítah (Olivine Cumulate)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-purple-500" />
+                    <span>Cc_b: Belva Impact Ejecta Breccia</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-pink-500" />
+                    <span>Hcf_m: Marginal Carbonate Bench</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Temporal controls: bottom-right */}
       <div
         className="mx-temporal-toolbar"
         role="region"
@@ -331,7 +428,6 @@ export default function MarsExplorerControls() {
           <span className="mx-eyebrow mx-eyebrow--accent">
             Temporal exploration
           </span>
-
           <span className="mx-mono text-[10px] text-mx-dim">
             MARS TIME CONTROLS
           </span>
@@ -391,19 +487,15 @@ export default function MarsExplorerControls() {
               Choose an Earth date to define the historical period
               you want to investigate.
             </p>
-
             <div className="mx-temporal-control">
               <label htmlFor="mars-past-date">Date</label>
-
               <input
                 id="mars-past-date"
                 type="date"
                 min={EARLIEST_TEMPORAL_DATE}
                 max={todayUTC}
                 value={temporal.selectedDate}
-                onChange={(event) =>
-                  setTemporalDate(event.target.value)
-                }
+                onChange={(event) => setTemporalDate(event.target.value)}
               />
             </div>
           </div>
@@ -415,7 +507,6 @@ export default function MarsExplorerControls() {
               <span className="mx-temporal-status-dot" />
               <span>Latest available observations</span>
             </div>
-
             <p className="mx-temporal-description m-0">
               Uses the currently configured datasets. This is not a
               live Mars feed.
@@ -429,10 +520,8 @@ export default function MarsExplorerControls() {
               Set a planning horizon. This does not yet generate a
               scientific forecast.
             </p>
-
             <div className="mx-temporal-control">
               <label htmlFor="mars-future-sols">Horizon (sols)</label>
-
               <input
                 id="mars-future-sols"
                 type="number"

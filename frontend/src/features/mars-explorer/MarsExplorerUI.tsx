@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -118,7 +119,7 @@ export function MarsExplorerLocationPanel({
             label="Elevation"
             value={
               <span className="text-mx-muted">
-                Retrieving elevation from HiRISE DEM...
+                Querying Mars DEM…
               </span>
             }
           />
@@ -143,16 +144,12 @@ export function MarsExplorerLocationPanel({
         {elevation && (
           <div>
             <DataField
-              label={
-                elevation.isFallback
-                  ? "Jezero CTX DEM Elevation (Local Fallback)"
-                  : "HiRISE Elevation"
-              }
+              label="Elevation"
               value={`${elevation.elevation.toFixed(2)} ${elevation.unit}`}
             />
-            <p className="mx-mono m-0 mt-1.5 text-[11px] text-mx-dim">
-              DEM product: {elevation.product_id} · row {elevation.row}, col{" "}
-              {elevation.column}
+            <p className="mx-mono m-0 mt-1.5 break-all text-[11px] text-mx-dim">
+              DEM product: {elevation.product_id || "Unknown"} · row{" "}
+              {elevation.row}, col {elevation.column}
             </p>
           </div>
         )}
@@ -250,6 +247,14 @@ export function MarsExplorerLocationPanel({
             </>
           )}
         </button>
+
+        <Link
+          to="/mission/investigate"
+          className="mx-btn mx-btn--secondary mx-btn--block"
+        >
+          <FlaskConical size={15} aria-hidden="true" />
+          Log Observation in Investigation
+        </Link>
 
         {site && (
           <Link

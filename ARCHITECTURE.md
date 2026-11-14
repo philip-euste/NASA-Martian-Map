@@ -7,18 +7,19 @@ NASAMartianMap
 |   |   ├── acquisition
 |   |   |   |── download_meda_test.py
 |   |   |   └── discover_hirise_dtm.py
-|   |   ├── acquisition
+|   |   ├── processing
 |   |   |   └── process_meda.py
 |   |   └── validation
 |   |       ├── inspect_remote_dem.py
 |   |       └── test_dem_coordinate.py
 |   └── datasets
-|   |   ├── indexes
-|   |   |   |── download_meda_test.py
-|   |   |   └── discover_hirise_dtm.py
-|   |   ├── processed
-|   |   |   └── process_meda.py
-|   |   └── raw
+|       ├── meda
+|       |   |── processes
+|       |   |── indexes
+|       |   └── raw
+|       └── rover_imagery
+|           |── raw
+|           └── indexes
 └── frontend
     ├── dist
     ├── node_modules
