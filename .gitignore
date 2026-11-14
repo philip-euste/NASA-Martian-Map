@@ -20,3 +20,4 @@ __pycache__/
 # Keep downloaded raw scientific datasets out of Git.
 **/datasets/raw/
 frontend/data/raw/
+**/datasets/meda

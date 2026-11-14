@@ -162,6 +162,22 @@ export interface SimulationState {
 }
 
 /* =========================================================
+   TEMPORAL STATE
+   ========================================================= */
+
+export type TemporalMode = "past" | "present" | "future";
+
+export interface TemporalState {
+  mode: TemporalMode;
+
+  /** Earth calendar date, stored as YYYY-MM-DD. */
+  selectedDate: string;
+
+  /** Provisional future simulation horizon, measured in Martian sols. */
+  futureSols: number;
+}
+
+/* =========================================================
    MISSION STATE
    ========================================================= */
 
@@ -184,9 +200,13 @@ export interface Mission {
   hypotheses: UserHypothesis[];
 
   candidateRoutes: Route[];
-  selectedRoute: Route | null;
+  selectedRouteId: string | null;
 
   simulation: SimulationState;
+  temporal: TemporalState;
+
+  fieldNotes: FieldNote[];
+  reports: ExpeditionReport[];
 
   createdAt: string;
   updatedAt: string;

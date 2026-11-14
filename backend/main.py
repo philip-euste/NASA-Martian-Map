@@ -1,11 +1,47 @@
 
-import httpx
+import csv
+import json
+import re
 import xml.etree.ElementTree as ET
-from fastapi import FastAPI, HTTPException
+
+from itertools import islice
+from pathlib import Path
+
+import httpx
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from terrain_dem import router as terrain_dem_router
 
+
+# =========================================================
+# CONFIGURATION
+# =========================================================
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+MEDA_PROCESSED_DIR = (
+    PROJECT_ROOT
+    / "datasets"
+    / "meda"
+    / "processed"
+)
+
+MEDA_SENSORS = [
+    "ATS",
+    "RDS",
+    "ANC",
+    "PS",
+    "RHS",
+    "TIRS",
+    "WS",
+]
+
+
+# =========================================================
+# APPLICATION
+# =========================================================
 
 app = FastAPI(title="Marswalk API")
 
@@ -22,6 +58,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# =========================================================
+# NASA LAYER CONFIGURATION
+# =========================================================
 
 MARS_GLOBAL_LAYER = {
     "id": "mars_global_mola",
@@ -46,6 +86,12 @@ JEZERO_LAYER = {
 }
 
 
+NASA_LAYERS = [
+    MARS_GLOBAL_LAYER,
+    JEZERO_LAYER,
+]
+
+
 def get_capabilities_url(layer):
     return (
         "https://trek.nasa.gov/tiles/Mars/EQ/"
@@ -54,19 +100,152 @@ def get_capabilities_url(layer):
     )
 
 
+# =========================================================
+# MEDA HELPERS
+# =========================================================
+
+def find_meda_report(sensor, sol):
+
+    sensor = sensor.upper()
+
+    if sensor not in MEDA_SENSORS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown MEDA sensor: {sensor}",
+        )
+
+    if not re.fullmatch(r"sol_\d{4}", sol):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid Sol format. Expected sol_0001.",
+        )
+
+    product_dir = (
+        MEDA_PROCESSED_DIR
+        / sensor
+        / sol
+    )
+
+    if not product_dir.is_dir():
+        raise HTTPException(
+            status_code=404,
+            detail=f"No processed MEDA data found for {sensor}, {sol}.",
+        )
+
+    reports = sorted(
+        product_dir.glob("*_REPORT.json")
+    )
+
+    if not reports:
+        raise HTTPException(
+            status_code=404,
+            detail="MEDA processing report not found.",
+        )
+
+    if len(reports) > 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Multiple MEDA products found. Product selection is ambiguous.",
+        )
+
+    report_path = reports[0]
+
+    try:
+        with open(
+            report_path,
+            "r",
+            encoding="utf-8",
+        ) as report_file:
+
+            report = json.load(report_file)
+
+    except (OSError, json.JSONDecodeError) as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to read MEDA report: {error}",
+        )
+
+    if report.get("validation") != "passed":
+        raise HTTPException(
+            status_code=409,
+            detail="MEDA product has not passed validation.",
+        )
+
+    output_filename = report.get("output_file")
+
+    if not output_filename:
+        raise HTTPException(
+            status_code=500,
+            detail="Output filename missing from MEDA report.",
+        )
+
+    if Path(output_filename).name != output_filename:
+        raise HTTPException(
+            status_code=500,
+            detail="Invalid output filename in MEDA report.",
+        )
+
+    csv_path = product_dir / output_filename
+
+    if not csv_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Processed MEDA CSV file not found.",
+        )
+
+    return report, csv_path
+
+
+def get_product_summary(report):
+
+    return {
+        "sensor": report.get("sensor"),
+        "sol": report.get("sol"),
+        "title": report.get("title"),
+        "logical_identifier": report.get(
+            "logical_identifier"
+        ),
+        "processing_level": report.get(
+            "processing_level"
+        ),
+        "product_version": report.get(
+            "product_version"
+        ),
+        "start_time": report.get("start_time"),
+        "stop_time": report.get("stop_time"),
+        "record_count": report.get("record_count"),
+        "fields": report.get("fields", []),
+        "validation": report.get("validation"),
+    }
+
+
+# =========================================================
+# GENERAL ENDPOINTS
+# =========================================================
+
 @app.get("/")
 def home():
-    return {"message": "Marswalk API is running!"}
 
+    return {
+        "message": "Marswalk API is running!"
+    }
+
+
+# =========================================================
+# NASA LAYER ENDPOINTS
+# =========================================================
 
 @app.get("/api/layers")
 def get_layers():
-    return [MARS_GLOBAL_LAYER, JEZERO_LAYER]
+
+    return NASA_LAYERS
 
 
 @app.get("/api/layers/{layer_id}")
 def get_layer(layer_id: str):
-    for layer in [MARS_GLOBAL_LAYER, JEZERO_LAYER]:
+
+    for layer in NASA_LAYERS:
+
         if layer["id"] == layer_id:
             return layer
 
@@ -78,10 +257,13 @@ def get_layer(layer_id: str):
 
 @app.get("/api/nasa/layers/{layer_id}/capabilities")
 async def get_nasa_capabilities(layer_id: str):
-    catalog = [MARS_GLOBAL_LAYER, JEZERO_LAYER]
 
     layer = next(
-        (item for item in catalog if item["id"] == layer_id),
+        (
+            item
+            for item in NASA_LAYERS
+            if item["id"] == layer_id
+        ),
         None,
     )
 
@@ -92,20 +274,26 @@ async def get_nasa_capabilities(layer_id: str):
         )
 
     try:
+
         async with httpx.AsyncClient(timeout=30) as client:
+
             response = await client.get(
                 get_capabilities_url(layer)
             )
+
             response.raise_for_status()
 
         return {
             "source": layer["source"],
             "status": "connected",
-            "content_type": response.headers.get("content-type"),
+            "content_type": response.headers.get(
+                "content-type"
+            ),
             "capabilities_xml": response.text,
         }
 
     except httpx.HTTPError as error:
+
         raise HTTPException(
             status_code=502,
             detail=f"NASA service request failed: {error}",
@@ -114,10 +302,13 @@ async def get_nasa_capabilities(layer_id: str):
 
 @app.get("/api/nasa/layers/{layer_id}/info")
 async def get_layer_info(layer_id: str):
-    catalog = [MARS_GLOBAL_LAYER, JEZERO_LAYER]
 
     layer_config = next(
-        (item for item in catalog if item["id"] == layer_id),
+        (
+            item
+            for item in NASA_LAYERS
+            if item["id"] == layer_id
+        ),
         None,
     )
 
@@ -128,15 +319,19 @@ async def get_layer_info(layer_id: str):
         )
 
     try:
+
         async with httpx.AsyncClient(timeout=30) as client:
+
             response = await client.get(
                 get_capabilities_url(layer_config)
             )
+
             response.raise_for_status()
 
         root = ET.fromstring(response.content)
 
         def find_all(element, tag_name):
+
             return [
                 node
                 for node in element.iter()
@@ -151,13 +346,17 @@ async def get_layer_info(layer_id: str):
                 for item in find_all(root, "Layer")
                 if any(
                     node.text == target_id
-                    for node in find_all(item, "Identifier")
+                    for node in find_all(
+                        item,
+                        "Identifier",
+                    )
                 )
             ),
             None,
         )
 
         if layer is None:
+
             raise HTTPException(
                 status_code=404,
                 detail="Layer not found in NASA capabilities",
@@ -178,21 +377,30 @@ async def get_layer_info(layer_id: str):
                     "resource_type": item.get("resourceType"),
                     "template": item.get("template"),
                 }
-                for item in find_all(layer, "ResourceURL")
+                for item in find_all(
+                    layer,
+                    "ResourceURL",
+                )
             ],
             "tile_matrix_sets": [
                 node.text
-                for node in find_all(layer, "TileMatrixSet")
+                for node in find_all(
+                    layer,
+                    "TileMatrixSet",
+                )
                 if node.text
             ],
         }
 
     except httpx.HTTPError as error:
+
         raise HTTPException(
             status_code=502,
             detail=f"NASA request failed: {error}",
         )
+
     except ET.ParseError:
+
         raise HTTPException(
             status_code=502,
             detail="NASA returned invalid XML",
@@ -201,6 +409,7 @@ async def get_layer_info(layer_id: str):
 
 @app.get("/api/nasa/layers/{layer_id}/tile-config")
 async def get_tile_config(layer_id: str):
+
     info = await get_layer_info(layer_id)
 
     tile = next(
@@ -213,6 +422,7 @@ async def get_tile_config(layer_id: str):
     )
 
     if tile is None:
+
         raise HTTPException(
             status_code=404,
             detail="No tile template found for this layer",
@@ -227,4 +437,129 @@ async def get_tile_config(layer_id: str):
             "/1.0.0//{Style}/",
             "/1.0.0/{Style}/",
         ),
+    }
+
+
+# =========================================================
+# MEDA ENDPOINTS
+# =========================================================
+
+@app.get("/api/meda/products")
+def get_meda_products():
+
+    if not MEDA_PROCESSED_DIR.is_dir():
+
+        return {
+            "count": 0,
+            "products": [],
+        }
+
+    products = []
+
+    for sensor in MEDA_SENSORS:
+
+        sensor_dir = MEDA_PROCESSED_DIR / sensor
+
+        if not sensor_dir.is_dir():
+            continue
+
+        report_paths = sorted(
+            sensor_dir.glob("sol_*/*_REPORT.json")
+        )
+
+        for report_path in report_paths:
+
+            try:
+
+                with open(
+                    report_path,
+                    "r",
+                    encoding="utf-8",
+                ) as report_file:
+
+                    report = json.load(report_file)
+
+                if report.get("validation") != "passed":
+                    continue
+
+                products.append(
+                    get_product_summary(report)
+                )
+
+            except (OSError, json.JSONDecodeError):
+                continue
+
+    return {
+        "count": len(products),
+        "products": products,
+    }
+
+
+@app.get("/api/meda/products/{sensor}/{sol}")
+def get_meda_observations(
+    sensor: str,
+    sol: str,
+    limit: int = Query(
+        default=100,
+        ge=1,
+        le=1000,
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+    ),
+):
+
+    report, csv_path = find_meda_report(
+        sensor,
+        sol,
+    )
+
+    observations = []
+
+    try:
+
+        with open(
+            csv_path,
+            "r",
+            encoding="utf-8-sig",
+            newline="",
+        ) as csv_file:
+
+            reader = csv.DictReader(csv_file)
+
+            observations = list(
+                islice(
+                    reader,
+                    offset,
+                    offset + limit,
+                )
+            )
+
+    except OSError as error:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to read MEDA observations: {error}",
+        )
+
+    total_records = report.get(
+        "record_count",
+        0,
+    )
+
+    returned_records = len(observations)
+
+    return {
+        "product": get_product_summary(report),
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "total_records": total_records,
+            "returned_records": returned_records,
+            "has_more": (
+                offset + returned_records < total_records
+            ),
+        },
+        "observations": observations,
     }

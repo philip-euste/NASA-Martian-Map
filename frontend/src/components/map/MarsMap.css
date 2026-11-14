@@ -30,6 +30,148 @@
   pointer-events: auto;
 }
 
+/* ---------- Temporal toolbar ---------- */
+
+.mx-temporal-toolbar {
+  position: absolute;
+  z-index: 1100;
+  left: 50%;
+  bottom: 18px;
+  width: min(680px, calc(100% - 360px));
+  min-width: 320px;
+  transform: translateX(-50%);
+  padding: 12px 14px;
+  border: 1px solid var(--color-mx-border);
+  border-radius: 10px;
+  background: rgb(20 18 21 / 94%);
+  color: var(--color-mx-text);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 35%);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+
+.mx-temporal-toolbar button,
+.mx-temporal-toolbar input,
+.mx-temporal-toolbar select {
+  pointer-events: auto;
+}
+
+.mx-temporal-mode-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.mx-temporal-mode-button {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid var(--color-mx-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-mx-muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.mx-temporal-mode-button:hover {
+  border-color: var(--color-mx-border-strong);
+  color: var(--color-mx-text);
+}
+
+.mx-temporal-mode-button.is-active {
+  border-color: var(--color-mx-accent);
+  background: rgb(255 255 255 / 5%);
+  color: var(--color-mx-accent);
+}
+
+.mx-temporal-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding-top: 10px;
+}
+
+.mx-temporal-description {
+  min-width: 0;
+  color: var(--color-mx-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.mx-temporal-control {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.mx-temporal-control label {
+  color: var(--color-mx-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mx-temporal-control input,
+.mx-temporal-control select {
+  min-height: 32px;
+  max-width: 170px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-mx-border);
+  border-radius: 5px;
+  outline: none;
+  background: var(--color-mx-panel);
+  color: var(--color-mx-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.mx-temporal-control input:focus,
+.mx-temporal-control select:focus {
+  border-color: var(--color-mx-accent);
+}
+
+.mx-temporal-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--color-mx-muted);
+  font-size: 11px;
+}
+
+.mx-temporal-status-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--color-mx-accent);
+}
+
+/* Keep map loading/error messages above the temporal toolbar. */
+
+.mx-map-status {
+  position: absolute;
+  z-index: 1050;
+  bottom: 112px;
+  left: 16px;
+  display: flex;
+  max-width: min(340px, calc(100% - 32px));
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+}
+
 /* ---------- Site label tooltips (Figma pin labels) ---------- */
 
 .leaflet-tooltip.mx-site-label {
@@ -74,7 +216,7 @@
   line-height: 1.5;
 }
 
-/* ---------- Attribution (bottom-right, Figma: TERRAIN: NASA / JPL-CALTECH / USGS) ---------- */
+/* ---------- Attribution (bottom-right) ---------- */
 
 .mx-map .leaflet-control-attribution {
   margin: 0 16px 14px 0;
@@ -91,4 +233,44 @@
 .mx-map .leaflet-control-attribution a {
   color: var(--color-mx-muted) !important;
   text-decoration: none;
+}
+
+/* ---------- Responsive layout ---------- */
+
+@media (max-width: 900px) {
+  .mx-temporal-toolbar {
+    width: calc(100% - 32px);
+    min-width: 0;
+    bottom: 12px;
+  }
+
+  .mx-map-status {
+    bottom: 130px;
+  }
+}
+
+@media (max-width: 560px) {
+  .mx-temporal-toolbar {
+    padding: 9px 10px;
+  }
+
+  .mx-temporal-content {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .mx-temporal-control {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mx-temporal-control input,
+  .mx-temporal-control select {
+    max-width: 190px;
+  }
+
+  .mx-map-status {
+    bottom: 150px;
+  }
 }

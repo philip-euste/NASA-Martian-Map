@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from "react";
 import {
   MapContainer,
@@ -20,6 +21,9 @@ import {
   Plus,
   Search,
   X,
+  CalendarDays,
+  Clock3,
+  Telescope,
 } from "lucide-react";
 
 import {
@@ -86,6 +90,9 @@ interface WmtsTileLayerProps {
   config: TileLayerConfig;
   opacity: number;
 }
+
+const EARLIEST_TEMPORAL_DATE = "1965-01-01";
+const MAX_FUTURE_SOLS = 30;
 
 function normalizeCoordinates(
   coordinates: Coordinates
@@ -422,13 +429,21 @@ export default function MarsMap({
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const { mission, setRegion, updateMission } = useMission();
+  const {
+    mission,
+    setRegion,
+    updateMission,
+    updateTemporal,
+  } = useMission();
 
   const layer = MAP_LAYERS[selectedLayer];
 
   const selectedSite = getSiteById(
     selectedSiteId ?? undefined
   );
+
+  const temporal = mission.temporal;
+  const todayUTC = new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
     if (!focusSiteId) return;
@@ -663,6 +678,44 @@ export default function MarsMap({
     setSavedOpen(false);
   }
 
+  function setTemporalMode(
+    mode: "past" | "present" | "future"
+  ): void {
+    updateTemporal({ mode });
+  }
+
+  function setTemporalDate(date: string): void {
+    if (!date) return;
+
+    if (
+      date < EARLIEST_TEMPORAL_DATE ||
+      date > todayUTC
+    ) {
+      return;
+    }
+
+    updateTemporal({
+      selectedDate: date,
+      mode: "past",
+    });
+  }
+
+  function setFutureSolHorizon(value: string): void {
+    if (value.trim() === "") return;
+
+    const parsed = Number(value);
+
+    if (!Number.isFinite(parsed)) return;
+
+    updateTemporal({
+      futureSols: Math.max(
+        1,
+        Math.min(MAX_FUTURE_SOLS, Math.round(parsed))
+      ),
+      mode: "future",
+    });
+  }
+
   const searchResults = useMemo(() => {
     const term = query.trim().toLowerCase();
 
@@ -881,6 +934,7 @@ export default function MarsMap({
           ))}
         </MapContainer>
 
+        {/* Search, map controls, and layer panels */}
         <div className="mx-map-overlay left-4 top-4 flex flex-col gap-3 sm:left-6 sm:top-5 max-lg:top-[76px]">
           <div className="flex min-w-0 items-start gap-2.5">
             <div className="relative min-w-0 w-[min(280px,calc(100vw-32px))]">
@@ -1197,9 +1251,10 @@ export default function MarsMap({
           </div>
         </div>
 
+        {/* Selected location information */}
         {coordinates && (
           <aside
-            className="mx-map-overlay mx-panel mx-panel--floating mx-scroll bottom-4 right-4 flex max-h-[calc(100%-32px)] w-[min(340px,calc(100%-32px))] flex-col overflow-auto p-5 sm:right-6 sm:top-5 sm:bottom-auto max-lg:sm:top-[76px] max-sm:left-4 max-sm:max-h-[60%]"
+            className="mx-map-overlay mx-panel mx-panel--floating mx-scroll bottom-4 right-4 flex max-h-[calc(100%-32px)] w-[min(340px,calc(100%-32px))] flex-col overflow-auto p-5 sm:right-6 sm:top-5 sm:bottom-auto max-lg:sm:top-[76px] max-sm:left-4 max-sm:!bottom-[174px] max-sm:max-h-[calc(100%-190px)]"
             aria-label="Selected location"
           >
             <div className="mb-4 flex items-center justify-between">
@@ -1349,7 +1404,154 @@ export default function MarsMap({
           </aside>
         )}
 
-        <div className="mx-map-overlay bottom-4 left-4 flex flex-col gap-1">
+        {/* Temporal exploration toolbar */}
+        <div
+          className="mx-temporal-toolbar"
+          role="region"
+          aria-label="Temporal exploration controls"
+        >
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span className="mx-eyebrow mx-eyebrow--accent">
+              Temporal exploration
+            </span>
+
+            <span className="mx-mono text-[10px] text-mx-dim">
+              MARS TIME CONTROLS
+            </span>
+          </div>
+
+          <div
+            className="mx-temporal-mode-list"
+            role="group"
+            aria-label="Select temporal mode"
+          >
+            <button
+              type="button"
+              className={`mx-temporal-mode-button ${
+                temporal.mode === "past" ? "is-active" : ""
+              }`}
+              aria-pressed={temporal.mode === "past"}
+              onClick={() => setTemporalMode("past")}
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <CalendarDays size={13} />
+                Past
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={`mx-temporal-mode-button ${
+                temporal.mode === "present" ? "is-active" : ""
+              }`}
+              aria-pressed={temporal.mode === "present"}
+              onClick={() => setTemporalMode("present")}
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <Clock3 size={13} />
+                Present
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={`mx-temporal-mode-button ${
+                temporal.mode === "future" ? "is-active" : ""
+              }`}
+              aria-pressed={temporal.mode === "future"}
+              onClick={() => setTemporalMode("future")}
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <Telescope size={13} />
+                Future
+              </span>
+            </button>
+          </div>
+
+          {temporal.mode === "past" && (
+            <div className="mx-temporal-content">
+              <p className="mx-temporal-description m-0">
+                Choose an Earth date to define the historical
+                period you want to investigate.
+              </p>
+
+              <div className="mx-temporal-control">
+                <label htmlFor="mars-past-date">
+                  Date
+                </label>
+
+                <input
+                  id="mars-past-date"
+                  type="date"
+                  min={EARLIEST_TEMPORAL_DATE}
+                  max={todayUTC}
+                  value={temporal.selectedDate}
+                  onChange={(event) =>
+                    setTemporalDate(event.target.value)
+                  }
+                />
+              </div>
+            </div>
+          )}
+
+          {temporal.mode === "present" && (
+            <div className="mx-temporal-content">
+              <div className="mx-temporal-status">
+                <span className="mx-temporal-status-dot" />
+
+                <span>
+                  Latest available observations
+                </span>
+              </div>
+
+              <p className="mx-temporal-description m-0">
+                Uses the currently configured datasets. This
+                is not a live Mars feed.
+              </p>
+            </div>
+          )}
+
+          {temporal.mode === "future" && (
+            <div className="mx-temporal-content">
+              <p className="mx-temporal-description m-0">
+                Set a planning horizon. This does not yet
+                generate a scientific forecast.
+              </p>
+
+              <div className="mx-temporal-control">
+                <label htmlFor="mars-future-sols">
+                  Horizon (sols)
+                </label>
+
+                <input
+                  id="mars-future-sols"
+                  type="number"
+                  min={1}
+                  max={MAX_FUTURE_SOLS}
+                  step={1}
+                  value={temporal.futureSols}
+                  onChange={(event) =>
+                    setFutureSolHorizon(event.target.value)
+                  }
+                  onBlur={() => {
+                    updateTemporal({
+                      futureSols: Math.max(
+                        1,
+                        Math.min(
+                          MAX_FUTURE_SOLS,
+                          Math.round(temporal.futureSols)
+                        )
+                      ),
+                    });
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Non-interactive map status messages */}
+        <div className="mx-map-status">
           {loading && (
             <p className="mx-chip">
               Loading map layer...

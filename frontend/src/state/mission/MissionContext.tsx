@@ -1,22 +1,41 @@
-// frontend\src\state\mission\MissionContext.tsx
+
 import {
   createContext,
   useContext,
   useState,
   type ReactNode,
-  type Dispatch,
-  type SetStateAction,
 } from "react";
 
-import type { Mission, Region } from "../../types";
+import type {
+  Mission,
+  Region,
+  SimulationState,
+  TemporalState,
+} from "../../types";
+
+type DeepReadonly<T> = T extends readonly (infer Item)[]
+  ? readonly DeepReadonly<Item>[]
+  : T extends object
+    ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+    : T;
+
+export type MissionUpdate = Partial<
+  Omit<
+    Mission,
+    "id" | "createdAt" | "updatedAt" | "simulation" | "temporal"
+  >
+>;
 
 interface MissionContextValue {
-  mission: Mission;
-  setMission: Dispatch<SetStateAction<Mission>>;
+  mission: DeepReadonly<Mission>;
+  updateMission: (updates: MissionUpdate) => void;
+  updateSimulation: (updates: Partial<SimulationState>) => void;
+  updateTemporal: (updates: Partial<TemporalState>) => void;
   setRegion: (region: Region | null) => void;
-  updateMission: (
-    updates: Partial<Omit<Mission, "id" | "createdAt">>
-  ) => void;
+}
+
+function getCurrentUTCDate(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function createInitialMission(): Mission {
@@ -41,7 +60,7 @@ function createInitialMission(): Mission {
     hypotheses: [],
 
     candidateRoutes: [],
-    selectedRoute: null,
+    selectedRouteId: null,
 
     simulation: {
       currentPosition: null,
@@ -50,6 +69,15 @@ function createInitialMission(): Mission {
       progressPercentage: 0,
       isActive: false,
     },
+
+    temporal: {
+      mode: "present",
+      selectedDate: getCurrentUTCDate(),
+      futureSols: 1,
+    },
+
+    fieldNotes: [],
+    reports: [],
 
     createdAt: now,
     updatedAt: now,
@@ -69,12 +97,50 @@ export function MissionProvider({
   );
 
   function updateMission(
-    updates: Partial<Omit<Mission, "id" | "createdAt">>
+    updates: MissionUpdate
   ): void {
+    const updatedAt = new Date().toISOString();
+
     setMission((current) => ({
       ...current,
       ...updates,
-      updatedAt: new Date().toISOString(),
+      id: current.id,
+      createdAt: current.createdAt,
+      updatedAt,
+    }));
+  }
+
+  function updateSimulation(
+    updates: Partial<SimulationState>
+  ): void {
+    const updatedAt = new Date().toISOString();
+
+    setMission((current) => ({
+      ...current,
+      simulation: {
+        ...current.simulation,
+        ...updates,
+      },
+      id: current.id,
+      createdAt: current.createdAt,
+      updatedAt,
+    }));
+  }
+
+  function updateTemporal(
+    updates: Partial<TemporalState>
+  ): void {
+    const updatedAt = new Date().toISOString();
+
+    setMission((current) => ({
+      ...current,
+      temporal: {
+        ...current.temporal,
+        ...updates,
+      },
+      id: current.id,
+      createdAt: current.createdAt,
+      updatedAt,
     }));
   }
 
@@ -86,9 +152,10 @@ export function MissionProvider({
     <MissionContext.Provider
       value={{
         mission,
-        setMission,
         setRegion,
         updateMission,
+        updateSimulation,
+        updateTemporal,
       }}
     >
       {children}
