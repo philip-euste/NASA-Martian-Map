@@ -9,3 +9,7 @@ Frontend:
 - HTML/CSS/TS/JS
 - Leaflet, Tailwind
 - React, Vite, Three
+
+Datasets:
+- meda
+- perserverance

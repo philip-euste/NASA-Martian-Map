@@ -37,6 +37,7 @@ export function MarsExplorerLocationPanel({
     elevation,
     elevationLoading,
     elevationError,
+    retryElevation,
     locationNameDraft,
     setLocationNameDraft,
     saveSelectedLocation,
@@ -124,16 +125,29 @@ export function MarsExplorerLocationPanel({
         )}
 
         {elevationError && (
-          <DataField
-            label="Elevation"
-            fallback={`Unavailable — ${elevationError}`}
-          />
+          <div>
+            <DataField
+              label="Elevation"
+              fallback={`Unavailable — ${elevationError}`}
+            />
+            <button
+              type="button"
+              onClick={retryElevation}
+              className="mx-btn mx-btn--secondary mx-btn--sm mt-2 !min-h-7 !px-2.5 !py-1 text-[11px]"
+            >
+              Retry Elevation Query
+            </button>
+          </div>
         )}
 
         {elevation && (
           <div>
             <DataField
-              label="HiRISE Elevation"
+              label={
+                elevation.isFallback
+                  ? "Jezero CTX DEM Elevation (Local Fallback)"
+                  : "HiRISE Elevation"
+              }
               value={`${elevation.elevation.toFixed(2)} ${elevation.unit}`}
             />
             <p className="mx-mono m-0 mt-1.5 text-[11px] text-mx-dim">

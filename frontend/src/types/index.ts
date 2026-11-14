@@ -36,6 +36,38 @@ export interface Dataset {
   resolutionMeters?: number;
   available: boolean;
   provenance?: EvidenceProvenance;
+  instrument?: string;
+  mission?: string;
+  category?: string;
+  measurementProvided?: string;
+  spatialResolutionLabel?: string;
+  geographicCoverage?: string;
+  temporalCoverage?: string;
+  scientificPurpose?: string;
+  suitability?: string;
+  integrationStatus?:
+    | "integrated_active"
+    | "integrated_backend"
+    | "documented_not_integrated";
+  integrationStatusLabel?: string;
+}
+
+export interface SurfaceImageAttachment {
+  imageId: string;
+  roverName: string;
+  instrument: string;
+  instrumentLabel: string;
+  sol: number;
+  dateTakenUtc: string | null;
+  dateTakenMars: string | null;
+  site: number | null;
+  drive: string | null;
+  xyzLocalMeters: string | null;
+  imageUrl: string;
+  thumbnailUrl: string;
+  sourceUrl: string;
+  credit: string;
+  caption: string;
 }
 
 export interface Observation {
@@ -47,6 +79,7 @@ export interface Observation {
   source: string;
   description?: string;
   provenance?: EvidenceProvenance;
+  surfaceImage?: SurfaceImageAttachment;
 }
 
 export interface ScientificTarget {
@@ -157,6 +190,7 @@ export interface Route {
   estimatedDurationHours?: number;
   measurementSource?:
     | "HiRISE DEM + Spherical Geometry"
+    | "Jezero CTX DEM (Local) + Spherical Geometry"
     | "Spherical Geometry (Orbital Estimate)";
 }
 

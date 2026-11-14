@@ -137,9 +137,23 @@ export function MarsExplorerProvider({
   const [elevation, setElevation] = useState<DemElevation | null>(null);
   const [elevationLoading, setElevationLoading] = useState(false);
   const [elevationError, setElevationError] = useState<string | null>(null);
+  const [layerRetryCount, setLayerRetryCount] = useState(0);
+  const [elevationRetryCount, setElevationRetryCount] = useState(0);
 
   const todayUTC = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const temporal = mission.temporal;
+
+  const retryLayer = useCallback(() => {
+    const layer = MAP_LAYERS[selectedLayerId];
+    const provider = getDataProvider(layer.provider);
+    provider.clearLayerCache?.(selectedLayerId);
+    setLayerRetryCount((c) => c + 1);
+  }, [selectedLayerId]);
+
+  const retryElevation = useCallback(() => {
+    marsDemProvider.resetBackendCooldown();
+    setElevationRetryCount((c) => c + 1);
+  }, []);
 
   useEffect(() => {
     try {
@@ -160,7 +174,9 @@ export function MarsExplorerProvider({
 
       try {
         const provider = getDataProvider(layer.provider);
-        const config = await provider.getLayerConfig(selectedLayerId);
+        const config = await provider.getLayerConfig(selectedLayerId, {
+          forceRetry: layerRetryCount > 0,
+        });
         if (!cancelled) {
           setTileConfig(config);
         }
@@ -181,7 +197,7 @@ export function MarsExplorerProvider({
     return () => {
       cancelled = true;
     };
-  }, [selectedLayerId]);
+  }, [selectedLayerId, layerRetryCount]);
 
   // Query real DEM elevation whenever selectedLocation changes
   useEffect(() => {
@@ -208,7 +224,9 @@ export function MarsExplorerProvider({
       setElevationError(null);
 
       try {
-        const result = await marsDemProvider.getElevation(validCoordinates!);
+        const result = await marsDemProvider.getElevation(validCoordinates!, {
+          forceRetry: elevationRetryCount > 0,
+        });
         if (!cancelled) {
           setElevation(result);
         }
@@ -235,7 +253,7 @@ export function MarsExplorerProvider({
     return () => {
       cancelled = true;
     };
-  }, [selectedLocation?.latitude, selectedLocation?.longitude]);
+  }, [selectedLocation?.latitude, selectedLocation?.longitude, elevationRetryCount]);
 
   useEffect(() => {
     return () => {
@@ -765,6 +783,7 @@ export function MarsExplorerProvider({
       tileConfig,
       layerLoading,
       layerError,
+      retryLayer,
       textureStatus,
       setTextureStatus,
 
@@ -797,6 +816,7 @@ export function MarsExplorerProvider({
       elevation,
       elevationLoading,
       elevationError,
+      retryElevation,
 
       temporal,
       todayUTC,
@@ -841,6 +861,8 @@ export function MarsExplorerProvider({
       openSelectedInMap,
       removeLocation,
       resetExplorerView,
+      retryElevation,
+      retryLayer,
       saveSelectedLocation,
       savedLocations,
       searchOpen,

@@ -28,9 +28,12 @@ import { useMission } from "../../state/mission/MissionContext";
 import {
   buildRegion,
   buildTarget,
+  createId,
   hasTargetAt,
   toMutable,
 } from "../mission/missionHelpers";
+import PerseveranceImageryPanel from "../mission/PerseveranceImageryPanel";
+import type { Observation } from "../../types";
 
 export default function LocationPage() {
   const { siteId } = useParams<{ siteId: string }>();
@@ -42,6 +45,7 @@ export default function LocationPage() {
   const [elevation, setElevation] = useState<DemElevation | null>(null);
   const [elevationLoading, setElevationLoading] = useState(false);
   const [elevationError, setElevationError] = useState<string | null>(null);
+  const [elevationRetryCount, setElevationRetryCount] = useState(0);
 
   useEffect(() => {
     setActiveImageIndex(0);
@@ -59,10 +63,13 @@ export default function LocationPage() {
       setElevationError(null);
 
       try {
-        const result = await marsDemProvider.getElevation({
-          latitude: site!.latitude,
-          longitude: site!.longitude,
-        });
+        const result = await marsDemProvider.getElevation(
+          {
+            latitude: site!.latitude,
+            longitude: site!.longitude,
+          },
+          { forceRetry: elevationRetryCount > 0 }
+        );
         if (!cancelled) {
           setElevation(result);
         }
@@ -83,7 +90,7 @@ export default function LocationPage() {
     return () => {
       cancelled = true;
     };
-  }, [site]);
+  }, [site, elevationRetryCount]);
 
   if (!site) {
     return (
@@ -268,21 +275,39 @@ export default function LocationPage() {
             </p>
 
             <div className="my-6 grid grid-cols-2 gap-6 border-y border-mx-border py-4">
-              <DataField
-                label="Elevation"
-                value={
-                  elevationLoading
-                    ? "Querying HiRISE DEM…"
-                    : elevation
-                      ? `${elevation.elevation.toFixed(0)} ${elevation.unit}`
-                      : undefined
-                }
-                fallback={
-                  elevationError
-                    ? "Outside active DEM / API offline"
-                    : "Not available"
-                }
-              />
+              <div>
+                <DataField
+                  label={
+                    elevation?.isFallback
+                      ? "Elevation (Local Jezero DEM)"
+                      : "Elevation"
+                  }
+                  value={
+                    elevationLoading
+                      ? "Querying DEM…"
+                      : elevation
+                        ? `${elevation.elevation.toFixed(0)} ${elevation.unit}`
+                        : undefined
+                  }
+                  fallback={
+                    elevationError
+                      ? "Outside regional DEM coverage"
+                      : "Not available"
+                  }
+                />
+                {elevationError && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      marsDemProvider.resetBackendCooldown();
+                      setElevationRetryCount((c) => c + 1);
+                    }}
+                    className="mt-1.5 text-[11px] font-mono text-mx-accent hover:underline"
+                  >
+                    Retry DEM query
+                  </button>
+                )}
+              </div>
               <DataField label="Terrain Type" value={site.terrainType} />
             </div>
 
@@ -362,6 +387,39 @@ export default function LocationPage() {
             </div>
           </section>
         </div>
+
+        {/* T-2.3: Perseverance Surface Imagery Catalog for Jezero Crater */}
+        {site.id === "jezero-crater" && (
+          <div className="mt-12">
+            <PerseveranceImageryPanel
+              onLogObservationWithImage={(params) => {
+                const newObs: Observation = {
+                  id: createId("obs"),
+                  datasetId: params.datasetId,
+                  name: params.name,
+                  source: `${params.surfaceImage.roverName} ${params.surfaceImage.instrument} (Surface Imagery Catalog)`,
+                  coordinates: undefined,
+                  observationDate: params.observationDate,
+                  description: params.description,
+                  provenance: {
+                    source: `${params.surfaceImage.instrumentLabel} · Mars 2020 Perseverance (${params.surfaceImage.credit})`,
+                    sourceId: params.sourceId,
+                    sourceUrl: params.sourceUrl,
+                    processingMethod: params.processingMethod,
+                    limitations: [params.limitation],
+                  },
+                  surfaceImage: params.surfaceImage,
+                };
+                updateMission({
+                  selectedObservations: [
+                    ...toMutable(mission.selectedObservations),
+                    newObs,
+                  ],
+                });
+              }}
+            />
+          </div>
+        )}
 
         {/* Observation details & recorded mission context for this site */}
         <section

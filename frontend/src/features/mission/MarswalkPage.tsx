@@ -179,6 +179,7 @@ export default function MarswalkPage() {
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const [simulatorError, setSimulatorError] = useState<string | null>(null);
   const [liveSlopeDeg, setLiveSlopeDeg] = useState<number>(1.8);
   const [liveElevationM, setLiveElevationM] = useState<number>(-2546);
 
@@ -325,7 +326,15 @@ export default function MarswalkPage() {
 
       if (msg.type === "jezero-simulation-ready") {
         setInitializing(false);
+        setSimulatorError(null);
         syncTargetsToIframe();
+      } else if (msg.type === "jezero-simulation-error") {
+        setInitializing(false);
+        setSimulatorError(
+          typeof msg.message === "string"
+            ? msg.message
+            : "Jezero Crater 3D terrain data is unavailable."
+        );
       } else if (msg.type === "marswalk:telemetry-sync") {
         if (typeof msg.slopeDeg === "number") {
           setLiveSlopeDeg(msg.slopeDeg);
@@ -578,6 +587,25 @@ export default function MarswalkPage() {
       }
     >
       <div className="flex flex-col gap-3">
+        {simulatorError && (
+          <div
+            className="mx-alert mx-alert--danger flex flex-wrap items-center justify-between gap-3"
+            role="alert"
+          >
+            <span>{simulatorError}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setSimulatorError(null);
+                setInitializing(true);
+                iframeRef.current?.contentWindow?.location.reload();
+              }}
+              className="mx-btn mx-btn--secondary mx-btn--sm"
+            >
+              Retry Terrain Load
+            </button>
+          </div>
+        )}
         {/* Top EVA Command & Telemetry Bar */}
         <div className="mx-panel flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex flex-wrap items-center gap-3">

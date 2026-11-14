@@ -20,6 +20,7 @@ export interface TileLayerConfig {
   style?: string;
   matrixIds?: string[];
   matrixLevels?: TileMatrixLevel[];
+  isFallbackConfig?: boolean;
 }
 
 export interface DataProvider {
@@ -27,7 +28,12 @@ export interface DataProvider {
 
   getAvailableLayers(): string[];
 
-  getLayerConfig(layerId: string): Promise<TileLayerConfig>;
+  getLayerConfig(
+    layerId: string,
+    options?: { forceRetry?: boolean }
+  ): Promise<TileLayerConfig>;
+
+  clearLayerCache?(layerId?: string): void;
 }
 
 const DATA_PROVIDERS = {
@@ -36,9 +42,7 @@ const DATA_PROVIDERS = {
 
 export type DataProviderId = keyof typeof DATA_PROVIDERS;
 
-export function getDataProvider(
-  providerId: DataProviderId
-): DataProvider {
+export function getDataProvider(providerId: DataProviderId): DataProvider {
   const provider = DATA_PROVIDERS[providerId];
 
   if (!provider) {

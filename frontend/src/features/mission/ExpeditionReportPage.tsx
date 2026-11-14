@@ -16,6 +16,7 @@ import {
   formatCoordinates,
   formatDistance,
 } from "../../components/ui";
+import { resolveDatasetMetadata } from "../../data/evidenceDatasets";
 import { useMission } from "../../state/mission/MissionContext";
 import type { ExpeditionReport } from "../../types";
 import MissionLayout from "./MissionLayout";
@@ -357,10 +358,13 @@ export default function ExpeditionReportPage() {
                           const ds = mission.selectedDatasets.find(
                             (d) => d.id === id
                           );
+                          const fallbackMeta = resolveDatasetMetadata(id);
                           return (
                             <li key={id}>
-                              <strong>{ds?.name ?? id}</strong>
-                              {ds?.source ? ` (${ds.source})` : ""}
+                              <strong>{ds?.name ?? fallbackMeta.name}</strong>
+                              {ds?.source
+                                ? ` (${ds.source})`
+                                : ` (${fallbackMeta.instrumentAndMission})`}
                             </li>
                           );
                         })}

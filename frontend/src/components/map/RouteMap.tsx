@@ -94,6 +94,8 @@ export default function RouteMap({
 }: RouteMapProps) {
   const [layerId, setLayerId] = useState<MapLayerId>("mars_global_mola");
   const [tileConfig, setTileConfig] = useState<TileLayerConfig | null>(null);
+  const [layerError, setLayerError] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
   const [map, setMap] = useState<L.Map | null>(null);
   const [layerPickerOpen, setLayerPickerOpen] = useState(false);
   const [resetCounter, setResetCounter] = useState(0);
@@ -102,18 +104,28 @@ export default function RouteMap({
 
   useEffect(() => {
     let cancelled = false;
+    setLayerError(null);
     getDataProvider(layer.provider)
-      .getLayerConfig(layerId)
+      .getLayerConfig(layerId, { forceRetry: retryToken > 0 })
       .then((cfg) => {
-        if (!cancelled) setTileConfig(cfg);
+        if (!cancelled) {
+          setTileConfig(cfg);
+          setLayerError(null);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setTileConfig(null);
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setLayerError(
+            err instanceof Error
+              ? err.message
+              : "Selected NASA map layer is temporarily unavailable."
+          );
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [layerId, layer.provider]);
+  }, [layerId, layer.provider, retryToken]);
 
   return (
     <div className="mx-map relative h-full min-h-[480px] w-full overflow-hidden rounded-[10px] border border-mx-border">
@@ -338,6 +350,31 @@ export default function RouteMap({
           </div>
         )}
       </div>
+
+      {layerError && (
+        <div
+          className="mx-map-overlay right-4 top-4 flex flex-wrap items-center gap-2 rounded-md border border-amber-400/50 bg-mx-bg/95 px-3 py-1.5 text-xs text-mx-text shadow-lg"
+          role="alert"
+        >
+          <span>{layerError}</span>
+          <button
+            type="button"
+            onClick={() => setRetryToken((c) => c + 1)}
+            className="mx-btn mx-btn--secondary mx-btn--sm !min-h-6 !px-2 !py-0.5 text-[11px]"
+          >
+            Retry
+          </button>
+          {layerId !== "mars_global_mola" && (
+            <button
+              type="button"
+              onClick={() => setLayerId("mars_global_mola")}
+              className="mx-btn mx-btn--primary mx-btn--sm !min-h-6 !px-2 !py-0.5 text-[11px]"
+            >
+              Use MOLA
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="mx-map-overlay bottom-4 left-4 rounded-md border border-mx-border bg-mx-bg/90 px-3 py-1.5">
         <span className="mx-mono text-[11px] text-mx-muted">

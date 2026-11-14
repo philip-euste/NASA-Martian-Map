@@ -173,11 +173,10 @@ class MarsWmtsGridLayer extends L.GridLayer {
       })
       .catch(() => {
         tile.onload = () => done(undefined, tile);
-        tile.onerror = () =>
-          done(
-            new Error(`NASA tile failed: ${matrix.id}/${row}/${column}`),
-            tile
-          );
+        tile.onerror = () => {
+          tile.src = TRANSPARENT_PIXEL;
+          done(undefined, tile);
+        };
         tile.src = tileUrl;
       });
 
@@ -329,9 +328,11 @@ function MapClickHandler({ onSelect }: MapClickHandlerProps) {
 function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
   const {
     selectedLayerId,
+    setSelectedLayerId,
     tileConfig,
     layerLoading,
     layerError,
+    retryLayer,
     opacity,
     focusCoordinates,
     focusRequestVersion,
@@ -602,13 +603,32 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
         {/* Unified Selected Location Panel (2D Map mode) */}
         <MarsExplorerLocationPanel mode="map" />
 
-        {/* Non-interactive map status messages */}
+        {/* Map status & layer recovery messages */}
         <div className="mx-map-status">
           {layerLoading && <p className="mx-chip">Loading map layer...</p>}
           {layerError && (
-            <p className="mx-chip" role="alert">
-              {layerError}
-            </p>
+            <div
+              className="pointer-events-auto flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/50 bg-mx-bg/95 px-3.5 py-2 text-xs text-mx-text shadow-lg backdrop-blur"
+              role="alert"
+            >
+              <span>{layerError}</span>
+              <button
+                type="button"
+                onClick={retryLayer}
+                className="mx-btn mx-btn--secondary mx-btn--sm !min-h-7 !px-2.5 !py-1 text-[11px]"
+              >
+                Retry Layer
+              </button>
+              {selectedLayerId !== "mars_global_mola" && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedLayerId("mars_global_mola")}
+                  className="mx-btn mx-btn--primary mx-btn--sm !min-h-7 !px-2.5 !py-1 text-[11px]"
+                >
+                  Use MOLA Basemap
+                </button>
+              )}
+            </div>
           )}
           {statusMessage && (
             <p className="mx-chip" role="status">

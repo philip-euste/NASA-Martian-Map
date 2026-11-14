@@ -12,6 +12,7 @@ import {
   FlaskConical,
   Info,
   MapPin,
+  Pencil,
   Plus,
   ScanSearch,
   Sparkles,
@@ -26,92 +27,25 @@ import {
 } from "../../components/ui";
 import { EXPLORATION_SITES } from "../../data/explorationSites";
 import {
-  MAP_LAYERS,
-  type MapLayer,
-  type MapLayerCategory,
-} from "../../data/mapLayers";
+  EVIDENCE_CATEGORY_LABELS,
+  EVIDENCE_DATASETS,
+  EVIDENCE_DATASETS_BY_ID,
+  resolveDatasetMetadata,
+  toMissionDataset,
+  type EvidenceDatasetCategory,
+  type EvidenceDatasetEntry,
+} from "../../data/evidenceDatasets";
 import { useMission } from "../../state/mission/MissionContext";
-import type { Dataset, Observation, UserHypothesis } from "../../types";
+import type { Observation, UserHypothesis } from "../../types";
 import MissionLayout from "./MissionLayout";
+import MedaEnvironmentalPanel from "./MedaEnvironmentalPanel";
+import PerseveranceImageryPanel from "./PerseveranceImageryPanel";
 import {
   buildRegion,
   buildTarget,
   createId,
   toMutable,
 } from "./missionHelpers";
-
-const CATEGORY_LABELS: Record<MapLayerCategory, string> = {
-  basemap: "Visible Basemap",
-  elevation: "Elevation & Terrain",
-  geology: "Geology",
-  composition: "Mineral Composition",
-  atmosphere: "Atmosphere & Dust",
-  thermal: "Thermal & Infrared",
-};
-
-interface CatalogDatasetItem {
-  dataset: Dataset;
-  category: MapLayerCategory;
-  geographicCoverage: string;
-  temporalCoverage: string;
-}
-
-function getTemporalCoverageForLayer(id: string): string {
-  if (id.includes("viking")) return "1976–1980 (Viking Orbiters 1 & 2)";
-  if (id.includes("mola") || id.includes("moc") || id.includes("tes"))
-    return "1997–2006 (Mars Global Surveyor)";
-  if (id.includes("themis")) return "2002–Present (2001 Mars Odyssey)";
-  return "Multi-mission Orbital Archive";
-}
-
-function mapLayerToCatalogItem(layer: MapLayer): CatalogDatasetItem {
-  return {
-    dataset: {
-      id: layer.id,
-      name: layer.name,
-      source: "NASA Mars Trek WMTS",
-      description: layer.description,
-      available: true,
-      provenance: {
-        source: "NASA / JPL-Caltech / USGS Mars Trek",
-        sourceId: layer.id,
-        processingMethod: `Global ${layer.category} WMTS mosaic (${layer.coverage})`,
-        limitations: [
-          "Orbital remote-sensing mosaic; small-scale surface hazards below pixel resolution require rover or HiRISE follow-up.",
-        ],
-      },
-    },
-    category: layer.category,
-    geographicCoverage: "Global (90°S–90°N, 180°W–180°E)",
-    temporalCoverage: getTemporalCoverageForLayer(layer.id),
-  };
-}
-
-const CATALOG_DATASETS: CatalogDatasetItem[] = [
-  ...Object.values(MAP_LAYERS).map(mapLayerToCatalogItem),
-  {
-    dataset: {
-      id: "hirise_jezero_dtm",
-      name: "MRO HiRISE — Jezero Controlled DTM",
-      source: "USGS Astrogeology / NASA PDS (Terrain API)",
-      description:
-        "High-resolution digital terrain model covering the Jezero Crater landing region (~1 m/post).",
-      resolutionMeters: 1,
-      available: true,
-      provenance: {
-        source: "MRO HiRISE / USGS Astrogeology",
-        sourceId: "DTEEC_048842_1985_048908_1985_U01",
-        processingMethod: "Stereo photogrammetric Digital Terrain Model",
-        limitations: [
-          "Spatial coverage is restricted to the Jezero stereo pair footprint; queries outside coverage or when the local terrain API is offline return unavailable.",
-        ],
-      },
-    },
-    category: "elevation",
-    geographicCoverage: "Regional · Jezero Crater (17.95°N–18.90°N, 76.95°E–78.05°E)",
-    temporalCoverage: "2006–Present (Mars Reconnaissance Orbiter)",
-  },
-];
 
 const EXAMPLE_QUESTIONS: { label: string; question: string; regionId: string }[] = [
   {
@@ -151,7 +85,7 @@ export default function InvestigationPage() {
 
   // Dataset filtering & progressive disclosure
   const [categoryFilter, setCategoryFilter] = useState<
-    MapLayerCategory | "all" | "selected"
+    EvidenceDatasetCategory | "all" | "selected"
   >("all");
   const [datasetSearch, setDatasetSearch] = useState("");
   const [expandedDatasetIds, setExpandedDatasetIds] = useState<Set<string>>(
@@ -164,17 +98,22 @@ export default function InvestigationPage() {
   );
   const [showTargetForm, setShowTargetForm] = useState(false);
   const [showHypotheses, setShowHypotheses] = useState(false);
+  const [showMedaInspector, setShowMedaInspector] = useState(false);
+  const [showRoverImagery, setShowRoverImagery] = useState(false);
 
-  // Observation draft state
+  // Observation draft state — default to first selected empirical evidence dataset
+  const defaultEvidenceId =
+    mission.selectedDatasets.find((d) => d.id in EVIDENCE_DATASETS_BY_ID)?.id ??
+    "hirise_jezero_dtm";
+
   const [obsName, setObsName] = useState("");
-  const [obsDatasetId, setObsDatasetId] = useState<string>(
-    mission.selectedDatasets[0]?.id ?? "mars_global_mola"
-  );
+  const [obsDatasetId, setObsDatasetId] = useState<string>(defaultEvidenceId);
   const [obsLat, setObsLat] = useState("");
   const [obsLon, setObsLon] = useState("");
   const [obsDescription, setObsDescription] = useState("");
   const [obsLimitation, setObsLimitation] = useState("");
   const [obsValidationMsg, setObsValidationMsg] = useState<string | null>(null);
+  const [editingObsId, setEditingObsId] = useState<string | null>(null);
 
   const [obsDate, setObsDate] = useState(mission.temporal.selectedDate);
   const [obsDateManuallyChanged, setObsDateManuallyChanged] = useState(false);
@@ -203,28 +142,28 @@ export default function InvestigationPage() {
   );
 
   const filteredDatasets = useMemo(() => {
-    return CATALOG_DATASETS.filter((item) => {
+    return EVIDENCE_DATASETS.filter((entry) => {
       if (categoryFilter === "selected") {
-        if (!selectedDatasetIds.has(item.dataset.id)) return false;
-      } else if (categoryFilter !== "all" && item.category !== categoryFilter) {
+        if (!selectedDatasetIds.has(entry.id)) return false;
+      } else if (categoryFilter !== "all" && entry.category !== categoryFilter) {
         return false;
       }
       if (datasetSearch.trim()) {
         const q = datasetSearch.trim().toLowerCase();
         const hay =
-          `${item.dataset.name} ${item.dataset.description} ${item.dataset.source} ${CATEGORY_LABELS[item.category]}`.toLowerCase();
+          `${entry.name} ${entry.instrument} ${entry.mission} ${entry.description} ${entry.measurementProvided} ${EVIDENCE_CATEGORY_LABELS[entry.category]}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
   }, [categoryFilter, datasetSearch, selectedDatasetIds]);
 
-  function toggleDataset(dataset: Dataset): void {
+  function toggleDataset(entry: EvidenceDatasetEntry): void {
     const current = toMutable(mission.selectedDatasets);
-    const exists = current.some((d) => d.id === dataset.id);
+    const exists = current.some((d) => d.id === entry.id);
     const next = exists
-      ? current.filter((d) => d.id !== dataset.id)
-      : [...current, dataset];
+      ? current.filter((d) => d.id !== entry.id)
+      : [...current, toMissionDataset(entry)];
 
     updateMission({ selectedDatasets: next });
   }
@@ -269,15 +208,14 @@ export default function InvestigationPage() {
     }
 
     const hasCoords = Number.isFinite(latNum) && Number.isFinite(lonNum);
-    const catalogMatch = CATALOG_DATASETS.find(
-      (item) => item.dataset.id === obsDatasetId
-    )?.dataset;
+    const catalogEntry = EVIDENCE_DATASETS_BY_ID[obsDatasetId];
+    const resolvedMeta = resolveDatasetMetadata(obsDatasetId);
 
-    const newObs: Observation = {
-      id: createId("obs"),
+    const obsRecord: Observation = {
+      id: editingObsId ?? createId("obs"),
       datasetId: obsDatasetId,
       name: obsName.trim(),
-      source: catalogMatch?.name ?? obsDatasetId,
+      source: catalogEntry?.name ?? resolvedMeta.name,
       coordinates: hasCoords
         ? { latitude: latNum, longitude: lonNum }
         : mission.region
@@ -286,27 +224,38 @@ export default function InvestigationPage() {
       observationDate: obsDate,
       description: obsDescription.trim() || undefined,
       provenance: {
-        source: catalogMatch?.source ?? "NASA Mars Trek",
-        sourceId: obsDatasetId,
-        processingMethod:
-          catalogMatch?.provenance?.processingMethod ??
-          "User-logged observation from orbital layer",
+        source: catalogEntry
+          ? `${catalogEntry.instrument} · ${catalogEntry.mission} (${catalogEntry.sourceReference})`
+          : `${resolvedMeta.instrumentAndMission} (${resolvedMeta.sourceReference})`,
+        sourceId: catalogEntry?.pdsProductId ?? resolvedMeta.pdsProductId,
+        processingMethod: catalogEntry
+          ? `${catalogEntry.measurementProvided} (${catalogEntry.spatialResolutionLabel})`
+          : `${resolvedMeta.measurementProvided} (${resolvedMeta.spatialResolutionLabel})`,
         limitations: obsLimitation.trim()
-          ? [obsLimitation.trim()]
-          : catalogMatch?.provenance?.limitations
-            ? [...catalogMatch.provenance.limitations]
-            : [],
+          ? [
+              obsLimitation.trim(),
+              ...(catalogEntry?.limitations ?? resolvedMeta.limitations),
+            ]
+          : [...(catalogEntry?.limitations ?? resolvedMeta.limitations)],
       },
     };
 
-    const nextObservations = [
-      ...toMutable(mission.selectedObservations),
-      newObs,
-    ];
+    const currentObsList = toMutable(mission.selectedObservations);
+    const existingEditingObs = editingObsId
+      ? currentObsList.find((o) => o.id === editingObsId)
+      : undefined;
+
+    if (existingEditingObs?.surfaceImage) {
+      obsRecord.surfaceImage = { ...existingEditingObs.surfaceImage };
+    }
+
+    const nextObservations = editingObsId
+      ? currentObsList.map((o) => (o.id === editingObsId ? obsRecord : o))
+      : [...currentObsList, obsRecord];
 
     const nextDatasets = toMutable(mission.selectedDatasets);
-    if (catalogMatch && !nextDatasets.some((d) => d.id === catalogMatch.id)) {
-      nextDatasets.push(catalogMatch);
+    if (catalogEntry && !nextDatasets.some((d) => d.id === catalogEntry.id)) {
+      nextDatasets.push(toMissionDataset(catalogEntry));
     }
 
     updateMission({
@@ -314,6 +263,7 @@ export default function InvestigationPage() {
       selectedDatasets: nextDatasets,
     });
 
+    setEditingObsId(null);
     setObsName("");
     setObsDescription("");
     setObsLimitation("");
@@ -322,7 +272,45 @@ export default function InvestigationPage() {
     setShowObsForm(false);
   }
 
+  function startEditingObservation(
+    obs: (typeof mission.selectedObservations)[number]
+  ): void {
+    setEditingObsId(obs.id);
+    setObsName(obs.name);
+    setObsDatasetId(obs.datasetId);
+    setObsLat(
+      obs.coordinates ? String(obs.coordinates.latitude) : ""
+    );
+    setObsLon(
+      obs.coordinates ? String(obs.coordinates.longitude) : ""
+    );
+    setObsDate(obs.observationDate || mission.temporal.selectedDate);
+    setObsDateManuallyChanged(true);
+    setObsDescription(obs.description ?? "");
+    const catalogLimits =
+      EVIDENCE_DATASETS_BY_ID[obs.datasetId]?.limitations ??
+      resolveDatasetMetadata(obs.datasetId).limitations;
+    const customLim = (obs.provenance?.limitations ?? []).find(
+      (lim) => !catalogLimits.includes(lim)
+    );
+    setObsLimitation(customLim ?? "");
+    setObsValidationMsg(null);
+    setShowObsForm(true);
+  }
+
+  function cancelObservationForm(): void {
+    setEditingObsId(null);
+    setObsName("");
+    setObsDescription("");
+    setObsLimitation("");
+    setObsValidationMsg(null);
+    setShowObsForm(false);
+  }
+
   function removeObservation(id: string): void {
+    if (editingObsId === id) {
+      cancelObservationForm();
+    }
     updateMission({
       selectedObservations: toMutable(mission.selectedObservations).filter(
         (obs) => obs.id !== id
@@ -621,20 +609,22 @@ export default function InvestigationPage() {
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-mx-border pb-4">
               <div>
                 <span className="mx-eyebrow mx-eyebrow--accent">
-                  Step 02 of 04 · Select Scientific Datasets
+                  Step 02 of 04 · Select Scientific Evidence Datasets
                 </span>
                 <h2
                   id="step2-datasets-heading"
                   className="mx-heading m-0 mt-1 flex items-center gap-2 text-xl"
                 >
                   <Database size={18} className="text-mx-accent" />
-                  NASA Planetary Dataset Catalog
+                  Scientific Evidence Dataset Catalog
                 </h2>
                 <p className="mx-body m-0 mt-1 text-xs">
-                  Select the orbital datasets (topography, visible imagery,
-                  thermal inertia, mineral abundance) needed to investigate your
-                  question. Selected datasets feed directly into the Evidence
-                  Inspector and Knowledge Gaps analysis.
+                  Select verifiable NASA physical measurements and calibrated
+                  products (topography, high-resolution visible imagery, thermal
+                  inertia, spectral deconvolution, and surface weather) to
+                  support your investigation. Visualization-only basemaps (MOLA
+                  Hillshade, Viking Color, MOC Atlas) remain in the 2D/3D Map
+                  Layer selector and are excluded from empirical evidence.
                 </p>
               </div>
 
@@ -645,7 +635,7 @@ export default function InvestigationPage() {
                     : "mx-badge--accent"
                 }`}
               >
-                {mission.selectedDatasets.length} of {CATALOG_DATASETS.length}{" "}
+                {mission.selectedDatasets.length} of {EVIDENCE_DATASETS.length}{" "}
                 selected
               </span>
             </div>
@@ -655,20 +645,20 @@ export default function InvestigationPage() {
               <div
                 className="flex flex-wrap gap-1.5"
                 role="group"
-                aria-label="Filter datasets by discipline"
+                aria-label="Filter evidence datasets by discipline"
               >
                 {(
                   [
-                    ["all", `All (${CATALOG_DATASETS.length})`],
+                    ["all", `All (${EVIDENCE_DATASETS.length})`],
                     [
                       "selected",
                       `Selected (${mission.selectedDatasets.length})`,
                     ],
-                    ["basemap", "Basemaps"],
-                    ["elevation", "Elevation & DEM"],
-                    ["composition", "Composition"],
-                    ["thermal", "Thermal IR"],
-                    ["atmosphere", "Atmosphere"],
+                    ["topography", "Topography & DEM"],
+                    ["optical_imagery", "Optical Imagery"],
+                    ["thermal_physical", "Thermal & Physical"],
+                    ["composition", "Mineral Composition"],
+                    ["atmosphere_environment", "Atmosphere & Dust"],
                   ] as const
                 ).map(([key, label]) => (
                   <button
@@ -706,154 +696,267 @@ export default function InvestigationPage() {
               </EmptyState>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
-                {filteredDatasets.map(
-                  ({
-                    dataset,
-                    category,
-                    geographicCoverage,
-                    temporalCoverage,
-                  }) => {
-                    const selected = selectedDatasetIds.has(dataset.id);
-                    const expanded = expandedDatasetIds.has(dataset.id);
+                {filteredDatasets.map((entry) => {
+                  const selected = selectedDatasetIds.has(entry.id);
+                  const expanded = expandedDatasetIds.has(entry.id);
 
-                    return (
-                      <div
-                        key={dataset.id}
-                        className={`flex flex-col justify-between rounded-lg border p-4 transition ${
-                          selected
-                            ? "border-mx-accent bg-mx-panel-2"
-                            : "border-mx-border bg-mx-bg hover:border-mx-border-strong"
-                        }`}
-                      >
-                        <div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="mx-eyebrow">
-                              {CATEGORY_LABELS[category]}
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                              {selected && (
-                                <span className="mx-badge mx-badge--accent">
-                                  Selected
-                                </span>
-                              )}
-                              <span
-                                className={`mx-badge ${
-                                  dataset.available
-                                    ? "mx-badge--success"
-                                    : "mx-badge--danger"
-                                }`}
-                              >
-                                {dataset.available
-                                  ? "Available"
-                                  : "Unavailable"}
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`flex flex-col justify-between rounded-lg border p-4 transition ${
+                        selected
+                          ? "border-mx-accent bg-mx-panel-2"
+                          : "border-mx-border bg-mx-bg hover:border-mx-border-strong"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="mx-eyebrow">
+                            {EVIDENCE_CATEGORY_LABELS[entry.category]}
+                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {selected && (
+                              <span className="mx-badge mx-badge--accent">
+                                Selected
                               </span>
-                            </div>
-                          </div>
-
-                          <h3 className="mx-heading m-0 mt-2 text-[15px]">
-                            {dataset.name}
-                          </h3>
-                          <p className="mx-body m-0 mt-1 text-xs">
-                            {dataset.description}
-                          </p>
-
-                          {/* Core Dataset Metadata */}
-                          <div className="mt-3 grid grid-cols-2 gap-2 rounded border border-mx-border bg-mx-panel/60 p-2.5 text-[11px]">
-                            <div>
-                              <span className="block text-[10px] font-mono uppercase text-mx-dim">
-                                Coverage
-                              </span>
-                              <span className="text-mx-text">
-                                {geographicCoverage.split("·")[0]}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="block text-[10px] font-mono uppercase text-mx-dim">
-                                Source
-                              </span>
-                              <span className="text-mx-text">
-                                {dataset.source}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Progressive Disclosure: Advanced Provenance & Metadata */}
-                          {expanded && (
-                            <div className="mt-2.5 rounded border border-mx-border bg-mx-bg p-3 text-xs text-mx-muted">
-                              <div className="grid gap-1.5">
-                                <div>
-                                  <strong className="text-mx-text">
-                                    Temporal Coverage:
-                                  </strong>{" "}
-                                  {temporalCoverage}
-                                </div>
-                                <div>
-                                  <strong className="text-mx-text">
-                                    Spatial Resolution:
-                                  </strong>{" "}
-                                  {dataset.resolutionMeters
-                                    ? `${dataset.resolutionMeters} m/pixel`
-                                    : "Global WMTS Mosaic"}
-                                </div>
-                                {dataset.provenance?.processingMethod && (
-                                  <div>
-                                    <strong className="text-mx-text">
-                                      Processing:
-                                    </strong>{" "}
-                                    {dataset.provenance.processingMethod}
-                                  </div>
-                                )}
-                                {dataset.provenance?.limitations &&
-                                  dataset.provenance.limitations.length > 0 && (
-                                    <div>
-                                      <strong className="text-mx-text">
-                                        Known Limitations:
-                                      </strong>{" "}
-                                      {dataset.provenance.limitations.join(
-                                        "; "
-                                      )}
-                                    </div>
-                                  )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="mt-3.5 flex items-center justify-between border-t border-mx-border pt-3">
-                          <button
-                            type="button"
-                            onClick={() => toggleDatasetDetails(dataset.id)}
-                            className="inline-flex items-center gap-1 text-xs text-mx-muted hover:text-mx-text"
-                          >
-                            <Info size={12} aria-hidden="true" />
-                            {expanded ? "Hide metadata" : "Details & limits"}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => toggleDataset(dataset)}
-                            className={`mx-btn mx-btn--sm ${
-                              selected ? "mx-btn--primary" : "mx-btn--secondary"
-                            }`}
-                          >
-                            {selected ? (
-                              <>
-                                <Check size={13} aria-hidden="true" /> Selected
-                              </>
-                            ) : (
-                              <>
-                                <Plus size={13} aria-hidden="true" /> Select
-                                Dataset
-                              </>
                             )}
-                          </button>
+                            <span
+                              className={`mx-badge ${
+                                entry.integrationStatus === "integrated_active"
+                                  ? "mx-badge--success"
+                                  : entry.integrationStatus ===
+                                      "integrated_backend"
+                                    ? "mx-badge--accent"
+                                    : ""
+                              }`}
+                              title={entry.integrationStatusLabel}
+                            >
+                              {entry.integrationStatus === "integrated_active"
+                                ? "Live Integrated"
+                                : entry.integrationStatus ===
+                                    "integrated_backend"
+                                  ? "Backend / Archive Verified"
+                                  : "Verified Catalog Reference"}
+                            </span>
+                            <span
+                              className={`mx-badge ${
+                                entry.suitability ===
+                                "Direct Quantitative Analysis"
+                                  ? "mx-badge--success"
+                                  : "mx-badge--accent"
+                              }`}
+                            >
+                              {entry.suitability}
+                            </span>
+                          </div>
                         </div>
+
+                        <h3 className="mx-heading m-0 mt-2 text-[15px]">
+                          {entry.name}
+                        </h3>
+                        <p className="mx-mono m-0 mt-1 text-[11px] text-mx-accent">
+                          {entry.instrument} · {entry.mission}
+                        </p>
+                        <p className="mx-body m-0 mt-1.5 text-xs">
+                          {entry.description}
+                        </p>
+
+                        {/* Core Dataset Metadata */}
+                        <div className="mt-3 grid grid-cols-2 gap-2 rounded border border-mx-border bg-mx-panel/60 p-2.5 text-[11px]">
+                          <div>
+                            <span className="block font-mono text-[10px] uppercase text-mx-dim">
+                              Spatial Resolution
+                            </span>
+                            <span className="text-mx-text">
+                              {entry.spatialResolutionLabel}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block font-mono text-[10px] uppercase text-mx-dim">
+                              Geographic Coverage
+                            </span>
+                            <span className="text-mx-text">
+                              {entry.geographicCoverage.split("·")[0]}
+                            </span>
+                          </div>
+                          <div className="col-span-2 border-t border-mx-border/60 pt-1.5">
+                            <span className="block font-mono text-[10px] uppercase text-mx-dim">
+                              Actual Measurement Provided
+                            </span>
+                            <span className="text-mx-text">
+                              {entry.measurementProvided}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Progressive Disclosure: Advanced Provenance & Metadata */}
+                        {expanded && (
+                          <div className="mt-2.5 rounded border border-mx-border bg-mx-bg p-3 text-xs text-mx-muted">
+                            <div className="grid gap-1.5">
+                              <div>
+                                <strong className="text-mx-text">
+                                  Availability &amp; Integration Status:
+                                </strong>{" "}
+                                {entry.integrationStatusLabel}
+                              </div>
+                              <div>
+                                <strong className="text-mx-text">
+                                  Scientific Purpose:
+                                </strong>{" "}
+                                {entry.scientificPurpose}
+                              </div>
+                              <div>
+                                <strong className="text-mx-text">
+                                  Temporal Coverage:
+                                </strong>{" "}
+                                {entry.temporalCoverage}
+                              </div>
+                              <div>
+                                <strong className="text-mx-text">
+                                  PDS / Source ID:
+                                </strong>{" "}
+                                <span className="mx-mono text-[11px]">
+                                  {entry.pdsProductId}
+                                </span>
+                              </div>
+                              <div>
+                                <strong className="text-mx-text">
+                                  Archive Reference:
+                                </strong>{" "}
+                                {entry.sourceReference}
+                              </div>
+                              {entry.limitations.length > 0 && (
+                                <div>
+                                  <strong className="text-mx-text">
+                                    Known Limitations:
+                                  </strong>{" "}
+                                  {entry.limitations.join(" ")}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    );
-                  }
-                )}
+
+                      <div className="mt-3.5 flex items-center justify-between border-t border-mx-border pt-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleDatasetDetails(entry.id)}
+                          className="inline-flex items-center gap-1 text-xs text-mx-muted hover:text-mx-text"
+                        >
+                          <Info size={12} aria-hidden="true" />
+                          {expanded ? "Hide metadata" : "Details & limits"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleDataset(entry)}
+                          className={`mx-btn mx-btn--sm ${
+                            selected ? "mx-btn--primary" : "mx-btn--secondary"
+                          }`}
+                        >
+                          {selected ? (
+                            <>
+                              <Check size={13} aria-hidden="true" /> Selected
+                            </>
+                          ) : (
+                            <>
+                              <Plus size={13} aria-hidden="true" /> Select
+                              Dataset
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
+
+            {/* T-2.2: Interactive MEDA Environmental Measurements Inspector */}
+            <div className="mt-5 border-t border-mx-border pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <span className="mx-eyebrow mx-eyebrow--accent">
+                    In-Situ Rover Environmental Telemetry · MEDA (`m2020_meda_env`)
+                  </span>
+                  <p className="m-0 mt-0.5 text-xs text-mx-muted">
+                    Inspect real Perseverance MEDA pressure, air/ground
+                    temperature, relative humidity, wind, and solar radiation
+                    from NASA PDS4 (Sol 0001 &amp; Sol 0036).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowMedaInspector((prev) => !prev)}
+                  aria-expanded={showMedaInspector}
+                  className="mx-btn mx-btn--secondary mx-btn--sm"
+                >
+                  {showMedaInspector ? (
+                    <>
+                      <ChevronUp size={14} aria-hidden="true" /> Hide MEDA
+                      Inspector
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={14} aria-hidden="true" /> Inspect MEDA
+                      Measurements
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {(showMedaInspector ||
+                selectedDatasetIds.has("m2020_meda_env")) && (
+                <div className="mt-4">
+                  <MedaEnvironmentalPanel
+                    onLogObservation={(params) => {
+                      const medaEntry =
+                        EVIDENCE_DATASETS_BY_ID["m2020_meda_env"];
+                      const newObs: Observation = {
+                        id: createId("obs"),
+                        datasetId: "m2020_meda_env",
+                        name: params.name,
+                        source:
+                          medaEntry?.name ??
+                          "Perseverance MEDA Surface Environmental Measurements",
+                        coordinates: {
+                          latitude: 18.4447,
+                          longitude: 77.4508,
+                        },
+                        observationDate: params.observationDate,
+                        description: params.description,
+                        provenance: {
+                          source: `${medaEntry?.instrument ?? "MEDA"} · ${
+                            medaEntry?.mission ?? "Mars 2020 Perseverance"
+                          } (${medaEntry?.sourceReference ?? "NASA PDS4"})`,
+                          sourceId: params.sourceId,
+                          processingMethod: params.processingMethod,
+                          limitations: [
+                            params.limitation,
+                            ...(medaEntry?.limitations ?? []),
+                          ],
+                        },
+                      };
+                      const nextDatasets = toMutable(mission.selectedDatasets);
+                      if (
+                        medaEntry &&
+                        !nextDatasets.some((d) => d.id === medaEntry.id)
+                      ) {
+                        nextDatasets.push(toMissionDataset(medaEntry));
+                      }
+                      updateMission({
+                        selectedObservations: [
+                          ...toMutable(mission.selectedObservations),
+                          newObs,
+                        ],
+                        selectedDatasets: nextDatasets,
+                      });
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </section>
 
           {/* STEP 3: RECORD OBSERVATIONS */}
@@ -875,8 +978,9 @@ export default function InvestigationPage() {
                   {mission.selectedObservations.length})
                 </h2>
                 <p className="mx-body m-0 mt-1 text-xs">
-                  Record specific features, thermal signatures, or outcrops
-                  observed in your selected datasets.
+                  Record specific geological features, thermal inertia
+                  signatures, or elevation measurements observed in verifiable
+                  NASA evidence datasets.
                 </p>
               </div>
 
@@ -908,7 +1012,9 @@ export default function InvestigationPage() {
               >
                 <div className="flex items-center justify-between border-b border-mx-border pb-2.5">
                   <span className="font-display text-sm font-semibold text-mx-text">
-                    New Observation Record
+                    {editingObsId
+                      ? "Edit Observation Record"
+                      : "New Observation Record"}
                   </span>
                   {mission.region && (
                     <button
@@ -950,7 +1056,7 @@ export default function InvestigationPage() {
 
                   <div>
                     <label htmlFor="obs-dataset" className="mx-label">
-                      Source NASA dataset *
+                      Source NASA evidence dataset *
                     </label>
                     <select
                       id="obs-dataset"
@@ -958,14 +1064,104 @@ export default function InvestigationPage() {
                       value={obsDatasetId}
                       onChange={(e) => setObsDatasetId(e.target.value)}
                     >
-                      {CATALOG_DATASETS.map(({ dataset }) => (
-                        <option key={dataset.id} value={dataset.id}>
-                          {dataset.name}
-                        </option>
+                      {!(obsDatasetId in EVIDENCE_DATASETS_BY_ID) && (
+                        <optgroup label="Legacy Observation Source (Migrate to Evidence Dataset)">
+                          <option value={obsDatasetId}>
+                            ⚠ {resolveDatasetMetadata(obsDatasetId).name} (Legacy Map Layer)
+                          </option>
+                        </optgroup>
+                      )}
+                      {mission.selectedDatasets.some(
+                        (d) => d.id in EVIDENCE_DATASETS_BY_ID
+                      ) && (
+                        <optgroup label="Selected in Your Investigation">
+                          {EVIDENCE_DATASETS.filter((entry) =>
+                            selectedDatasetIds.has(entry.id)
+                          ).map((entry) => (
+                            <option key={`sel-${entry.id}`} value={entry.id}>
+                              ★ {entry.name} ({entry.spatialResolutionLabel})
+                              {entry.integrationStatus ===
+                              "documented_not_integrated"
+                                ? " [Catalog Reference]"
+                                : ""}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {(
+                        Object.keys(
+                          EVIDENCE_CATEGORY_LABELS
+                        ) as EvidenceDatasetCategory[]
+                      ).map((catKey) => (
+                        <optgroup
+                          key={catKey}
+                          label={EVIDENCE_CATEGORY_LABELS[catKey]}
+                        >
+                          {EVIDENCE_DATASETS.filter(
+                            (entry) => entry.category === catKey
+                          ).map((entry) => (
+                            <option key={entry.id} value={entry.id}>
+                              {entry.name} ({entry.spatialResolutionLabel})
+                              {entry.integrationStatus ===
+                              "documented_not_integrated"
+                                ? " [Catalog Reference]"
+                                : ""}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </div>
                 </div>
+
+                {/* Live Scientific Context Card for Selected Source Dataset */}
+                {(() => {
+                  const activeDs = resolveDatasetMetadata(obsDatasetId);
+                  return (
+                    <div className="rounded-lg border border-mx-border bg-mx-panel/70 p-3 text-xs">
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-mono text-[11px] font-semibold text-mx-accent">
+                            {activeDs.instrumentAndMission}
+                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={`mx-badge ${
+                                activeDs.integrationStatus ===
+                                "integrated_active"
+                                  ? "mx-badge--success"
+                                  : activeDs.integrationStatus ===
+                                      "integrated_backend"
+                                    ? "mx-badge--accent"
+                                    : activeDs.isVisualizationOnlyLegacy
+                                      ? "mx-badge--danger"
+                                      : ""
+                              }`}
+                            >
+                              {activeDs.integrationStatusLabel}
+                            </span>
+                            <span className="mx-badge">
+                              {activeDs.suitability} ·{" "}
+                              {activeDs.spatialResolutionLabel}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="m-0 text-mx-text">
+                          <strong>Measures:</strong>{" "}
+                          {activeDs.measurementProvided}
+                        </p>
+                        <p className="m-0 text-mx-muted">
+                          <strong>Scientific Purpose:</strong>{" "}
+                          {activeDs.scientificPurpose}
+                        </p>
+                        <p className="m-0 text-amber-200/90">
+                          <strong>Limitations:</strong>{" "}
+                          {activeDs.limitations[0]}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div>
@@ -1043,7 +1239,7 @@ export default function InvestigationPage() {
 
                   <div>
                     <label htmlFor="obs-lim" className="mx-label">
-                      Known limitation (optional)
+                      Additional site-specific limitation (optional)
                     </label>
                     <input
                       id="obs-lim"
@@ -1057,10 +1253,10 @@ export default function InvestigationPage() {
                 </div>
 
                 <div className="flex justify-end gap-2 pt-1">
-                  {mission.selectedObservations.length > 0 && (
+                  {(mission.selectedObservations.length > 0 || editingObsId) && (
                     <button
                       type="button"
-                      onClick={() => setShowObsForm(false)}
+                      onClick={cancelObservationForm}
                       className="mx-btn mx-btn--secondary mx-btn--sm"
                     >
                       Cancel
@@ -1071,7 +1267,7 @@ export default function InvestigationPage() {
                     className="mx-btn mx-btn--primary mx-btn--sm"
                   >
                     <Plus size={14} aria-hidden="true" />
-                    Save Observation
+                    {editingObsId ? "Update Observation" : "Save Observation"}
                   </button>
                 </div>
               </form>
@@ -1094,50 +1290,148 @@ export default function InvestigationPage() {
                   )
                 }
               >
-                Observations link your selected NASA datasets to specific
-                Martian coordinates and feed directly into the Evidence
+                Observations link your selected NASA evidence datasets to
+                specific Martian coordinates and feed directly into the Evidence
                 Inspector.
               </EmptyState>
             ) : (
               <div className="grid gap-2.5 sm:grid-cols-2">
-                {mission.selectedObservations.map((obs) => (
-                  <div
-                    key={obs.id}
-                    className="flex items-start justify-between gap-3 rounded-lg border border-mx-border bg-mx-bg p-3.5"
-                  >
-                    <div className="min-w-0">
-                      <span className="mx-eyebrow mx-eyebrow--accent">
-                        {obs.source}
-                      </span>
-                      <h3 className="mx-heading m-0 mt-1 text-sm">
-                        {obs.name}
-                      </h3>
-                      <p className="mx-mono m-0 mt-1 text-[11px] text-mx-dim">
-                        Date: {obs.observationDate ?? "Date unavailable"}
-                        {obs.coordinates &&
-                          ` · ${formatCoordinates(
-                            obs.coordinates.latitude,
-                            obs.coordinates.longitude
-                          )}`}
-                      </p>
-                      {obs.description && (
-                        <p className="mx-body m-0 mt-1.5 text-xs">
-                          {obs.description}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeObservation(obs.id)}
-                      className="mx-icon-btn !h-8 !w-8 shrink-0"
-                      aria-label={`Remove ${obs.name}`}
+                {mission.selectedObservations.map((obs) => {
+                  const meta = resolveDatasetMetadata(obs.datasetId);
+                  return (
+                    <div
+                      key={obs.id}
+                      className="flex items-start justify-between gap-3 rounded-lg border border-mx-border bg-mx-bg p-3.5"
                     >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="mx-eyebrow mx-eyebrow--accent">
+                            {obs.source}
+                          </span>
+                          <span className="mx-badge text-[10px]">
+                            {meta.spatialResolutionLabel}
+                          </span>
+                          {meta.isVisualizationOnlyLegacy && (
+                            <span className="mx-badge mx-badge--danger text-[10px]">
+                              Legacy Map Layer
+                            </span>
+                          )}
+                          {obs.surfaceImage && (
+                            <span className="mx-badge mx-badge--success text-[10px]">
+                              Rover Image: {obs.surfaceImage.instrument} (Sol{" "}
+                              {obs.surfaceImage.sol})
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="mx-heading m-0 mt-1 text-sm">
+                          {obs.name}
+                        </h3>
+                        <p className="mx-mono m-0 mt-1 text-[11px] text-mx-dim">
+                          Date: {obs.observationDate ?? "Date unavailable"}
+                          {obs.coordinates &&
+                            ` · ${formatCoordinates(
+                              obs.coordinates.latitude,
+                              obs.coordinates.longitude
+                            )}`}
+                        </p>
+                        {obs.description && (
+                          <p className="mx-body m-0 mt-1.5 text-xs">
+                            {obs.description}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => startEditingObservation(obs)}
+                          className="mx-icon-btn !h-8 !w-8"
+                          aria-label={`Edit ${obs.name}`}
+                          title="Edit observation"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeObservation(obs.id)}
+                          className="mx-icon-btn !h-8 !w-8"
+                          aria-label={`Remove ${obs.name}`}
+                          title="Remove observation"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
+
+            {/* T-2.3: Perseverance Surface Imagery Catalog (Catalog #3) */}
+            <div className="mt-6 border-t border-mx-border pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <span className="mx-eyebrow mx-eyebrow--accent">
+                    Surface Imagery Catalog (Catalog #3) · Perseverance Rover Photographs
+                  </span>
+                  <p className="m-0 mt-0.5 text-xs text-mx-muted">
+                    Browse authentic Mastcam-Z, Navcam, and SuperCam RMI surface
+                    photographs from NASA&apos;s Perseverance rover and reference
+                    them in your scientific observations.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowRoverImagery((prev) => !prev)}
+                  aria-expanded={showRoverImagery}
+                  className="mx-btn mx-btn--secondary mx-btn--sm"
+                >
+                  {showRoverImagery ? (
+                    <>
+                      <ChevronUp size={14} aria-hidden="true" /> Hide Rover
+                      Imagery Catalog
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={14} aria-hidden="true" /> Browse
+                      Perseverance Surface Imagery
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {showRoverImagery && (
+                <div className="mt-4">
+                  <PerseveranceImageryPanel
+                    onLogObservationWithImage={(params) => {
+                      const newObs: Observation = {
+                        id: createId("obs"),
+                        datasetId: params.datasetId,
+                        name: params.name,
+                        source: `${params.surfaceImage.roverName} ${params.surfaceImage.instrument} (Surface Imagery Catalog)`,
+                        // Raw EDR records do not provide planetocentric (lat, lon); never invent coordinates.
+                        coordinates: undefined,
+                        observationDate: params.observationDate,
+                        description: params.description,
+                        provenance: {
+                          source: `${params.surfaceImage.instrumentLabel} · Mars 2020 Perseverance (${params.surfaceImage.credit})`,
+                          sourceId: params.sourceId,
+                          sourceUrl: params.sourceUrl,
+                          processingMethod: params.processingMethod,
+                          limitations: [params.limitation],
+                        },
+                        surfaceImage: params.surfaceImage,
+                      };
+                      updateMission({
+                        selectedObservations: [
+                          ...toMutable(mission.selectedObservations),
+                          newObs,
+                        ],
+                      });
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </section>
 
           {/* STEP 4: MANAGE SCIENTIFIC TARGETS & HYPOTHESES */}

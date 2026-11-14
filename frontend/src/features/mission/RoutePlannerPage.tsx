@@ -140,6 +140,7 @@ export default function RoutePlannerPage() {
     let maxSlopeDeg: number | undefined = undefined;
     let avgSlopeDeg: number | undefined = undefined;
     let demPointsSampled = 0;
+    let usedLocalFallbackDem = false;
 
     const allWaypointsForProfile = includeReturnLeg
       ? [...draftWaypoints, draftWaypoints[0]]
@@ -153,6 +154,9 @@ export default function RoutePlannerPage() {
             const res = await marsDemProvider.getElevation(wp.coordinates);
             elevations.push(res.elevation);
             demPointsSampled++;
+            if (res.isFallback) {
+              usedLocalFallbackDem = true;
+            }
           } catch {
             elevations.push(null);
           }
@@ -225,7 +229,9 @@ export default function RoutePlannerPage() {
       elevationLossMeters: elevLoss,
       measurementSource:
         demPointsSampled >= 2
-          ? "HiRISE DEM + Spherical Geometry"
+          ? usedLocalFallbackDem
+            ? "Jezero CTX DEM (Local) + Spherical Geometry"
+            : "HiRISE DEM + Spherical Geometry"
           : "Spherical Geometry (Orbital Estimate)",
       terrainMetrics: {
         averageSlopeDegrees: avgSlopeDeg,

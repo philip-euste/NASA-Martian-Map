@@ -28,9 +28,12 @@ import {
   formatCoordinates,
 } from "../../components/ui";
 import { marsDemProvider } from "../../services/providers/marsDem";
+import { resolveDatasetMetadata } from "../../data/evidenceDatasets";
 import { useMission } from "../../state/mission/MissionContext";
 import type { DerivedAnalysis, ScientificInterpretation } from "../../types";
 import MissionLayout from "./MissionLayout";
+import MedaEnvironmentalPanel from "./MedaEnvironmentalPanel";
+import PerseveranceImageryPanel from "./PerseveranceImageryPanel";
 import { createId, toMutable } from "./missionHelpers";
 
 export default function EvidenceInspectorPage() {
@@ -43,6 +46,8 @@ export default function EvidenceInspectorPage() {
   // Progressive disclosure toggles for forms
   const [showAnalysisForm, setShowAnalysisForm] = useState(false);
   const [showInterpForm, setShowInterpForm] = useState(false);
+  const [showRoverGallery, setShowRoverGallery] = useState(false);
+  const [cutoutImgFailed, setCutoutImgFailed] = useState(false);
 
   // Derived measurement form state
   const [analysisName, setAnalysisName] = useState("");
@@ -97,16 +102,23 @@ export default function EvidenceInspectorPage() {
       const result = await marsDemProvider.getElevation(
         activeObservation.coordinates
       );
+      const isLocalCtx = Boolean(result.isFallback);
       const analysis: DerivedAnalysis = {
         id: createId("analysis"),
-        name: `HiRISE DEM spot elevation (${activeObservation.name})`,
+        name: `${
+          isLocalCtx ? "Jezero CTX DEM" : "HiRISE DEM"
+        } spot elevation (${activeObservation.name})`,
         description: `Sampled at row ${result.row}, column ${result.column} from ${result.product_id}.`,
         inputObservationIds: [activeObservation.id],
-        method: `HiRISE DTM raster query (${result.product_id})`,
+        method: `${
+          isLocalCtx ? "Local Jezero CTX DEM" : "HiRISE DTM"
+        } raster query (${result.product_id})`,
         value: Number(result.elevation.toFixed(2)),
         unit: result.unit,
         limitations: [
-          "Vertical precision depends on stereo DTM resolution (~1 m/post).",
+          isLocalCtx
+            ? "Sampled from local verified USGS/NASA Mars 2020 CTX DEM (~20 m/post)."
+            : "Vertical precision depends on stereo DTM resolution (~1 m/post).",
         ],
       };
 
@@ -436,44 +448,115 @@ export default function EvidenceInspectorPage() {
 
                 <div className="mt-5 grid gap-6 md:grid-cols-12">
                   <div className="md:col-span-5">
-                    <ImagePending
-                      className="h-full min-h-[170px]"
-                      label="Observation Cutout Frame"
-                      detail={`Dataset ID: ${activeObservation.datasetId}. Connect orbital product cutouts to render observation imagery.`}
-                    />
+                    {activeObservation.surfaceImage ? (
+                      <div className="flex h-full flex-col justify-between rounded-lg border border-mx-border bg-mx-bg p-3">
+                        <div className="overflow-hidden rounded border border-mx-border bg-mx-panel">
+                          {!cutoutImgFailed ? (
+                            <img
+                              key={activeObservation.surfaceImage.imageUrl}
+                              src={activeObservation.surfaceImage.imageUrl}
+                              alt={activeObservation.surfaceImage.caption || activeObservation.name}
+                              onError={() => setCutoutImgFailed(true)}
+                              className="aspect-[16/10] w-full object-contain bg-black/40"
+                            />
+                          ) : (
+                            <ImagePending
+                              className="aspect-[16/10] border-0"
+                              label={`Perseverance ${activeObservation.surfaceImage.instrument} (Sol ${activeObservation.surfaceImage.sol})`}
+                              detail={`Verified NASA Image ID: ${activeObservation.surfaceImage.imageId}. Remote image stream offline.`}
+                            />
+                          )}
+                        </div>
+                        <div className="mt-2.5 space-y-1 text-[11px]">
+                          <div className="flex flex-wrap items-center justify-between gap-1">
+                            <span className="mx-badge mx-badge--success">
+                              In-Situ Rover Surface Photograph
+                            </span>
+                            <a
+                              href={activeObservation.surfaceImage.sourceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-mono text-mx-accent hover:underline"
+                            >
+                              NASA Source →
+                            </a>
+                          </div>
+                          <div className="font-mono text-mx-text truncate">
+                            ID: {activeObservation.surfaceImage.imageId}
+                          </div>
+                          <div className="text-mx-muted">
+                            {activeObservation.surfaceImage.instrumentLabel} · Sol{" "}
+                            {activeObservation.surfaceImage.sol}
+                            {activeObservation.surfaceImage.site !== null
+                              ? ` · Site ${activeObservation.surfaceImage.site}, Drive ${
+                                  activeObservation.surfaceImage.drive ?? "—"
+                                }`
+                              : ""}
+                          </div>
+                          <div className="text-mx-dim">
+                            Credit: {activeObservation.surfaceImage.credit}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <ImagePending
+                        className="h-full min-h-[170px]"
+                        label="Observation Cutout Frame"
+                        detail={`Dataset ID: ${activeObservation.datasetId}. Attach a Perseverance surface photograph below or connect orbital cutouts.`}
+                      />
+                    )}
                   </div>
 
                   <div className="flex flex-col justify-between md:col-span-7">
-                    <div className="grid grid-cols-2 gap-4 rounded-lg border border-mx-border bg-mx-bg p-4">
-                      <DataField
-                        label="Dataset Identifier"
-                        value={activeObservation.datasetId}
-                      />
-                      <DataField
-                        label="Authoritative Source"
-                        value={
-                          activeObservation.provenance?.source ??
-                          activeObservation.source
-                        }
-                      />
-                      <DataField
-                        label="Observation Date (UTC)"
-                        value={activeObservation.observationDate}
-                      />
-                      <DataField
-                        label="Spatial Resolution"
-                        value={
-                          relatedDataset?.resolutionMeters
-                            ? `${relatedDataset.resolutionMeters} m/pixel`
-                            : "Global WMTS Mosaic"
-                        }
-                      />
-                      <DataField
-                        label="Processing Method"
-                        value={activeObservation.provenance?.processingMethod}
-                        className="col-span-2"
-                      />
-                    </div>
+                    {(() => {
+                      const dsMeta = resolveDatasetMetadata(
+                        activeObservation.datasetId
+                      );
+                      return (
+                        <div className="grid grid-cols-2 gap-4 rounded-lg border border-mx-border bg-mx-bg p-4">
+                          <DataField
+                            label="Dataset Identifier"
+                            value={activeObservation.datasetId}
+                          />
+                          <DataField
+                            label="Instrument & Mission"
+                            value={dsMeta.instrumentAndMission}
+                          />
+                          <DataField
+                            label="Observation Date (UTC)"
+                            value={activeObservation.observationDate}
+                          />
+                          <DataField
+                            label="Spatial Resolution"
+                            value={
+                              relatedDataset?.spatialResolutionLabel ??
+                              dsMeta.spatialResolutionLabel
+                            }
+                          />
+                          <DataField
+                            label="Scientific Suitability"
+                            value={dsMeta.suitability}
+                          />
+                          <DataField
+                            label="Integration Status"
+                            value={dsMeta.integrationStatusLabel}
+                          />
+                          <DataField
+                            label="Geographic Coverage"
+                            value={dsMeta.geographicCoverage}
+                            className="col-span-2"
+                          />
+                          <DataField
+                            label="Actual Measurement / Method"
+                            value={
+                              activeObservation.provenance?.processingMethod ??
+                              dsMeta.measurementProvided
+                            }
+                            className="col-span-2"
+                          />
+                        </div>
+                      );
+                    })()}
 
                     {activeObservation.description && (
                       <div className="mt-4 rounded-lg border border-mx-border bg-mx-bg p-3.5">
@@ -521,9 +604,77 @@ export default function EvidenceInspectorPage() {
                     </p>
                   )}
                 </div>
+
+                {/* T-2.3: Attach or Inspect Perseverance Surface Imagery */}
+                <div className="mt-4 border-t border-mx-border pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs text-mx-muted">
+                      {activeObservation.surfaceImage
+                        ? `Linked Rover Photograph: ${activeObservation.surfaceImage.imageId} (${activeObservation.surfaceImage.instrument}, Sol ${activeObservation.surfaceImage.sol})`
+                        : "Have supporting Perseverance surface imagery (Mastcam-Z, Navcam, or SuperCam RMI) for this observation?"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowRoverGallery((prev) => !prev)}
+                      className="mx-btn mx-btn--secondary mx-btn--sm"
+                    >
+                      {showRoverGallery
+                        ? "Hide Perseverance Imagery Catalog"
+                        : activeObservation.surfaceImage
+                          ? "Change / Inspect Rover Image"
+                          : "Browse & Attach Rover Image"}
+                    </button>
+                  </div>
+
+                  {showRoverGallery && (
+                    <div className="mt-4">
+                      <PerseveranceImageryPanel
+                        activeObservationName={activeObservation.name}
+                        onAttachToObservation={(surfaceImage) => {
+                          setCutoutImgFailed(false);
+                          const updatedObs = toMutable(
+                            mission.selectedObservations
+                          ).map((obs) => {
+                            if (obs.id !== activeObservation.id) return obs;
+                            return {
+                              ...obs,
+                              surfaceImage,
+                            };
+                          });
+                          updateMission({
+                            selectedObservations: updatedObs,
+                          });
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
               </section>
 
               {/* 2. Derived Measurements */}
+              {activeObservation.datasetId === "m2020_meda_env" && (
+                <MedaEnvironmentalPanel
+                  onLogDerivedMeasurement={(params) => {
+                    const analysis: DerivedAnalysis = {
+                      id: createId("analysis"),
+                      name: params.name,
+                      description: `Derived from MEDA PDS4 environmental dataset for observation "${activeObservation.name}".`,
+                      inputObservationIds: [activeObservation.id],
+                      method: params.method,
+                      value: params.value,
+                      unit: params.unit,
+                      limitations: [params.limitation],
+                    };
+                    updateMission({
+                      derivedAnalyses: [
+                        ...toMutable(mission.derivedAnalyses),
+                        analysis,
+                      ],
+                    });
+                  }}
+                />
+              )}
+
               <section
                 className="mx-panel p-6"
                 aria-label="Derived measurements"

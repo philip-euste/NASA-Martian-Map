@@ -6,6 +6,11 @@ import {
   type ReactNode,
 } from "react";
 
+import {
+  EVIDENCE_DATASETS_BY_ID,
+  resolveDatasetMetadata,
+  toMissionDataset,
+} from "../../data/evidenceDatasets";
 import type {
   FieldNote,
   MarsEnvironmentConditions,
@@ -136,9 +141,45 @@ function loadStoredMission(): Mission {
     if (!parsed || typeof parsed !== "object" || typeof parsed.id !== "string") {
       return fallback;
     }
+    const migratedDatasets = Array.isArray(parsed.selectedDatasets)
+      ? parsed.selectedDatasets.map((ds) => {
+          const catalogEntry = ds?.id
+            ? EVIDENCE_DATASETS_BY_ID[ds.id]
+            : undefined;
+          return catalogEntry
+            ? {
+                ...toMissionDataset(catalogEntry),
+                ...ds,
+                integrationStatus: catalogEntry.integrationStatus,
+                integrationStatusLabel: catalogEntry.integrationStatusLabel,
+                provenance: toMissionDataset(catalogEntry).provenance,
+              }
+            : ds;
+        })
+      : fallback.selectedDatasets;
+
+    const migratedObservations = Array.isArray(parsed.selectedObservations)
+      ? parsed.selectedObservations.map((obs) => {
+          if (!obs || typeof obs !== "object") return obs;
+          const dsMeta = resolveDatasetMetadata(obs.datasetId || "");
+          return {
+            ...obs,
+            source: obs.source || dsMeta.name,
+            provenance: obs.provenance ?? {
+              source: `${dsMeta.instrumentAndMission} (${dsMeta.sourceReference})`,
+              sourceId: dsMeta.pdsProductId,
+              processingMethod: `${dsMeta.measurementProvided} (${dsMeta.spatialResolutionLabel})`,
+              limitations: [...dsMeta.limitations],
+            },
+          };
+        })
+      : fallback.selectedObservations;
+
     return {
       ...fallback,
       ...parsed,
+      selectedDatasets: migratedDatasets,
+      selectedObservations: migratedObservations,
       simulation: {
         ...fallback.simulation,
         ...(parsed.simulation ?? {}),

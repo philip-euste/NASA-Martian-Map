@@ -1068,18 +1068,28 @@ async function boot() {
     const r = await fetch(`${CONFIG.dataUrl}manifest.json`);
     if (!r.ok) throw new Error("manifest missing");
     M = await r.json();
+    CONFIG.farStep = M.overview.step;
+    CONFIG.groundOffset = M.heightMin;
+    halfW = (M.tilesX * M.tileSize * M.cellX) / 2;
+    halfD = (M.tilesY * M.tileSize * M.cellZ) / 2;
+    overview = new Uint16Array(await fetchBuffer(`${CONFIG.dataUrl}overview.u16`));
   } catch {
     loadingEl.innerHTML =
-      "Jezero terrain data not found.<br>Run <code>npm run build:map</code> once, then reload.";
-    statusEl.textContent = "Map data missing — see README";
+      "Jezero Crater 3D elevation data is unavailable.<br>Verify that <code>/jezero/manifest.json</code> and <code>/jezero/overview.u16</code> are present, then reload.";
+    statusEl.textContent = "Terrain elevation data unavailable";
     startBtn.disabled = true;
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage(
+        {
+          type: "jezero-simulation-error",
+          message:
+            "Unable to load Jezero Crater 3D terrain elevation data (/jezero/manifest.json or /jezero/overview.u16).",
+        },
+        "*"
+      );
+    }
     return;
   }
-  CONFIG.farStep = M.overview.step;
-  CONFIG.groundOffset = M.heightMin;
-  halfW = (M.tilesX * M.tileSize * M.cellX) / 2;
-  halfD = (M.tilesY * M.tileSize * M.cellZ) / 2;
-  overview = new Uint16Array(await fetchBuffer(`${CONFIG.dataUrl}overview.u16`));
 
   creditEl.textContent = `Terrain: ${M.source.credit}`;
 

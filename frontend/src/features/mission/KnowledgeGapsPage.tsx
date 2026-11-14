@@ -22,7 +22,8 @@ import {
   EmptyState,
   SectionHeading,
 } from "../../components/ui";
-import { MAP_LAYERS, type MapLayerCategory } from "../../data/mapLayers";
+import { getDatasetDisciplineCategory } from "../../data/evidenceDatasets";
+import { type MapLayerCategory } from "../../data/mapLayers";
 import { useMission } from "../../state/mission/MissionContext";
 import type { KnowledgeGap } from "../../types";
 import MissionLayout from "./MissionLayout";
@@ -247,13 +248,7 @@ export default function KnowledgeGapsPage() {
               </span>
               {COVERAGE_CATEGORIES.map((cat) => {
                 const matchingInMission = mission.selectedDatasets.filter(
-                  (ds) => {
-                    const layer = MAP_LAYERS[ds.id as keyof typeof MAP_LAYERS];
-                    if (layer) return layer.category === cat.id;
-                    if (ds.id === "hirise_jezero_dtm" && cat.id === "elevation")
-                      return true;
-                    return false;
-                  }
+                  (ds) => getDatasetDisciplineCategory(ds.id) === cat.id
                 );
 
                 const covered = matchingInMission.length > 0;

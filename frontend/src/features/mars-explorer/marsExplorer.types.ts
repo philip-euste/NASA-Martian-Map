@@ -48,6 +48,7 @@ export interface MarsExplorerContextValue {
   tileConfig: TileLayerConfig | null;
   layerLoading: boolean;
   layerError: string | null;
+  retryLayer: () => void;
   textureStatus: string;
   setTextureStatus: (status: string) => void;
 
@@ -80,6 +81,7 @@ export interface MarsExplorerContextValue {
   elevation: DemElevation | null;
   elevationLoading: boolean;
   elevationError: string | null;
+  retryElevation: () => void;
 
   temporal: Readonly<TemporalState>;
   todayUTC: string;
@@ -104,10 +106,10 @@ export interface MarsExplorerContextValue {
 }
 
 export const JEZERO_DEM_BOUNDS = {
-  westLonDeg: 76.95,
-  eastLonDeg: 78.05,
-  southLatDeg: 17.95,
-  northLatDeg: 18.9,
+  westLonDeg: 76.99,
+  eastLonDeg: 78.4935,
+  southLatDeg: 17.5805,
+  northLatDeg: 19.2902,
 } as const;
 
 export const JEZERO_DEFAULT_COORDINATES: Coordinates = {

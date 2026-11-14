@@ -4,8 +4,10 @@ import type {
   DataProvider,
 } from "../dataProviders";
 import type { MapLayerId } from "../../data/mapLayers";
+import { reportNasaWmtsStatus } from "../connectionStatus";
 
 const BASE_URL = "https://trek.nasa.gov/tiles/Mars/EQ";
+const CAPABILITIES_TIMEOUT_MS = 9000;
 
 interface NasaLayerDefinition {
   id: string;
@@ -83,7 +85,10 @@ function getNumber(element: Element, name: string): number {
   return value;
 }
 
-function getTopLeftCoordinates(element: Element, supportedCRS: string): { x: number; y: number } {
+function getTopLeftCoordinates(
+  element: Element,
+  supportedCRS: string
+): { x: number; y: number } {
   const raw = getText(element, "TopLeftCorner");
   if (!raw) {
     throw new Error("Missing WMTS TopLeftCorner.");
@@ -134,27 +139,61 @@ function getMolaFallback(): TileLayerConfig {
   return {
     tileUrlTemplate: NASA_LAYERS.mars_global_mola.tileUrlTemplate!,
     zoomOffset: 0,
-    attribution: "NASA Mars Trek",
+    attribution: "NASA Mars Trek (Static MOLA Configuration)",
     matrixSet: "default028mm",
     supportedCRS: "CRS84",
     matrixIds: levels.map((level) => level.id),
     matrixLevels: levels,
+    isFallbackConfig: true,
   };
 }
 
-async function fetchCapabilities(layer: NasaLayerDefinition): Promise<TileLayerConfig> {
+async function fetchWithTimeout(
+  url: string,
+  timeoutMs = CAPABILITIES_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function fetchCapabilities(
+  layer: NasaLayerDefinition
+): Promise<TileLayerConfig> {
   const url = `${BASE_URL}/${layer.id}/1.0.0/WMTSCapabilities.xml`;
-  const response = await fetch(url);
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(url);
+  } catch (err: unknown) {
+    const isTimeout =
+      err instanceof Error &&
+      (err.name === "AbortError" ||
+        err.message.toLowerCase().includes("abort"));
+    throw new Error(
+      isTimeout
+        ? "NASA Mars Trek service timed out while loading map layer metadata."
+        : "Cannot reach NASA Mars Trek service. Check your internet connection or retry."
+    );
+  }
 
   if (!response.ok) {
-    throw new Error(`NASA HTTP ${response.status}: ${layer.id}`);
+    throw new Error(
+      `NASA Mars Trek layer service returned status ${response.status}.`
+    );
   }
 
   const xmlText = await response.text();
+  if (typeof DOMParser === "undefined") {
+    throw new Error("XML parser unavailable in current environment.");
+  }
   const xml = new DOMParser().parseFromString(xmlText, "application/xml");
 
   if (xml.querySelector("parsererror")) {
-    throw new Error("Invalid NASA WMTS XML.");
+    throw new Error("NASA Mars Trek returned an invalid layer configuration.");
   }
 
   const matchingLayer = getElements(xml, "Layer").find(
@@ -162,13 +201,14 @@ async function fetchCapabilities(layer: NasaLayerDefinition): Promise<TileLayerC
   );
 
   if (!matchingLayer) {
-    throw new Error(`Layer identifier not found: ${layer.id}`);
+    throw new Error(`Requested layer is not listed in NASA Mars Trek metadata.`);
   }
 
   const styles = getElements(matchingLayer, "Style");
   const style =
-    styles.find((item) => ["true", "1"].includes(item.getAttribute("isDefault") ?? "")) ??
-    styles[0];
+    styles.find((item) =>
+      ["true", "1"].includes(item.getAttribute("isDefault") ?? "")
+    ) ?? styles[0];
   const styleId = style ? getText(style, "Identifier") : undefined;
 
   if (!styleId) {
@@ -176,7 +216,9 @@ async function fetchCapabilities(layer: NasaLayerDefinition): Promise<TileLayerC
   }
 
   const tileMatrixSetLink = getElements(matchingLayer, "TileMatrixSetLink")[0];
-  const matrixSetId = tileMatrixSetLink ? getText(tileMatrixSetLink, "TileMatrixSet") : undefined;
+  const matrixSetId = tileMatrixSetLink
+    ? getText(tileMatrixSetLink, "TileMatrixSet")
+    : undefined;
 
   if (!matrixSetId) {
     throw new Error("No tile matrix set reference found.");
@@ -225,11 +267,15 @@ async function fetchCapabilities(layer: NasaLayerDefinition): Promise<TileLayerC
   }
 
   const resources = getElements(matchingLayer, "ResourceURL");
-  const tileResource = resources.find((item) => item.getAttribute("resourceType") === "tile");
+  const tileResource = resources.find(
+    (item) => item.getAttribute("resourceType") === "tile"
+  );
   const advertisedTemplate = tileResource?.getAttribute("template");
 
   const template =
-    layer.static && layer.tileUrlTemplate ? layer.tileUrlTemplate : advertisedTemplate;
+    layer.static && layer.tileUrlTemplate
+      ? layer.tileUrlTemplate
+      : advertisedTemplate;
 
   if (!template) {
     throw new Error("No WMTS tile URL template found.");
@@ -242,6 +288,8 @@ async function fetchCapabilities(layer: NasaLayerDefinition): Promise<TileLayerC
     .replaceAll("{TileMatrix}", "{z}")
     .replaceAll("{TileRow}", "{y}")
     .replaceAll("{TileCol}", "{x}");
+
+  reportNasaWmtsStatus("online", null);
 
   return {
     tileUrlTemplate: resolvedTileUrl,
@@ -262,10 +310,25 @@ export const nasaTrekProvider: DataProvider = {
     return Object.keys(NASA_LAYERS);
   },
 
-  async getLayerConfig(layerId: string): Promise<TileLayerConfig> {
+  clearLayerCache(layerId?: string): void {
+    if (layerId) {
+      layerConfigCache.delete(layerId);
+    } else {
+      layerConfigCache.clear();
+    }
+  },
+
+  async getLayerConfig(
+    layerId: string,
+    options?: { forceRetry?: boolean }
+  ): Promise<TileLayerConfig> {
     const layer = NASA_LAYERS[layerId as MapLayerId];
     if (!layer) {
       throw new Error(`Unknown NASA layer: ${layerId}`);
+    }
+
+    if (options?.forceRetry) {
+      layerConfigCache.delete(layerId);
     }
 
     const cached = layerConfigCache.get(layerId);
@@ -273,15 +336,23 @@ export const nasaTrekProvider: DataProvider = {
       return cached;
     }
 
-    const requestPromise = fetchCapabilities(layer).catch((error) => {
+    const requestPromise = fetchCapabilities(layer).catch((error: unknown) => {
       layerConfigCache.delete(layerId);
 
       if (layer.static && layer.tileUrlTemplate) {
-        console.warn("NASA capabilities unavailable; using static MOLA fallback.", error);
+        reportNasaWmtsStatus(
+          "degraded",
+          "NASA Mars Trek capabilities unreachable; using built-in MOLA tile configuration."
+        );
         return getMolaFallback();
       }
 
-      throw error;
+      const cleanMessage =
+        error instanceof Error
+          ? error.message
+          : "NASA Mars Trek map layer is temporarily unavailable.";
+      reportNasaWmtsStatus("degraded", cleanMessage);
+      throw new Error(cleanMessage);
     });
 
     layerConfigCache.set(layerId, requestPromise);
