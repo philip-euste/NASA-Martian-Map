@@ -29,6 +29,7 @@ import {
 import {
   getDataProvider,
   type TileLayerConfig,
+  type TileMatrixLevel,
 } from "../../services/dataProviders";
 
 import { marsDemProvider } from "../../services/providers/marsDem";
@@ -56,10 +57,6 @@ import {
 
 import "./MarsMap.css";
 
-// ==========================================
-// TYPES
-// ==========================================
-
 interface Coordinates {
   latitude: number;
   longitude: number;
@@ -84,9 +81,214 @@ interface MapReferenceProps {
   onMapReady: (map: L.Map) => void;
 }
 
-// ==========================================
-// MAP HELPERS
-// ==========================================
+interface WmtsTileLayerProps {
+  config: TileLayerConfig;
+  opacity: number;
+}
+
+function normalizeCoordinates(
+  coordinates: Coordinates
+): Coordinates | null {
+  const { latitude, longitude } = coordinates;
+
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90
+  ) {
+    return null;
+  }
+
+  const normalizedLongitude =
+    ((longitude + 180) % 360 + 360) % 360 - 180;
+
+  return {
+    latitude,
+    longitude: normalizedLongitude,
+  };
+}
+
+function getMatrixForZoom(
+  levels: TileMatrixLevel[],
+  zoom: number
+): TileMatrixLevel {
+  const available = levels.filter(
+    (level) => level.matrixWidth <= 2 ** (zoom + 1)
+  );
+
+  if (available.length === 0) {
+    return levels.reduce((smallest, current) =>
+      current.matrixWidth < smallest.matrixWidth
+        ? current
+        : smallest
+    );
+  }
+
+  return available.reduce((largest, current) =>
+    current.matrixWidth > largest.matrixWidth
+      ? current
+      : largest
+  );
+}
+
+class MarsWmtsGridLayer extends L.GridLayer {
+  private mapInstance: L.Map;
+  private config: TileLayerConfig;
+  private levels: TileMatrixLevel[];
+
+  constructor(
+    map: L.Map,
+    config: TileLayerConfig,
+    levels: TileMatrixLevel[],
+    opacity: number
+  ) {
+    const smallestMatrixWidth = Math.min(
+      ...levels.map((level) => level.matrixWidth)
+    );
+
+    const largestMatrixWidth = Math.max(
+      ...levels.map((level) => level.matrixWidth)
+    );
+
+    super({
+      tileSize: 256,
+      opacity,
+      attribution: config.attribution,
+      noWrap: true,
+      bounds: L.latLngBounds(
+        [-90, -180],
+        [90, 180]
+      ),
+      minNativeZoom: Math.max(
+        0,
+        Math.ceil(Math.log2(smallestMatrixWidth)) - 1
+      ),
+      maxNativeZoom: Math.max(
+        0,
+        Math.floor(Math.log2(largestMatrixWidth)) - 1
+      ),
+      minZoom: 1,
+      maxZoom: 12,
+    });
+
+    this.mapInstance = map;
+    this.config = config;
+    this.levels = levels;
+  }
+
+  createTile(
+    coords: L.Coords,
+    done: L.DoneCallback
+  ): HTMLElement {
+    const tile = document.createElement("img");
+
+    tile.alt = "";
+    tile.setAttribute("role", "presentation");
+    tile.width = 256;
+    tile.height = 256;
+
+    const matrix = getMatrixForZoom(
+      this.levels,
+      coords.z
+    );
+
+    const northWest = this.mapInstance.unproject(
+      L.point(
+        coords.x * 256,
+        coords.y * 256
+      ),
+      coords.z
+    );
+
+    const matrixTileWidth =
+      360 / matrix.matrixWidth;
+
+    const matrixTileHeight =
+      180 / matrix.matrixHeight;
+
+    const column = Math.floor(
+      (northWest.lng - matrix.topLeftX) /
+        matrixTileWidth +
+        0.000000001
+    );
+
+    const row = Math.floor(
+      (matrix.topLeftY - northWest.lat) /
+        matrixTileHeight +
+        0.000000001
+    );
+
+    const validTile =
+      column >= 0 &&
+      column < matrix.matrixWidth &&
+      row >= 0 &&
+      row < matrix.matrixHeight;
+
+    if (!validTile) {
+      tile.src =
+        "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+
+      done(undefined, tile);
+      return tile;
+    }
+
+    const tileUrl = this.config.tileUrlTemplate
+      .replaceAll(
+        "{z}",
+        encodeURIComponent(matrix.id)
+      )
+      .replaceAll("{x}", String(column))
+      .replaceAll("{y}", String(row));
+
+    tile.onload = () => {
+      done(undefined, tile);
+    };
+
+    tile.onerror = () => {
+      done(
+        new Error(
+          `NASA tile failed: ${matrix.id}/${row}/${column}`
+        ),
+        tile
+      );
+    };
+
+    tile.src = tileUrl;
+
+    return tile;
+  }
+}
+
+function WmtsTileLayer({
+  config,
+  opacity,
+}: WmtsTileLayerProps) {
+  const map = useMap();
+
+  useEffect(() => {
+    const levels = config.matrixLevels;
+
+    if (!levels?.length) {
+      return;
+    }
+
+    const gridLayer = new MarsWmtsGridLayer(
+      map,
+      config,
+      levels,
+      opacity
+    );
+
+    gridLayer.addTo(map);
+
+    return () => {
+      map.removeLayer(gridLayer);
+    };
+  }, [map, config, opacity]);
+
+  return null;
+}
 
 function MapReference({
   onMapReady,
@@ -95,6 +297,26 @@ function MapReference({
 
   useEffect(() => {
     onMapReady(map);
+
+    const invalidate = () => {
+      map.invalidateSize({
+        pan: false,
+        animate: false,
+      });
+    };
+
+    const frame = requestAnimationFrame(invalidate);
+    const secondFrame = requestAnimationFrame(invalidate);
+
+    const observer = new ResizeObserver(invalidate);
+
+    observer.observe(map.getContainer());
+
+    return () => {
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(secondFrame);
+      observer.disconnect();
+    };
   }, [map, onMapReady]);
 
   return null;
@@ -146,21 +368,13 @@ function MapClickHandler({
   return null;
 }
 
-// ==========================================
-// MAIN MAP COMPONENT
-// ==========================================
-
 export default function MarsMap({
   focusSiteId,
 }: {
   focusSiteId?: string;
 }) {
-  // ========================================
-  // MAP STATE
-  // ========================================
-
   const [selectedLayer, setSelectedLayer] =
-    useState<MapLayerId>("mars_global_mola");
+    useState<MapLayerId>("mars_viking_global");
 
   const [tileConfig, setTileConfig] =
     useState<TileLayerConfig | null>(null);
@@ -171,15 +385,9 @@ export default function MarsMap({
   const [focusLocation, setFocusLocation] =
     useState<Coordinates | null>(null);
 
-  const [resetCounter, setResetCounter] =
-    useState(0);
+  const [resetCounter, setResetCounter] = useState(0);
 
-  const [map, setMap] =
-    useState<L.Map | null>(null);
-
-  // ========================================
-  // ELEVATION STATE
-  // ========================================
+  const [map, setMap] = useState<L.Map | null>(null);
 
   const [elevation, setElevation] =
     useState<
@@ -194,19 +402,10 @@ export default function MarsMap({
   const [elevationError, setElevationError] =
     useState<string | null>(null);
 
-  // ========================================
-  // SAVED LOCATION STATE
-  // ========================================
-
   const [savedLocations, setSavedLocations] =
     useState<SavedLocation[]>([]);
 
-  const [locationName, setLocationName] =
-    useState("");
-
-  // ========================================
-  // UI STATE
-  // ========================================
+  const [locationName, setLocationName] = useState("");
 
   const [opacity, setOpacity] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -216,32 +415,19 @@ export default function MarsMap({
   const [selectedSiteId, setSelectedSiteId] =
     useState<string | null>(null);
 
-  const [layersOpen, setLayersOpen] =
-    useState(false);
-
-  const [savedOpen, setSavedOpen] =
-    useState(false);
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [savedOpen, setSavedOpen] = useState(false);
 
   const [query, setQuery] = useState("");
-  const [searchOpen, setSearchOpen] =
-    useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
-  // ========================================
-  // MISSION STATE
-  // ========================================
-
-  const { mission, setRegion, updateMission } =
-    useMission();
+  const { mission, setRegion, updateMission } = useMission();
 
   const layer = MAP_LAYERS[selectedLayer];
 
   const selectedSite = getSiteById(
     selectedSiteId ?? undefined
   );
-
-  // ========================================
-  // EXTERNAL SITE FOCUS
-  // ========================================
 
   useEffect(() => {
     if (!focusSiteId) return;
@@ -252,25 +438,33 @@ export default function MarsMap({
 
     setSelectedSiteId(site.id);
 
-    setCoordinates({
+    const siteCoordinates = normalizeCoordinates({
       latitude: site.latitude,
       longitude: site.longitude,
     });
 
-    setFocusLocation({
-      latitude: site.latitude,
-      longitude: site.longitude,
-    });
+    if (!siteCoordinates) return;
+
+    setCoordinates(siteCoordinates);
+    setFocusLocation(siteCoordinates);
   }, [focusSiteId]);
-
-  // ========================================
-  // LOAD ELEVATION
-  // ========================================
 
   useEffect(() => {
     if (!coordinates) {
       setElevation(null);
       setElevationError(null);
+      setElevationLoading(false);
+      return;
+    }
+
+    const validCoordinates =
+      normalizeCoordinates(coordinates);
+
+    if (!validCoordinates) {
+      setElevation(null);
+      setElevationError(
+        "Invalid latitude or longitude."
+      );
       setElevationLoading(false);
       return;
     }
@@ -284,17 +478,25 @@ export default function MarsMap({
 
       try {
         const result =
-          await marsDemProvider.getElevation(coordinates!);
+          await marsDemProvider.getElevation(
+            validCoordinates!
+          );
 
         if (!cancelled) {
           setElevation(result);
         }
       } catch (err: unknown) {
         if (!cancelled) {
+          const isNetworkError =
+            err instanceof TypeError &&
+            err.message.toLowerCase().includes("fetch");
+
           setElevationError(
-            err instanceof Error
-              ? err.message
-              : "Unable to retrieve elevation."
+            isNetworkError
+              ? "Cannot reach the DEM API. Check that the FastAPI backend is running and VITE_API_BASE_URL is correct."
+              : err instanceof Error
+                ? err.message
+                : "Unable to retrieve elevation."
           );
         }
       } finally {
@@ -310,10 +512,6 @@ export default function MarsMap({
       cancelled = true;
     };
   }, [coordinates]);
-
-  // ========================================
-  // LOAD MAP LAYER
-  // ========================================
 
   useEffect(() => {
     let cancelled = false;
@@ -354,31 +552,39 @@ export default function MarsMap({
     };
   }, [selectedLayer, layer.provider]);
 
-  // ========================================
-  // MAP ACTIONS
-  // ========================================
-
   function selectCoordinates(
     nextCoordinates: Coordinates
   ): void {
-    setCoordinates(nextCoordinates);
+    const validCoordinates =
+      normalizeCoordinates(nextCoordinates);
+
+    if (!validCoordinates) {
+      setMessage(
+        "Selected point is outside Mars' valid latitude range."
+      );
+      return;
+    }
+
+    setCoordinates(validCoordinates);
     setSelectedSiteId(null);
     setFocusLocation(null);
+    setMessage("");
   }
 
   function selectSite(site: ExplorationSite): void {
+    const siteCoordinates = normalizeCoordinates({
+      latitude: site.latitude,
+      longitude: site.longitude,
+    });
+
+    if (!siteCoordinates) {
+      setMessage("This site's coordinates are invalid.");
+      return;
+    }
+
     setSelectedSiteId(site.id);
-
-    setCoordinates({
-      latitude: site.latitude,
-      longitude: site.longitude,
-    });
-
-    setFocusLocation({
-      latitude: site.latitude,
-      longitude: site.longitude,
-    });
-
+    setCoordinates(siteCoordinates);
+    setFocusLocation(siteCoordinates);
     setQuery("");
     setSearchOpen(false);
   }
@@ -393,10 +599,6 @@ export default function MarsMap({
     setSelectedSiteId(null);
     setFocusLocation(null);
   }
-
-  // ========================================
-  // SAVED LOCATIONS
-  // ========================================
 
   function saveLocation(): void {
     if (!coordinates) return;
@@ -447,24 +649,18 @@ export default function MarsMap({
   function goToSavedLocation(
     location: SavedLocation
   ): void {
-    setCoordinates({
+    const validCoordinates = normalizeCoordinates({
       latitude: location.latitude,
       longitude: location.longitude,
     });
 
+    if (!validCoordinates) return;
+
+    setCoordinates(validCoordinates);
     setSelectedSiteId(null);
-
-    setFocusLocation({
-      latitude: location.latitude,
-      longitude: location.longitude,
-    });
-
+    setFocusLocation(validCoordinates);
     setSavedOpen(false);
   }
-
-  // ========================================
-  // SEARCH
-  // ========================================
 
   const searchResults = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -488,10 +684,6 @@ export default function MarsMap({
       ),
     };
   }, [query, savedLocations]);
-
-  // ========================================
-  // MISSION ACTIONS
-  // ========================================
 
   const selectedName =
     selectedSite?.name ||
@@ -556,19 +748,11 @@ export default function MarsMap({
     );
   }
 
-  // ========================================
-  // RENDER
-  // ========================================
-
   return (
-    <section className="relative h-full w-full">
+    <section className="relative h-full min-h-0 w-full">
       <div
-        className="relative w-full"
-        style={{
-          height: "min(800px, 100%)",
-          minHeight: "600px",
-          background: "#171717",
-        }}
+        className="relative h-full min-h-0 w-full"
+        style={{ background: "#171717" }}
       >
         <MapContainer
           center={layer.center}
@@ -582,14 +766,13 @@ export default function MarsMap({
           ]}
           maxBoundsViscosity={0.8}
           worldCopyJump={false}
+          zoomAnimation={false}
           style={{
             height: "100%",
             width: "100%",
           }}
         >
-          <MapReference
-            onMapReady={setMap}
-          />
+          <MapReference onMapReady={setMap} />
 
           <MapController
             layerId={selectedLayer}
@@ -597,21 +780,26 @@ export default function MarsMap({
             resetCounter={resetCounter}
           />
 
-          <MapClickHandler
-            onSelect={selectCoordinates}
-          />
+          <MapClickHandler onSelect={selectCoordinates} />
 
-          {tileConfig && (
+          {tileConfig?.matrixLevels?.length ? (
+            <WmtsTileLayer
+              key={selectedLayer}
+              config={tileConfig}
+              opacity={opacity}
+            />
+          ) : tileConfig ? (
             <TileLayer
               key={selectedLayer}
               url={tileConfig.tileUrlTemplate}
               attribution={tileConfig.attribution}
               zoomOffset={tileConfig.zoomOffset}
+              noWrap
               opacity={opacity}
             />
-          )}
+          ) : null}
 
-          {/* Named exploration sites */}
+          
           {EXPLORATION_SITES.map((site) => {
             const active = site.id === selectedSiteId;
 
@@ -622,13 +810,14 @@ export default function MarsMap({
                   site.latitude,
                   site.longitude,
                 ]}
-                radius={active ? 7 : 5.5}
+                radius={active ? 0 : 5.5}
                 bubblingMouseEvents={false}
                 pathOptions={{
-                  color: active ? "#f47738" : "#f3efea",
+                  opacity: active ? 0 : 1,
+                  fillOpacity: active ? 0 : 1,
+                  color: "#f3efea",
                   weight: 2,
-                  fillColor: active ? "#f47738" : "#141215",
-                  fillOpacity: 1,
+                  fillColor: "#141215",
                 }}
                 eventHandlers={{
                   click: () => selectSite(site),
@@ -646,7 +835,7 @@ export default function MarsMap({
             );
           })}
 
-          {/* Selected arbitrary point */}
+
           {coordinates && !selectedSite && (
             <CircleMarker
               center={[
@@ -664,7 +853,6 @@ export default function MarsMap({
             />
           )}
 
-          {/* Saved locations */}
           {savedLocations.map((location) => (
             <CircleMarker
               key={location.id}
@@ -690,13 +878,9 @@ export default function MarsMap({
           ))}
         </MapContainer>
 
-        {/* ======================================
-            TOP-LEFT CONTROLS
-        ====================================== */}
-
         <div className="mx-map-overlay left-4 top-4 flex flex-col gap-3 sm:left-6 sm:top-5 max-lg:top-[76px]">
-          <div className="flex items-start gap-2.5">
-            <div className="relative w-[min(280px,calc(100vw-32px))]">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <div className="relative min-w-0 w-[min(280px,calc(100vw-32px))]">
               <label
                 htmlFor="mars-map-search"
                 className="sr-only"
@@ -713,7 +897,7 @@ export default function MarsMap({
               <input
                 id="mars-map-search"
                 type="search"
-                className="mx-input !bg-mx-bg/95 pl-9"
+                className="mx-input min-w-0 !bg-mx-bg/95 pl-9"
                 placeholder="Search sites or saved locations"
                 value={query}
                 autoComplete="off"
@@ -786,7 +970,7 @@ export default function MarsMap({
             </div>
 
             <span
-              className="mx-chip hidden h-10 sm:inline-flex"
+              className="mx-chip hidden h-10 shrink-0 sm:inline-flex"
               title={layer.name}
             >
               {layer.name}
@@ -861,7 +1045,6 @@ export default function MarsMap({
               </button>
             </div>
 
-            {/* Layer panel */}
             {layersOpen && (
               <div className="mx-panel mx-panel--floating w-[min(300px,calc(100vw-80px))] p-4">
                 <div className="mb-3 flex items-center justify-between">
@@ -940,7 +1123,6 @@ export default function MarsMap({
               </div>
             )}
 
-            {/* Saved locations panel */}
             {savedOpen && (
               <div className="mx-panel mx-panel--floating w-[min(300px,calc(100vw-80px))]">
                 <div className="mx-panel__header !py-3">
@@ -1011,10 +1193,6 @@ export default function MarsMap({
             )}
           </div>
         </div>
-
-        {/* ======================================
-            SELECTED LOCATION PANEL
-        ====================================== */}
 
         {coordinates && (
           <aside
@@ -1113,7 +1291,6 @@ export default function MarsMap({
               </p>
             )}
 
-            {/* Save location */}
             <div className="mt-5 flex gap-2">
               <label
                 htmlFor="mars-location-name"
@@ -1143,7 +1320,6 @@ export default function MarsMap({
               </button>
             </div>
 
-            {/* Mission actions */}
             <div className="mt-3 flex flex-col gap-2">
               <button
                 type="button"
@@ -1169,10 +1345,6 @@ export default function MarsMap({
             </div>
           </aside>
         )}
-
-        {/* ======================================
-            STATUS
-        ====================================== */}
 
         <div className="mx-map-overlay bottom-4 left-4 flex flex-col gap-1">
           {loading && (

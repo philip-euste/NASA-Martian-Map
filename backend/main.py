@@ -1,12 +1,15 @@
+
 import httpx
 import xml.etree.ElementTree as ET
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
 from terrain_dem import router as terrain_dem_router
 
 
 app = FastAPI(title="Marswalk API")
-app.include_router(terrain_dem_router)  
+
+app.include_router(terrain_dem_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,6 +21,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 MARS_GLOBAL_LAYER = {
     "id": "mars_global_mola",
@@ -49,6 +53,7 @@ def get_capabilities_url(layer):
         "WMTSCapabilities.xml"
     )
 
+
 @app.get("/")
 def home():
     return {"message": "Marswalk API is running!"}
@@ -69,6 +74,7 @@ def get_layer(layer_id: str):
         status_code=404,
         detail="Layer not found",
     )
+
 
 @app.get("/api/nasa/layers/{layer_id}/capabilities")
 async def get_nasa_capabilities(layer_id: str):
@@ -106,7 +112,6 @@ async def get_nasa_capabilities(layer_id: str):
         )
 
 
-
 @app.get("/api/nasa/layers/{layer_id}/info")
 async def get_layer_info(layer_id: str):
     catalog = [MARS_GLOBAL_LAYER, JEZERO_LAYER]
@@ -133,7 +138,8 @@ async def get_layer_info(layer_id: str):
 
         def find_all(element, tag_name):
             return [
-                node for node in element.iter()
+                node
+                for node in element.iter()
                 if node.tag.split("}")[-1] == tag_name
             ]
 
@@ -141,7 +147,8 @@ async def get_layer_info(layer_id: str):
 
         layer = next(
             (
-                item for item in find_all(root, "Layer")
+                item
+                for item in find_all(root, "Layer")
                 if any(
                     node.text == target_id
                     for node in find_all(item, "Identifier")
@@ -161,7 +168,8 @@ async def get_layer_info(layer_id: str):
             "name": layer_config["name"],
             "layer_id": target_id,
             "formats": [
-                node.text for node in find_all(layer, "Format")
+                node.text
+                for node in find_all(layer, "Format")
                 if node.text
             ],
             "tile_resources": [
@@ -191,7 +199,6 @@ async def get_layer_info(layer_id: str):
         )
 
 
-
 @app.get("/api/nasa/layers/{layer_id}/tile-config")
 async def get_tile_config(layer_id: str):
     info = await get_layer_info(layer_id)
@@ -217,9 +224,7 @@ async def get_tile_config(layer_id: str):
         "format": tile["format"],
         "tile_matrix_sets": info["tile_matrix_sets"],
         "tile_url_template": tile["template"].replace(
-        "/1.0.0//{Style}/",
-        "/1.0.0/{Style}/",
+            "/1.0.0//{Style}/",
+            "/1.0.0/{Style}/",
         ),
     }
-
-

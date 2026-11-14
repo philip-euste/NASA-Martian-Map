@@ -1,0 +1,437 @@
+
+/* Mars Explorer design system.
+   Derived from the Figma desktop references (Landing, 2D Map, Location
+   Information): warm near-black backgrounds, Mars-orange accent,
+   sandstone highlights, Space Grotesk headings, Inter body text and
+   IBM Plex Mono metadata labels.
+
+   Tokens are registered with Tailwind v4 (@theme) so they are available
+   both as CSS variables and as utilities (bg-mx-panel, text-mx-muted...). */
+
+@theme {
+  --color-mx-bg: #141215;
+  --color-mx-bg-raised: #1a181c;
+  --color-mx-panel: #1c1a1e;
+  --color-mx-panel-2: #232025;
+  --color-mx-border: #2e2a2f;
+  --color-mx-border-strong: #45404a;
+  --color-mx-text: #f3efea;
+  --color-mx-muted: #a8a19a;
+  --color-mx-dim: #77716b;
+  --color-mx-accent: #f47738;
+  --color-mx-accent-hover: #ff8b4f;
+  --color-mx-sand: #d8b48f;
+  --color-mx-danger: #e4705f;
+  --color-mx-success: #93b98a;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+:root {
+  --mx-header-height: 64px;
+  --mx-radius: 6px;
+  --mx-radius-lg: 10px;
+  --mx-shadow: 0 18px 50px rgb(0 0 0 / 0.45);
+}
+
+@layer components {
+  /* ---------- Typography ---------- */
+
+  .mx-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-mx-muted);
+  }
+
+  .mx-eyebrow--accent {
+    color: var(--color-mx-accent);
+  }
+
+  .mx-mono {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+
+  .mx-display {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+
+  .mx-heading {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--color-mx-text);
+  }
+
+  .mx-body {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--color-mx-muted);
+  }
+
+  /* ---------- Buttons ---------- */
+
+  .mx-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 18px;
+    border: 1px solid transparent;
+    border-radius: var(--mx-radius);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+  }
+
+  .mx-btn:focus-visible,
+  .mx-icon-btn:focus-visible,
+  .mx-input:focus-visible,
+  .mx-chip:focus-visible {
+    outline: 2px solid var(--color-mx-accent);
+    outline-offset: 2px;
+  }
+
+  .mx-btn:disabled,
+  .mx-btn[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .mx-btn--primary {
+    background: var(--color-mx-accent);
+    border-color: var(--color-mx-accent);
+    color: #1a0f08;
+  }
+
+  .mx-btn--primary:not(:disabled):hover {
+    background: var(--color-mx-accent-hover);
+    border-color: var(--color-mx-accent-hover);
+  }
+
+  .mx-btn--secondary {
+    background: transparent;
+    border-color: var(--color-mx-border-strong);
+    color: var(--color-mx-text);
+  }
+
+  .mx-btn--secondary:not(:disabled):hover {
+    background: rgb(255 255 255 / 0.04);
+    border-color: var(--color-mx-muted);
+  }
+
+  .mx-btn--ghost {
+    background: transparent;
+    color: var(--color-mx-text);
+    padding: 0 8px;
+  }
+
+  .mx-btn--ghost:not(:disabled):hover {
+    color: var(--color-mx-accent);
+  }
+
+  .mx-btn--sm {
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .mx-btn--block {
+    width: 100%;
+  }
+
+  .mx-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--color-mx-border-strong);
+    border-radius: var(--mx-radius);
+    background: rgb(20 18 21 / 0.92);
+    color: var(--color-mx-text);
+    cursor: pointer;
+    transition: border-color 150ms ease, color 150ms ease, background-color 150ms ease;
+  }
+
+  .mx-icon-btn:hover {
+    border-color: var(--color-mx-muted);
+  }
+
+  .mx-icon-btn[aria-pressed="true"] {
+    border-color: var(--color-mx-accent);
+    color: var(--color-mx-accent);
+  }
+
+  /* ---------- Chips / badges ---------- */
+
+  .mx-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid var(--color-mx-border-strong);
+    border-radius: 4px;
+    background: rgb(20 18 21 / 0.9);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-mx-muted);
+  }
+
+  .mx-chip[aria-pressed="true"],
+  .mx-chip--active {
+    border-color: var(--color-mx-accent);
+    color: var(--color-mx-accent);
+  }
+
+  button.mx-chip {
+    cursor: pointer;
+  }
+
+  .mx-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--color-mx-panel-2);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-mx-muted);
+    white-space: nowrap;
+  }
+
+  .mx-badge--accent {
+    background: rgb(244 119 56 / 0.14);
+    color: var(--color-mx-accent);
+  }
+
+  .mx-badge--success {
+    background: rgb(147 185 138 / 0.14);
+    color: var(--color-mx-success);
+  }
+
+  .mx-badge--danger {
+    background: rgb(228 112 95 / 0.14);
+    color: var(--color-mx-danger);
+  }
+
+  /* ---------- Panels & cards ---------- */
+
+  .mx-panel {
+    border: 1px solid var(--color-mx-border);
+    border-radius: var(--mx-radius-lg);
+    background: var(--color-mx-panel);
+  }
+
+  .mx-panel--floating {
+    background: rgb(26 24 28 / 0.94);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--mx-shadow);
+  }
+
+  .mx-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--color-mx-border);
+  }
+
+  .mx-panel__body {
+    padding: 20px;
+  }
+
+  .mx-divider {
+    height: 1px;
+    border: 0;
+    margin: 0;
+    background: var(--color-mx-border);
+  }
+
+  /* Label + value pairs (Figma: ELEVATION / -2,450 m) */
+  .mx-field__label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-mx-dim);
+  }
+
+  .mx-field__value {
+    margin-top: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-mx-text);
+    overflow-wrap: anywhere;
+  }
+
+  .mx-field__value--muted {
+    color: var(--color-mx-dim);
+    font-weight: 400;
+  }
+
+  /* ---------- Forms ---------- */
+
+  .mx-input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 40px;
+    padding: 9px 12px;
+    border: 1px solid var(--color-mx-border-strong);
+    border-radius: var(--mx-radius);
+    background: var(--color-mx-bg);
+    color: var(--color-mx-text);
+    font-size: 14px;
+  }
+
+  .mx-input::placeholder {
+    color: var(--color-mx-dim);
+    opacity: 1;
+  }
+
+  input[type="search"].mx-input {
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  textarea.mx-input {
+    min-height: 88px;
+    resize: vertical;
+    line-height: 1.5;
+  }
+
+  select.mx-input {
+    appearance: none;
+    padding-right: 32px;
+    background-image: linear-gradient(45deg, transparent 50%, var(--color-mx-muted) 50%),
+      linear-gradient(135deg, var(--color-mx-muted) 50%, transparent 50%);
+    background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+  }
+
+  .mx-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-mx-text);
+  }
+
+  .mx-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--color-mx-dim);
+  }
+
+  input[type="range"].mx-range {
+    width: 100%;
+    accent-color: var(--color-mx-accent);
+  }
+
+  input[type="checkbox"].mx-checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-mx-accent);
+  }
+
+  /* ---------- Navigation link (Figma header) ---------- */
+
+  .mx-navlink {
+    position: relative;
+    padding: 6px 2px;
+    font-size: 14px;
+    color: var(--color-mx-muted);
+    text-decoration: none;
+    transition: color 150ms ease;
+  }
+
+  .mx-navlink:hover {
+    color: var(--color-mx-text);
+  }
+
+  .mx-navlink.active {
+    color: var(--color-mx-text);
+    font-weight: 600;
+  }
+
+  .mx-navlink.active::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -6px;
+    width: 18px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--color-mx-accent);
+    transform: translateX(-50%);
+  }
+
+  /* ---------- Status messages ---------- */
+
+  .mx-alert {
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--color-mx-border-strong);
+    border-radius: var(--mx-radius);
+    background: var(--color-mx-panel-2);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-mx-muted);
+  }
+
+  .mx-alert--danger {
+    border-color: rgb(228 112 95 / 0.5);
+    background: rgb(228 112 95 / 0.08);
+    color: #f0b5aa;
+  }
+
+  .mx-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-mx-border-strong) transparent;
+  }
+}
+
+/* ---------- Print (Expedition report) ---------- */
+@media print {
+  .mx-no-print {
+    display: none !important;
+  }
+
+  body,
+  :root {
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+
+  .mx-print-surface,
+  .mx-print-surface * {
+    background: transparent !important;
+    color: #111111 !important;
+    border-color: #cccccc !important;
+    box-shadow: none !important;
+  }
+}

@@ -1,20 +1,11 @@
-/*frontend\src\services\providers\marsDem.ts */
 import type { Coordinates } from "../../types";
-
-/* =========================================================
-   CONFIGURATION
-   ========================================================= */
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ??
   "http://127.0.0.1:8000"
-).replace(/\/$/, "");
+).replace(/\/+$/, "");
 
 const DEM_ENDPOINT = `${API_BASE_URL}/api/terrain/dem`;
-
-/* =========================================================
-   RESPONSE TYPES
-   ========================================================= */
 
 export interface DemInfo {
   product_id: string;
@@ -49,33 +40,24 @@ export interface DemWindow {
     projected_x: number;
     projected_y: number;
   };
-
   dimensions: {
     width: number;
     height: number;
   };
-
   pixel_origin: {
     row: number;
     column: number;
   };
-
   resolution: number[];
-
   elevations: (number | null)[][];
-
   unit: string;
   product_id: string;
 }
 
-/* =========================================================
-   REQUEST HANDLING
-   ========================================================= */
-
-async function request<T>(
-  endpoint: string
-): Promise<T> {
-  const response = await fetch(`${DEM_ENDPOINT}${endpoint}`);
+async function request<T>(endpoint: string): Promise<T> {
+  const response = await fetch(
+    `${DEM_ENDPOINT}${endpoint}`
+  );
 
   if (!response.ok) {
     let message = `DEM API error: HTTP ${response.status}`;
@@ -84,7 +66,7 @@ async function request<T>(
       const error = await response.json();
       message = error.detail ?? message;
     } catch {
-      // Keep the default error message.
+      message = `DEM API error: HTTP ${response.status}`;
     }
 
     throw new Error(message);
@@ -93,21 +75,11 @@ async function request<T>(
   return response.json() as Promise<T>;
 }
 
-/* =========================================================
-   MARS DEM PROVIDER
-   ========================================================= */
-
 export const marsDemProvider = {
-  /**
-   * Retrieve DEM metadata.
-   */
   async getInfo(): Promise<DemInfo> {
     return request<DemInfo>("/info");
   },
 
-  /**
-   * Retrieve elevation at a Mars coordinate.
-   */
   async getElevation(
     coordinates: Coordinates
   ): Promise<DemElevation> {
@@ -121,9 +93,6 @@ export const marsDemProvider = {
     );
   },
 
-  /**
-   * Retrieve a rectangular elevation grid.
-   */
   async getWindow(
     coordinates: Coordinates,
     width = 32,
