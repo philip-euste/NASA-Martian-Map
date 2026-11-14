@@ -37,39 +37,6 @@ import {
 import PerseveranceImageryPanel from "../mission/PerseveranceImageryPanel";
 import type { Observation } from "../../types";
 
-function getElevationSourceLabel(elevation: DemElevation): string {
-  const productId = elevation.product_id?.trim();
-
-  if (productId) {
-    return productId;
-  }
-
-  if (elevation.source) {
-    return elevation.source;
-  }
-
-  return "Unknown dataset";
-}
-
-function getElevationAccessLabel(elevation: DemElevation): string {
-  if (elevation.source?.toUpperCase() === "MOLA") {
-    return "Remote MOLA fallback";
-  }
-
-  if (
-    elevation.source?.toUpperCase() === "CTX" &&
-    elevation.isFallback
-  ) {
-    return "Local CTX fallback";
-  }
-
-  if (elevation.source?.toUpperCase() === "HIRISE") {
-    return "Remote HiRISE dataset";
-  }
-
-  return elevation.isFallback ? "Fallback dataset" : "Primary dataset";
-}
-
 export default function LocationPage() {
   const { siteId } = useParams<{ siteId: string }>();
   const navigate = useNavigate();
@@ -358,7 +325,7 @@ export default function LocationPage() {
                   label="Elevation"
                   value={
                     elevationLoading
-                      ? "Querying DEM…"
+                      ? "Querying Mars DEM…"
                       : elevation
                         ? `${elevation.elevation.toFixed(2)} ${elevation.unit}`
                         : undefined
@@ -371,36 +338,10 @@ export default function LocationPage() {
                 />
 
                 {elevation && (
-                  <div className="mt-2 space-y-1">
-                    <p className="mx-mono break-all text-[11px] text-mx-accent">
-                      Dataset: {getElevationSourceLabel(elevation)}
-                    </p>
-
-                    <p className="mx-mono text-[10px] text-mx-dim">
-                      Source type: {elevation.source ?? "Unknown"}
-                    </p>
-
-                    <p className="mx-mono text-[10px] text-mx-dim">
-                      Access: {getElevationAccessLabel(elevation)}
-                    </p>
-
-                    {elevation.resolution_meters != null && (
-                      <p className="mx-mono text-[10px] text-mx-dim">
-                        Resolution: approximately{" "}
-                        {elevation.resolution_meters.toLocaleString()} m/pixel
-                      </p>
-                    )}
-
-                    {elevation.vertical_reference && (
-                      <p className="mx-mono text-[10px] text-mx-dim">
-                        Vertical reference: {elevation.vertical_reference}
-                      </p>
-                    )}
-
-                    <p className="mx-mono text-[10px] text-mx-dim">
-                      Fallback status: {elevation.isFallback ? "Yes" : "No"}
-                    </p>
-                  </div>
+                  <p className="mx-mono mt-2 break-all text-[11px] text-mx-accent">
+                    DEM product: {elevation.product_id || "Unknown"} · row{" "}
+                    {elevation.row}, col {elevation.column}
+                  </p>
                 )}
 
                 {elevationError && (
