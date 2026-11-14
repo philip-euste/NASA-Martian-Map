@@ -1,17 +1,15 @@
 
 from functools import lru_cache
 from threading import RLock
-from typing import Any
-import math
 
 import httpx
-import numpy as np
 import rasterio
 from rasterio.warp import transform
 from fastapi import APIRouter, HTTPException, Query
 
 
 router = APIRouter(prefix="/api/terrain/dem", tags=["Mars DEM"])
+
 
 # ---------------------------------------------------------
 # DATA SOURCES
@@ -24,7 +22,6 @@ STAC_SEARCH_URL = (
 
 HIRISE_COLLECTION = "mro_hirise_socet_dtms"
 
-# Existing known HiRISE product. Kept as a backup candidate.
 KNOWN_HIRISE_URL = (
     "https://astrogeo-ard.s3-us-west-2.amazonaws.com/"
     "mars/mro/hirise/controlled/dtm/"
@@ -43,14 +40,15 @@ MOLA_32_DIRECTORY = f"{MOLA_BASE_URL}meg032/"
 MOLA_PIXELS_PER_DEGREE = 128
 MOLA_GLOBAL_PIXELS_PER_DEGREE = 32
 
+# GDAL configuration values are strings.
+# aws_unsigned is a Rasterio Env argument and must be a Boolean.
 REMOTE_ENV_OPTIONS = {
     "GDAL_HTTP_MULTIRANGE": "YES",
     "GDAL_HTTP_MERGE_CONSECUTIVE_RANGES": "YES",
     "CPL_VSIL_CURL_ALLOWED_EXTENSIONS": ".tif,.tiff,.img,.hdr",
+    "aws_unsigned": True,
 }
 
-# Rasterio/GDAL datasets are reused between requests.
-# Reads are protected because cached GDAL handles are shared.
 DATASET_LOCK = RLock()
 
 
@@ -222,7 +220,6 @@ def get_hirise_candidates(longitude: float, latitude: float):
                 "vertical_reference": "MOLA areoid",
             })
 
-    # Prefer assets explicitly named DTM.
     candidates.sort(
         key=lambda item: (
             "dtm" not in item["url"].lower(),
@@ -249,12 +246,16 @@ def get_known_hirise_candidate():
 
 def project_coordinate(dataset, longitude, latitude):
     if dataset.crs is None:
-        raise ValueError("HiRISE dataset has no coordinate reference system.")
+        raise ValueError(
+            "HiRISE dataset has no coordinate reference system."
+        )
 
     geographic_crs = dataset.crs.geodetic_crs
 
     if geographic_crs is None:
-        raise ValueError("HiRISE dataset has no geographic reference system.")
+        raise ValueError(
+            "HiRISE dataset has no geographic reference system."
+        )
 
     coordinates = transform(
         geographic_crs,
@@ -314,7 +315,6 @@ def find_hirise_elevation(longitude, latitude):
         latitude,
     )
 
-    # Keep the previously configured product as an additional candidate.
     candidates.append(get_known_hirise_candidate())
 
     checked_urls = set()
@@ -419,7 +419,6 @@ def sample_mola(longitude, latitude):
         dataset = open_remote_dataset(source["url"])
 
         pixels_per_degree = source["pixels_per_degree"]
-
         longitude_360 = longitude % 360
 
         row = int(
@@ -507,7 +506,13 @@ def get_best_dataset(longitude, latitude):
 
         try:
             dataset = open_remote_dataset(candidate["url"])
-            x, y = project_coordinate(dataset, longitude, latitude)
+
+            x, y = project_coordinate(
+                dataset,
+                longitude,
+                latitude,
+            )
+
             row, col = dataset.index(x, y)
 
             if not (
@@ -634,7 +639,6 @@ def get_elevation_window(
         height,
     )
 
-    # A window crossing a HiRISE boundary can use MOLA instead.
     if values is None and selected["source"] == "HiRISE":
         source = get_mola_location(latitude, longitude)
         dataset = open_remote_dataset(source["url"])
@@ -675,7 +679,10 @@ def get_elevation_window(
     if values is None:
         raise HTTPException(
             status_code=400,
-            detail="Requested terrain window extends outside the selected dataset.",
+            detail=(
+                "Requested terrain window extends outside "
+                "the selected dataset."
+            ),
         )
 
     return {
