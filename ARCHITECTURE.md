@@ -2,14 +2,23 @@ NASAMartianMap
 ├── .venv
 ├── backend
 │   ├── main.py
-|   └── terrain_dem.py
-    ├── data-processing
-    |   ├── acquisition
-    |   |   └── discover_hirise_dtm.py
-    |   └── validation
-    |       ├── inspect_remote_dem.py
-    |       └── test_dem_coordinate.py
-    ├── datasets
+|   |── terrain_dem.py
+|   ├── data-processing
+|   |   ├── acquisition
+|   |   |   |── download_meda_test.py
+|   |   |   └── discover_hirise_dtm.py
+|   |   ├── acquisition
+|   |   |   └── process_meda.py
+|   |   └── validation
+|   |       ├── inspect_remote_dem.py
+|   |       └── test_dem_coordinate.py
+|   └── datasets
+|   |   ├── indexes
+|   |   |   |── download_meda_test.py
+|   |   |   └── discover_hirise_dtm.py
+|   |   ├── processed
+|   |   |   └── process_meda.py
+|   |   └── raw
 └── frontend
     ├── dist
     ├── node_modules
@@ -92,4 +101,5 @@ NASAMartianMap
 ├── ARCHITECTURE.md 
 ├── LICENSE
 ├── notes.md
+├── skills-lock.json
 └── README.md
