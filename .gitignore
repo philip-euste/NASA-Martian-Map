@@ -1,6 +1,6 @@
 __pycache__
 .venv
-frontend/node_modules/
+node_modules/
 dist/
 coverage/
 .vite/
@@ -16,3 +16,6 @@ __pycache__/
 *.egg-info/         
 .pytest_cache/
 .mypy_cache/
+
+# Keep downloaded raw scientific datasets out of Git.
+**/datasets/raw/
