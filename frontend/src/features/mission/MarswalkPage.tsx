@@ -6,11 +6,9 @@ import {
   ArrowRight,
   Camera,
   Check,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   FlaskConical,
-  Home,
   Layers,
   Loader2,
   MapPin,
@@ -19,17 +17,22 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
-  Wind,
   Wrench,
   X,
 } from "lucide-react";
 import { ImagePending, formatCoordinates } from "../../components/ui";
 import type { SurfaceImageryCatalogItem } from "../../data/evidenceDatasets";
-import {
-  JEZERO_DEFAULT_COORDINATES,
-  isWithinJezeroDemBounds,
-} from "../mars-explorer/marsExplorer.types";
 import { perseveranceImageryProvider } from "../../services/providers/perseveranceImageryProvider";
+import { resolveSimulatorEnvironment } from "../../simulator/environments/catalog";
+import { isWithinBounds } from "../../simulator/shared/environment";
+import HelmetHud, {
+  type CompassMarkerItem,
+} from "../../simulator/shared/HelmetHud";
+import {
+  bearingDegrees,
+  greatCircleDistanceMeters,
+  shortestAngularDelta,
+} from "../../simulator/shared/navigation";
 import { useMission } from "../../state/mission/MissionContext";
 import type {
   Coordinates,
@@ -39,41 +42,7 @@ import type {
 } from "../../types";
 import { identifyGeologicUnitAt } from "../../utils/jezeroStratigraphy";
 import MissionLayout from "./MissionLayout";
-import {
-  calculateMarsSurfaceDistanceMeters,
-  toMutable,
-} from "./missionHelpers";
-
-const FREE_EXPLORATION_SITES = [
-  {
-    id: "octavia-e-butler",
-    name: "Octavia E. Butler Landing (Habitat Base)",
-    latitude: 18.4447,
-    longitude: 77.4508,
-    note: "Perseverance landing site and simulated EVA Habitat & Rover Base.",
-  },
-  {
-    id: "jezero-delta-front",
-    name: "Western Delta Scarp & Layered Sediments",
-    latitude: 18.4585,
-    longitude: 77.4052,
-    note: "Exposed deltaic mudstones and boulder conglomerates (~40 m relief).",
-  },
-  {
-    id: "seitah-outcrop",
-    name: "Séítah Olivine-Rich Unit",
-    latitude: 18.4295,
-    longitude: 77.439,
-    note: "Fractured igneous/altered crater floor unit with regolith dunes.",
-  },
-  {
-    id: "belva-crater",
-    name: "Belva Impact Crater Rim",
-    latitude: 18.464,
-    longitude: 77.429,
-    note: "Fresh impact crater exposing subsurface delta stratigraphy.",
-  },
-];
+import { toMutable } from "./missionHelpers";
 
 type ContingencyPreset = {
   id: string;
@@ -181,54 +150,6 @@ const CONTINGENCY_PRESETS: ContingencyPreset[] = [
   },
 ];
 
-const COMPASS_TICKS = [
-  { deg: 0, label: "N", major: true },
-  { deg: 15, label: "15", major: false },
-  { deg: 30, label: "30", major: false },
-  { deg: 45, label: "NE", major: true },
-  { deg: 60, label: "60", major: false },
-  { deg: 75, label: "75", major: false },
-  { deg: 90, label: "E", major: true },
-  { deg: 105, label: "105", major: false },
-  { deg: 120, label: "120", major: false },
-  { deg: 135, label: "SE", major: true },
-  { deg: 150, label: "150", major: false },
-  { deg: 165, label: "165", major: false },
-  { deg: 180, label: "S", major: true },
-  { deg: 195, label: "195", major: false },
-  { deg: 210, label: "210", major: false },
-  { deg: 225, label: "SW", major: true },
-  { deg: 240, label: "240", major: false },
-  { deg: 255, label: "255", major: false },
-  { deg: 270, label: "W", major: true },
-  { deg: 285, label: "285", major: false },
-  { deg: 300, label: "300", major: false },
-  { deg: 315, label: "NW", major: true },
-  { deg: 330, label: "330", major: false },
-  { deg: 345, label: "345", major: false },
-];
-
-function calculateMarsBearingDegrees(from: Coordinates, to: Coordinates): number {
-  const lat1 = (from.latitude * Math.PI) / 180;
-  const lat2 = (to.latitude * Math.PI) / 180;
-  const dLon = ((to.longitude - from.longitude) * Math.PI) / 180;
-  const y = Math.sin(dLon) * Math.cos(lat2);
-  const x =
-    Math.cos(lat1) * Math.sin(lat2) -
-    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-  return Math.round((((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360);
-}
-
-function shortestAngularDelta(fromDeg: number, toDeg: number): number {
-  return ((toDeg - fromDeg + 540) % 360) - 180;
-}
-
-function formatHeadingCardinal(deg: number): string {
-  const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-  const idx = Math.round((((deg % 360) + 360) % 360) / 45) % 8;
-  return `${String(Math.round(((deg % 360) + 360) % 360)).padStart(3, "0")}° ${dirs[idx]}`;
-}
-
 export default function MarswalkPage() {
   const navigate = useNavigate();
   const {
@@ -236,6 +157,14 @@ export default function MarswalkPage() {
     updateMission,
     updateSimulation,
   } = useMission();
+
+  const {
+    environment: activeEnv,
+    isFallbackEnvironment,
+  } = useMemo(
+    () => resolveSimulatorEnvironment(mission.region?.id),
+    [mission.region?.id]
+  );
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [initializing, setInitializing] = useState(true);
@@ -303,47 +232,58 @@ export default function MarswalkPage() {
   const baseCoordinates = useMemo(() => {
     if (
       mission.configuration?.startingLocation &&
-      isWithinJezeroDemBounds(mission.configuration.startingLocation)
+      isWithinBounds(activeEnv.bounds, mission.configuration.startingLocation)
     ) {
       return mission.configuration.startingLocation;
     }
     if (
       mission.region?.coordinates &&
-      isWithinJezeroDemBounds(mission.region.coordinates)
+      isWithinBounds(activeEnv.bounds, mission.region.coordinates)
     ) {
       return mission.region.coordinates;
     }
-    return JEZERO_DEFAULT_COORDINATES;
-  }, [mission.configuration?.startingLocation, mission.region?.coordinates]);
+    return {
+      latitude: activeEnv.defaultBase.latitude,
+      longitude: activeEnv.defaultBase.longitude,
+    };
+  }, [
+    activeEnv.bounds,
+    activeEnv.defaultBase.latitude,
+    activeEnv.defaultBase.longitude,
+    mission.configuration?.startingLocation,
+    mission.region?.coordinates,
+  ]);
 
-  const withinJezeroDem = useMemo(() => {
+  const withinEnvironmentDem = useMemo(() => {
     if (!mission.region) return true;
     return (
-      mission.region.id === "jezero-crater" ||
-      isWithinJezeroDemBounds(mission.region.coordinates)
+      mission.region.id === activeEnv.id ||
+      isWithinBounds(activeEnv.bounds, mission.region.coordinates)
     );
-  }, [mission.region]);
+  }, [activeEnv.bounds, activeEnv.id, mission.region]);
 
   const targetName =
     explorationMode === "free"
-      ? "Jezero Crater Open-World Surface"
-      : mission.region?.name ?? "Jezero Crater";
+      ? `${activeEnv.displayName} Open-World Surface`
+      : mission.region?.name ?? activeEnv.displayName;
 
   const simulatorSrc = useMemo(() => {
     const params = new URLSearchParams({
       lat: baseCoordinates.latitude.toFixed(5),
       lon: baseCoordinates.longitude.toFixed(5),
       name: targetName,
-      regionId: mission.region?.id ?? "jezero-crater",
-      withinDem: withinJezeroDem ? "1" : "0",
+      regionId: mission.region?.id ?? activeEnv.id,
+      withinDem: withinEnvironmentDem ? "1" : "0",
     });
-    return `/src/simulator/jezero_crater/scripts/jezero-simulator.html?${params.toString()}`;
+    return `${activeEnv.simulatorEntryUrl}?${params.toString()}`;
   }, [
+    activeEnv.id,
+    activeEnv.simulatorEntryUrl,
     baseCoordinates.latitude,
     baseCoordinates.longitude,
     mission.region?.id,
     targetName,
-    withinJezeroDem,
+    withinEnvironmentDem,
   ]);
 
   const syncTargetsToIframe = () => {
@@ -369,10 +309,10 @@ export default function MarswalkPage() {
       {
         type: "mars-explorer:expedition",
         name: targetName,
-        regionId: mission.region?.id ?? "jezero-crater",
+        regionId: mission.region?.id ?? activeEnv.id,
         latitude: baseCoordinates.latitude,
         longitude: baseCoordinates.longitude,
-        withinDem: withinJezeroDem,
+        withinDem: withinEnvironmentDem,
         targets: beaconList,
       },
       "*"
@@ -569,7 +509,7 @@ export default function MarswalkPage() {
         {
           type: "mars-explorer:expedition",
           name: label,
-          regionId: "jezero-crater",
+          regionId: activeEnv.id,
           latitude,
           longitude,
           withinDem: true,
@@ -663,10 +603,9 @@ export default function MarswalkPage() {
   const visitedCount = mission.simulation.visitedTargetIds.length;
   const totalTargets = mission.scientificTargets.length;
   const collectedSamples = mission.simulation.simulatedSamples ?? [];
-  const elapsedMin = Math.floor(mission.simulation.elapsedTimeSeconds / 60);
-  const elapsedSec = mission.simulation.elapsedTimeSeconds % 60;
+  const planetRadiusMeters = activeEnv.coordinateReference.meanRadiusMeters;
 
-  // Phase 5: Nearest Beacon Proximity (<150 m) & USGS SIM 3464 Stratigraphic Context
+  // Phase 5: Nearest Beacon Proximity (<150 m) & Stratigraphic Context
   const activeTargetObj = useMemo(
     () =>
       mission.scientificTargets.find((t) => t.id === selectedTargetId) ??
@@ -683,7 +622,7 @@ export default function MarswalkPage() {
         coordinates: t.coordinates,
         isMissionTarget: true,
       })),
-      ...FREE_EXPLORATION_SITES.map((s) => ({
+      ...activeEnv.fieldSites.map((s) => ({
         id: s.id,
         name: s.name,
         coordinates: { latitude: s.latitude, longitude: s.longitude },
@@ -700,16 +639,22 @@ export default function MarswalkPage() {
     } | null = null;
 
     for (const c of candidates) {
-      const dist = calculateMarsSurfaceDistanceMeters(
+      const dist = greatCircleDistanceMeters(
         currentPos,
-        c.coordinates
+        c.coordinates,
+        planetRadiusMeters
       );
       if (!best || dist < best.distanceMeters) {
         best = { ...c, distanceMeters: Math.round(dist) };
       }
     }
     return best;
-  }, [currentPos, mission.scientificTargets]);
+  }, [
+    activeEnv.fieldSites,
+    currentPos,
+    mission.scientificTargets,
+    planetRadiusMeters,
+  ]);
 
   const isApproachingBeacon =
     nearestBeacon !== null && nearestBeacon.distanceMeters < 150;
@@ -743,9 +688,13 @@ export default function MarswalkPage() {
   const groundTruthCorrelation = useMemo(() => {
     const lowerLabel = inspectionLabel.toLowerCase();
     const unitCode = currentGeologicUnit.unit_code;
-    const distFromLanding = calculateMarsSurfaceDistanceMeters(
+    const distFromLanding = greatCircleDistanceMeters(
       inspectionCoords,
-      { latitude: 18.4447, longitude: 77.4508 }
+      {
+        latitude: activeEnv.defaultBase.latitude,
+        longitude: activeEnv.defaultBase.longitude,
+      },
+      planetRadiusMeters
     );
 
     if (
@@ -799,7 +748,14 @@ export default function MarswalkPage() {
       orbitalLink:
         "MRO CRISM FRT0000B204 (1.05 µm Fe²⁺ olivine crystal-field absorption, OLINDEX3 = 0.065).",
     };
-  }, [currentGeologicUnit.unit_code, inspectionCoords, inspectionLabel]);
+  }, [
+    activeEnv.defaultBase.latitude,
+    activeEnv.defaultBase.longitude,
+    currentGeologicUnit.unit_code,
+    inspectionCoords,
+    inspectionLabel,
+    planetRadiusMeters,
+  ]);
 
   const [groundTruthSolOverride, setGroundTruthSolOverride] = useState<
     number | null
@@ -917,7 +873,9 @@ export default function MarswalkPage() {
     });
   };
 
-  const nextTubeSerialId = `JZ-EVA-${String(collectedSamples.length + 1).padStart(2, "0")}`;
+  const nextTubeSerialId = `${activeEnv.sampleIdPrefix}-${String(
+    collectedSamples.length + 1
+  ).padStart(2, "0")}`;
 
   const handleSaveObservation = () => {
     if (!obsTitle.trim()) return;
@@ -926,7 +884,7 @@ export default function MarswalkPage() {
     const obs: Observation = {
       id: `obs-eva-${Date.now()}`,
       datasetId:
-        mission.selectedDatasets[0]?.id ?? "hirise_jezero_dtm",
+        mission.selectedDatasets[0]?.id ?? activeEnv.defaultObservationDatasetId,
       name: `${obsTitle.trim()} (${obsCategory})`,
       coordinates: { ...coords },
       observationDate: new Date().toISOString().slice(0, 10),
@@ -935,7 +893,7 @@ export default function MarswalkPage() {
         `In-situ Marswalk EVA surface observation recorded at ${formatCoordinates(coords.latitude, coords.longitude)} in USGS unit ${currentGeologicUnit.unit_code} (Elev ${liveElevationM.toFixed(0)} m, Slope ${liveSlopeDeg.toFixed(1)}°).`,
       source: "Marswalk In-Situ EVA Observation (User Recorded)",
       provenance: {
-        source: "Simulated Astronaut EVA Fieldwork (CTX / HiRISE Reference DEM)",
+        source: `Simulated Astronaut EVA Fieldwork (${activeEnv.displayName} Reference DEM)`,
         sourceId: "marswalk-eva",
         processingMethod: `Visual and instrument inspection during surface traverse across ${currentGeologicUnit.unit_code} (${currentGeologicUnit.unit_name})`,
         limitations: [
@@ -983,7 +941,7 @@ export default function MarswalkPage() {
       mission.simulation.currentPosition ?? baseCoordinates;
     const rawName = sampleName.trim();
     const formattedName = rawName
-      ? rawName.startsWith("JZ-EVA-")
+      ? rawName.startsWith(`${activeEnv.sampleIdPrefix}-`)
         ? rawName
         : `${nextTubeSerialId} · ${rawName}`
       : `${nextTubeSerialId} · ${currentGeologicUnit.unit_code} ${sampleType}`;
@@ -1039,19 +997,9 @@ export default function MarswalkPage() {
     showTransientFeedback(`Applied EVA condition: ${preset.label}`);
   };
 
-  // Compute real spherical bearings and distances for the Helmet Navigation Compass
-  const compassMarkers = useMemo(() => {
-    const items: {
-      id: string;
-      shortName: string;
-      fullName: string;
-      coordinates: Coordinates;
-      bearingDeg: number;
-      deltaDeg: number;
-      distanceMeters: number;
-      kind: "base" | "target" | "landmark";
-      visited: boolean;
-    }[] = [];
+  // Compute spherical bearings and distances for the shared Helmet Navigation Compass
+  const compassMarkers = useMemo<CompassMarkerItem[]>(() => {
+    const items: CompassMarkerItem[] = [];
 
     const addMarker = (
       id: string,
@@ -1062,9 +1010,9 @@ export default function MarswalkPage() {
       visited = false
     ) => {
       const dist = Math.round(
-        calculateMarsSurfaceDistanceMeters(currentPos, coords)
+        greatCircleDistanceMeters(currentPos, coords, planetRadiusMeters)
       );
-      const bearing = calculateMarsBearingDegrees(currentPos, coords);
+      const bearing = Math.round(bearingDegrees(currentPos, coords)) % 360;
       const delta = shortestAngularDelta(liveHeadingDeg, bearing);
       items.push({
         id,
@@ -1082,7 +1030,7 @@ export default function MarswalkPage() {
     addMarker(
       "habitat-base",
       "Habitat Base",
-      "Octavia E. Butler Habitat & Rover Base",
+      activeEnv.defaultBase.name,
       baseCoordinates,
       "base",
       false
@@ -1105,7 +1053,7 @@ export default function MarswalkPage() {
       "belva-crater": "Belva Impact",
     };
 
-    FREE_EXPLORATION_SITES.slice(1).forEach((site) => {
+    activeEnv.fieldSites.slice(1).forEach((site) => {
       const dup = mission.scientificTargets.some(
         (t) =>
           Math.hypot(
@@ -1127,11 +1075,14 @@ export default function MarswalkPage() {
 
     return items;
   }, [
+    activeEnv.defaultBase.name,
+    activeEnv.fieldSites,
     baseCoordinates,
     currentPos,
     liveHeadingDeg,
     mission.scientificTargets,
     mission.simulation.visitedTargetIds,
+    planetRadiusMeters,
   ]);
 
   const primaryGuideMarker = useMemo(() => {
@@ -1147,12 +1098,17 @@ export default function MarswalkPage() {
     );
   }, [compassMarkers, selectedTargetId]);
 
+  const baseMarker = useMemo(
+    () => compassMarkers.find((m) => m.kind === "base") ?? null,
+    [compassMarkers]
+  );
+
   return (
     <MissionLayout
       fullscreenCanvas
       stage="Stage 03 · Explore"
-      title="Marswalk 3D Surface Simulator"
-      subtitle="Traverse the USGS/NASA CTX & HiRISE 3D elevation model of Jezero Crater under Mars partial gravity (3.71 m/s²)."
+      title={`Marswalk 3D Surface Simulator · ${activeEnv.displayName}`}
+      subtitle={`Traverse the ${activeEnv.terrain.credit} under Mars partial gravity (3.71 m/s²).`}
       actions={
         <>
           <Link
@@ -1211,626 +1167,101 @@ export default function MarswalkPage() {
           aria-hidden="true"
         />
 
-        {/* ================================================================
-            ASTRONAUT HELMET HUD — TOP ROW (Left Location, Center Compass, Right Mission)
-            ================================================================ */}
-        <div className="pointer-events-none absolute inset-x-3 top-3 z-[25] grid grid-cols-1 items-start gap-2.5 lg:grid-cols-12">
-          {/* TOP LEFT (Cols 1-3): Location, Orientation & Active Stratigraphy */}
-          <div className="pointer-events-auto rounded-xl border border-white/12 bg-[#141215]/86 px-3.5 py-2.5 text-xs shadow-lg backdrop-blur-md lg:col-span-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="mx-eyebrow mx-eyebrow--accent flex items-center gap-1">
-                <MapPin size={11} className="text-mx-accent" />
-                SURFACE TELEMETRY
-              </span>
-              <span
-                className="rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold"
-                style={{
-                  borderColor: currentGeologicUnit.color,
-                  backgroundColor: `${currentGeologicUnit.color}28`,
-                  color: "#f8fafc",
-                }}
-                title={`${currentGeologicUnit.unit_name} (${currentGeologicUnit.stratigraphic_age})`}
-              >
-                {currentGeologicUnit.unit_code}
-              </span>
-            </div>
-
-            <div className="mt-1.5 font-mono text-[12px] font-semibold text-mx-text">
-              {formatCoordinates(currentPos.latitude, currentPos.longitude)}
-            </div>
-
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-mx-muted">
-              <span>
-                Elev{" "}
-                <strong className="text-mx-text">
-                  {liveElevationM.toFixed(0)} m
-                </strong>
-              </span>
-              <span
-                className={
-                  liveSlopeDeg >= 15
-                    ? "font-semibold text-amber-300"
-                    : "text-mx-muted"
-                }
-              >
-                Slope{" "}
-                <strong
-                  className={
-                    liveSlopeDeg >= 15 ? "text-amber-300" : "text-mx-text"
-                  }
-                >
-                  {liveSlopeDeg.toFixed(1)}°
-                </strong>
-                {liveSlopeDeg >= 15 ? " ⚠" : ""}
-              </span>
-              <span>
-                Traverse{" "}
-                <strong className="text-mx-text">
-                  {Math.round(mission.simulation.totalTraverseMeters ?? 0)} m
-                </strong>
-              </span>
-            </div>
-
-            <div className="mt-1 truncate text-[10px] text-mx-dim">
-              Unit:{" "}
-              <span className="text-mx-muted">
-                {currentGeologicUnit.unit_name}
-              </span>
-            </div>
-          </div>
-
-          {/* TOP CENTER (Cols 4-9): Interactive Horizontal Navigation Compass Tape */}
-          <div className="pointer-events-auto flex flex-col items-center lg:col-span-6">
-            <div
-              className="relative w-full max-w-[620px] overflow-hidden rounded-xl border border-white/15 bg-[#121014]/88 px-3 pt-2 pb-2.5 shadow-xl backdrop-blur-md"
-              aria-label="Astronaut Horizontal Navigation Compass"
-            >
-              {/* Top digital heading & active target bearing strip */}
-              <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] font-mono">
-                <span className="text-mx-muted">
-                  MODE:{" "}
-                  <strong className="text-mx-text">
-                    {liveFlyMode ? "RECON FLIGHT [F]" : "0.38G SURFACE WALK"}
-                  </strong>
-                </span>
-                <span className="rounded border border-mx-accent/50 bg-mx-accent/15 px-2 py-0.5 text-[11px] font-bold text-[#ff9d66]">
-                  HDG {formatHeadingCardinal(liveHeadingDeg)}
-                </span>
-                {primaryGuideMarker ? (
-                  <span className="truncate text-sky-300">
-                    DEST: <strong>{primaryGuideMarker.shortName}</strong> (
-                    {primaryGuideMarker.distanceMeters >= 1000
-                      ? `${(primaryGuideMarker.distanceMeters / 1000).toFixed(2)} km`
-                      : `${primaryGuideMarker.distanceMeters} m`}{" "}
-                    · {primaryGuideMarker.bearingDeg}°)
-                  </span>
-                ) : (
-                  <span className="text-mx-dim">JEZERO DEM COMPASS</span>
-                )}
-              </div>
-
-              {/* Sliding Horizontal Compass Tape */}
-              <div className="relative h-9 w-full overflow-hidden rounded-md border border-white/10 bg-black/45">
-                {/* Center Lubber Line / Reticle */}
-                <div
-                  className="pointer-events-none absolute inset-y-0 left-1/2 z-[15] w-0.5 -translate-x-1/2 bg-mx-accent"
-                  aria-hidden="true"
-                />
-
-                {/* Rear-Turn Indicators when Primary Destination is outside +/-62° FOV */}
-                {primaryGuideMarker && primaryGuideMarker.deltaDeg < -62 && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleTeleportTo(
-                        primaryGuideMarker.coordinates.latitude,
-                        primaryGuideMarker.coordinates.longitude,
-                        primaryGuideMarker.fullName
-                      )
-                    }
-                    className=" absolute left-1.5 top-1/2 z-[16] -translate-y-1/2 inline-flex items-center gap-1 rounded bg-mx-accent/25 border border-mx-accent/60 px-1.5 py-0.5 font-mono text-[9.5px] font-semibold text-[#ff9d66]"
-                    title={`Turn left toward ${primaryGuideMarker.fullName} (Click to teleport)`}
-                  >
-                    <ChevronLeft size={11} />
-                    {primaryGuideMarker.shortName}
-                  </button>
-                )}
-                {primaryGuideMarker && primaryGuideMarker.deltaDeg > 62 && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleTeleportTo(
-                        primaryGuideMarker.coordinates.latitude,
-                        primaryGuideMarker.coordinates.longitude,
-                        primaryGuideMarker.fullName
-                      )
-                    }
-                    className="absolute right-1.5 top-1/2 z-[16] -translate-y-1/2 inline-flex items-center gap-1 rounded bg-mx-accent/25 border border-mx-accent/60 px-1.5 py-0.5 font-mono text-[9.5px] font-semibold text-[#ff9d66]"
-                    title={`Turn right toward ${primaryGuideMarker.fullName} (Click to teleport)`}
-                  >
-                    {primaryGuideMarker.shortName}
-                    <ChevronRight size={11} />
-                  </button>
-                )}
-
-                {/* Cardinal & Degree Ticks within +/-65° of current heading */}
-                {COMPASS_TICKS.map((tick) => {
-                  const delta = shortestAngularDelta(liveHeadingDeg, tick.deg);
-                  if (Math.abs(delta) > 66) return null;
-                  const leftPct = 50 + (delta / 65) * 46;
-                  return (
-                    <div
-                      key={tick.deg}
-                      className="pointer-events-none absolute top-0 flex -translate-x-1/2 flex-col items-center"
-                      style={{ left: `${leftPct}%` }}
-                    >
-                      <div
-                        className={`w-px ${
-                          tick.major ? "h-2.5 bg-white/70" : "h-1.5 bg-white/30"
-                        }`}
-                      />
-                      <span
-                        className={`mt-0.5 font-mono leading-none ${
-                          tick.major
-                            ? tick.label === "N"
-                              ? "text-[10px] font-bold text-mx-accent"
-                              : "text-[10px] font-bold text-white"
-                            : "text-[8.5px] text-white/45"
-                        }`}
-                      >
-                        {tick.label}
-                      </span>
-                    </div>
-                  );
-                })}
-
-                {/* Waypoint & Landmark Markers on the Compass Tape */}
-                {compassMarkers.map((m) => {
-                  if (Math.abs(m.deltaDeg) > 60) return null;
-                  const leftPct = 50 + (m.deltaDeg / 65) * 46;
-                  const badgeColor =
-                    m.kind === "base"
-                      ? "border-sky-400/70 bg-sky-500/25 text-sky-200"
-                      : m.visited
-                        ? "border-emerald-400/70 bg-emerald-500/25 text-emerald-200"
-                        : m.kind === "target"
-                          ? "border-mx-accent/80 bg-mx-accent/25 text-[#ffd2b8]"
-                          : "border-white/30 bg-white/10 text-mx-text";
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        if (m.kind === "target") {
-                          setSelectedTargetId(m.id);
-                        }
-                        handleTeleportTo(
-                          m.coordinates.latitude,
-                          m.coordinates.longitude,
-                          m.fullName
-                        );
-                      }}
-                      style={{ left: `${leftPct}%` }}
-                      className={` common-compass-marker absolute bottom-0.5 z-[14] -translate-x-1/2 whitespace-nowrap rounded border px-1.5 py-0.2 font-mono text-[8.5px] font-semibold transition hover:scale-105 ${badgeColor}`}
-                      title={`${m.fullName} — Bearing ${m.bearingDeg}°, Distance ${m.distanceMeters} m (Click to jump)`}
-                    >
-                      {m.shortName}{" "}
-                      <span className="opacity-80">
-                        {m.distanceMeters >= 1000
-                          ? `${(m.distanceMeters / 1000).toFixed(1)}k`
-                          : `${m.distanceMeters}m`}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Transient Feedback Notification Banner */}
-            {feedbackBanner && (
-              <div
-                className="mt-2 flex w-full max-w-[620px] items-center justify-between gap-3 rounded-lg border border-emerald-500/45 bg-emerald-950/85 px-3.5 py-1.5 text-xs text-emerald-200 shadow-lg backdrop-blur-md"
-                role="status"
-              >
-                <div className="flex items-center gap-2">
-                  <CheckCircle2
-                    size={13}
-                    className="shrink-0 text-emerald-400"
-                  />
-                  <span>{feedbackBanner}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFeedbackBanner(null)}
-                  className="text-emerald-300 hover:text-white"
-                >
-                  <X size={13} />
-                </button>
-              </div>
-            )}
-
-            {simulatorError && (
-              <div
-                className="mt-2 flex w-full max-w-[620px] items-center justify-between gap-3 rounded-lg border border-red-500/50 bg-red-950/90 px-3.5 py-2 text-xs text-red-100 shadow-lg"
-                role="alert"
-              >
-                <span>{simulatorError}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSimulatorError(null);
-                    setInitializing(true);
-                    iframeRef.current?.contentWindow?.location.reload();
-                  }}
-                  className="mx-btn mx-btn--secondary mx-btn--sm"
-                >
-                  Retry Terrain Load
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* TOP RIGHT (Cols 10-12): Mission Status, Mode Switcher & Quick-Jump Waypoints */}
-          <div className="pointer-events-auto rounded-xl border border-white/12 bg-[#141215]/86 px-3.5 py-2.5 text-xs shadow-lg backdrop-blur-md lg:col-span-3">
-            <div className="flex items-center justify-between gap-2">
-              <div
-                className="inline-flex rounded-md border border-mx-border bg-mx-bg/90 p-0.5"
-                role="group"
-                aria-label="Marswalk exploration mode"
-              >
-                <button
-                  type="button"
-                  onClick={() => updateSimulation({ mode: "mission" })}
-                  className={`rounded px-2 py-0.5 text-[10.5px] font-semibold transition ${
-                    explorationMode === "mission"
-                      ? "bg-mx-accent text-[#1a0f08]"
-                      : "text-mx-muted hover:text-mx-text"
-                  }`}
-                >
-                  Mission EVA
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateSimulation({ mode: "free" })}
-                  className={`rounded px-2 py-0.5 text-[10.5px] font-semibold transition ${
-                    explorationMode === "free"
-                      ? "bg-mx-accent text-[#1a0f08]"
-                      : "text-mx-muted hover:text-mx-text"
-                  }`}
-                >
-                  Free Explore
-                </button>
-              </div>
-
-              <span className="font-mono text-[11px] text-emerald-300">
-                <strong>
-                  {visitedCount}/{Math.max(1, totalTargets)}
-                </strong>{" "}
-                Targets
-              </span>
-            </div>
-
-            <div className="mt-1.5 flex items-center justify-between gap-2 font-mono text-[11px] text-mx-muted">
-              <span>
-                EVA{" "}
-                <strong className="text-mx-text">
-                  {String(elapsedMin).padStart(2, "0")}:
-                  {String(elapsedSec).padStart(2, "0")}
-                </strong>
-              </span>
-              <span>
-                Base Dist{" "}
-                <strong className="text-sky-300">
-                  {Math.round(mission.simulation.distanceFromBaseMeters ?? 0)} m
-                </strong>
-              </span>
-            </div>
-
-            {/* Quick-Jump Waypoint Strip */}
-            <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-white/10 pt-1.5">
-              <button
-                type="button"
-                onClick={() =>
-                  handleTeleportTo(
-                    baseCoordinates.latitude,
-                    baseCoordinates.longitude,
-                    "EVA Habitat & Rover Base"
-                  )
-                }
-                className="rounded border border-sky-400/40 bg-sky-500/15 px-1.5 py-0.5 font-mono text-[10px] text-sky-200 hover:bg-sky-500/25"
-              >
-                Habitat Base
-              </button>
-
-              {explorationMode === "free"
-                ? FREE_EXPLORATION_SITES.slice(1).map((site) => (
-                    <button
-                      key={site.id}
-                      type="button"
-                      onClick={() =>
-                        handleTeleportTo(
-                          site.latitude,
-                          site.longitude,
-                          site.name
-                        )
-                      }
-                      className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] text-mx-muted hover:border-mx-accent hover:text-mx-text"
-                    >
-                      {site.name.split(" ")[0]} {site.name.split(" ")[1]}
-                    </button>
-                  ))
-                : mission.scientificTargets.slice(0, 4).map((t, idx) => {
-                    const isVisited =
-                      mission.simulation.visitedTargetIds.includes(t.id);
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedTargetId(t.id);
-                          handleTeleportTo(
-                            t.coordinates.latitude,
-                            t.coordinates.longitude,
-                            t.name
-                          );
-                        }}
-                        className={`rounded border px-1.5 py-0.5 text-[10px] transition ${
-                          isVisited
-                            ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200"
-                            : "border-white/15 bg-white/5 text-mx-text hover:border-mx-accent"
-                        }`}
-                      >
-                        {isVisited ? "✓ " : `T${idx + 1}: `}
-                        {t.name.slice(0, 14)}
-                      </button>
-                    );
-                  })}
-            </div>
-          </div>
-        </div>
-
-        {/* Phase 5: Nearest Beacon (<150 m) Proximity Ground-Truth Callout */}
-        {isApproachingBeacon && nearestBeacon && !anyModalOpen && (
-          <div className="pointer-events-auto absolute bottom-28 right-3 z-[25] max-w-[330px] rounded-xl border border-emerald-500/45 bg-[#141215]/92 p-3 shadow-2xl backdrop-blur-md">
-            <div className="flex items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                <Camera size={12} />
-                BEACON IN RANGE ({nearestBeacon.distanceMeters} m)
-              </span>
-              <span
-                className="rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold"
-                style={{
-                  borderColor: currentGeologicUnit.color,
-                  backgroundColor: `${currentGeologicUnit.color}28`,
-                  color: "#f8fafc",
-                }}
-              >
-                {currentGeologicUnit.unit_code}
-              </span>
-            </div>
-            <p className="m-0 mt-1 text-xs font-semibold text-white">
-              {nearestBeacon.name}
-            </p>
-            <p className="m-0 mt-0.5 text-[10px] text-mx-muted">
-              Perseverance Sol {activeGroundTruthSol} Ground-Truth Outcrop &amp;
-              CRISM/HiRISE Orbital Telemetry ready.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                if (nearestBeacon.isMissionTarget) {
-                  setSelectedTargetId(nearestBeacon.id);
-                }
-                setActiveFieldworkTab("target");
-                setShowFieldworkDrawer(true);
-                setShowContingencyDrawer(false);
-              }}
-              className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-200 transition hover:bg-emerald-500/30"
-            >
-              <Camera size={12} />
-              Open Fieldwork Terminal [E]
-            </button>
-          </div>
-        )}
-
-        {/* ================================================================
-            ASTRONAUT HELMET HUD — BOTTOM ROW (Left Suit & Controls, Right Env Telemetry)
-            ================================================================ */}
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[25] flex flex-wrap items-end justify-between gap-2.5">
-          {/* BOTTOM LEFT: Suit Life-Support Systems & Interactive EVA Controls */}
-          <div className="pointer-events-auto flex max-w-full flex-col gap-1.5 rounded-xl border border-white/12 bg-[#141215]/88 px-3.5 py-2.5 text-xs shadow-xl backdrop-blur-md">
-            {/* Suit Life-Support Gauges */}
-            <div className="flex flex-wrap items-center gap-3 font-mono text-[11px]">
-              <span className="mx-eyebrow mx-eyebrow--accent">PLSS SUIT</span>
-              <span className="text-mx-muted">
-                O₂{" "}
-                <strong className="text-emerald-300">
-                  {suit.oxygenPercent.toFixed(1)}%
-                </strong>
-              </span>
-              <span className="text-mx-muted">
-                Press{" "}
-                <strong className="text-mx-text">
-                  {suit.suitPressureKpa.toFixed(1)} kPa
-                </strong>
-              </span>
-              <span className="text-mx-muted">
-                CO₂ Bed{" "}
-                <strong
-                  className={
-                    suit.co2ScrubberPercent < 80
-                      ? "text-amber-300"
-                      : "text-emerald-300"
-                  }
-                >
-                  {suit.co2ScrubberPercent.toFixed(0)}%
-                </strong>
-              </span>
-              <span className="text-mx-muted">
-                Batt{" "}
-                <strong className="text-mx-text">
-                  {suit.batteryPercent.toFixed(0)}%
-                </strong>
-              </span>
-              <span className="text-mx-muted">
-                Comms{" "}
-                <strong
-                  className={
-                    suit.commsStatus === "Nominal"
-                      ? "text-emerald-300"
-                      : "text-amber-300"
-                  }
-                >
-                  {suit.commsStatus}
-                </strong>
-              </span>
-              <span className="hidden text-mx-border sm:inline">|</span>
-              <span className="hidden text-[10.5px] text-mx-dim xl:inline">
-                [WASD] Walk · [Shift] Stride · [Space] 0.38g Hop
-              </span>
-            </div>
-
-            {/* Interactive Visor Action Strip */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setShowFieldworkDrawer((prev) => !prev)}
-                className={`mx-btn mx-btn--sm ${
-                  showFieldworkDrawer ? "mx-btn--primary" : "mx-btn--secondary"
-                }`}
-              >
-                <FlaskConical size={13} className="text-mx-accent" />
-                Fieldwork &amp; Samples [E]
-                <span className="mx-badge ml-0.5">
-                  {mission.selectedObservations.length + collectedSamples.length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleToggleIframeMap}
-                className={`mx-btn mx-btn--sm ${
-                  liveMapOpen ? "mx-btn--primary" : "mx-btn--secondary"
-                }`}
-              >
-                <Navigation size={13} className="text-sky-300" />
-                Terrain Map [M]
-              </button>
-
-              <button
-                type="button"
-                onClick={handleToggleIframeFlight}
-                className={`mx-btn mx-btn--sm ${
-                  liveFlyMode ? "mx-btn--primary" : "mx-btn--secondary"
-                }`}
-              >
-                Recon Flight [F]
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowSuitCheckModal(true)}
-                className={`mx-btn mx-btn--sm ${
-                  suit.readinessVerified
-                    ? "mx-btn--secondary border-emerald-500/40 text-emerald-200"
-                    : "mx-btn--secondary border-amber-400/50 text-amber-200"
-                }`}
-              >
-                {suit.readinessVerified ? (
-                  <ShieldCheck size={13} className="text-emerald-400" />
-                ) : (
-                  <ShieldAlert size={13} className="text-amber-400" />
-                )}
-                Suit Check
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  updateSimulation({
-                    returnedToBase: true,
-                    completedAt: new Date().toISOString(),
-                  });
-                  setShowReturnModal(true);
-                }}
-                className="mx-btn mx-btn--primary mx-btn--sm"
-              >
-                <Home size={13} />
-                Return Base [R]
-              </button>
-            </div>
-          </div>
-
-          {/* BOTTOM RIGHT: Environmental Telemetry & Contingency Trigger */}
-          <div className="pointer-events-auto flex flex-col gap-1.5 rounded-xl border border-white/12 bg-[#141215]/88 px-3.5 py-2.5 text-xs shadow-xl backdrop-blur-md">
-            <div className="flex items-center justify-between gap-3">
-              <span className="mx-eyebrow mx-eyebrow--accent">
-                SIMULATED ENV TELEMETRY
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowContingencyDrawer((prev) => !prev)}
-                className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10.5px] font-semibold transition ${
-                  env.contingencyActive
-                    ? "border-amber-400/60 bg-amber-500/20 text-amber-200"
-                    : "border-white/15 bg-white/5 text-mx-muted hover:border-mx-accent hover:text-mx-text"
-                }`}
-              >
-                <Wind size={11} />
-                {env.contingencyActive
-                  ? env.contingencyActive
-                  : "Env & Contingencies"}
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 font-mono text-[11px] text-mx-muted">
-              <span>
-                Temp{" "}
-                <strong className="text-mx-text">
-                  {env.surfaceTempCelsius}°C
-                </strong>
-              </span>
-              <span>
-                Atm{" "}
-                <strong className="text-mx-text">
-                  {env.atmosphericPressurePa} Pa
-                </strong>
-              </span>
-              <span>
-                Dust τ{" "}
-                <strong
-                  className={
-                    env.dustOpticalDepthTau > 1.0
-                      ? "text-amber-300"
-                      : "text-mx-text"
-                  }
-                >
-                  {env.dustOpticalDepthTau.toFixed(2)}
-                </strong>
-              </span>
-              <span>
-                Vis{" "}
-                <strong className="text-mx-text">
-                  {env.visibilityKm.toFixed(1)} km
-                </strong>
-              </span>
-              <span>
-                Rad{" "}
-                <strong className="text-mx-text">
-                  {env.radiationDoseRateMicroSvPerHour} µSv/h
-                </strong>
-              </span>
-            </div>
-          </div>
-        </div>
+        {/* Standardized Shared Astronaut Helmet HUD */}
+        <HelmetHud
+          environment={activeEnv}
+          isFallbackEnvironment={isFallbackEnvironment}
+          requestedRegionName={mission.region?.name ?? null}
+          explorationMode={explorationMode}
+          currentPos={currentPos}
+          baseCoordinates={baseCoordinates}
+          liveElevationM={liveElevationM}
+          liveSlopeDeg={liveSlopeDeg}
+          liveHeadingDeg={liveHeadingDeg}
+          liveFlyMode={liveFlyMode}
+          liveMapOpen={liveMapOpen}
+          anyModalOpen={anyModalOpen}
+          totalTraverseMeters={mission.simulation.totalTraverseMeters ?? 0}
+          distanceFromBaseMeters={mission.simulation.distanceFromBaseMeters ?? 0}
+          elapsedTimeSeconds={mission.simulation.elapsedTimeSeconds}
+          visitedCount={visitedCount}
+          totalTargets={totalTargets}
+          visitedTargetIds={mission.simulation.visitedTargetIds}
+          scientificTargets={mission.scientificTargets}
+          selectedTargetId={selectedTargetId}
+          currentGeologicUnit={currentGeologicUnit}
+          compassMarkers={compassMarkers}
+          primaryGuideMarker={primaryGuideMarker}
+          baseMarker={baseMarker}
+          nearestBeacon={nearestBeacon}
+          isApproachingBeacon={isApproachingBeacon}
+          activeGroundTruthSol={activeGroundTruthSol}
+          suit={suit}
+          envConditions={env}
+          isRotaryDrillEquipped={isRotaryDrillEquipped}
+          equippedToolsCount={equippedTools.length}
+          observationsCount={mission.selectedObservations.length}
+          samplesCount={collectedSamples.length}
+          feedbackBanner={feedbackBanner}
+          simulatorError={simulatorError}
+          onDismissFeedback={() => setFeedbackBanner(null)}
+          onRetrySimulator={() => {
+            setSimulatorError(null);
+            setInitializing(true);
+            iframeRef.current?.contentWindow?.location.reload();
+          }}
+          onSelectMode={(mode) => updateSimulation({ mode })}
+          onSelectTarget={(id) => setSelectedTargetId(id)}
+          onTeleportTo={handleTeleportTo}
+          onToggleFieldwork={() => {
+            setShowContingencyDrawer(false);
+            setShowSuitCheckModal(false);
+            setShowReturnModal(false);
+            setShowFieldworkDrawer((prev) => !prev);
+          }}
+          onOpenBeaconFieldwork={() => {
+            if (nearestBeacon?.isMissionTarget) {
+              setSelectedTargetId(nearestBeacon.id);
+            }
+            setActiveFieldworkTab("target");
+            setShowContingencyDrawer(false);
+            setShowSuitCheckModal(false);
+            setShowReturnModal(false);
+            setShowFieldworkDrawer(true);
+          }}
+          onToggleMap={handleToggleIframeMap}
+          onToggleFlight={handleToggleIframeFlight}
+          onOpenSuitCheck={() => {
+            setShowFieldworkDrawer(false);
+            setShowContingencyDrawer(false);
+            setShowReturnModal(false);
+            setShowSuitCheckModal(true);
+          }}
+          onOpenContingency={() => {
+            setShowFieldworkDrawer(false);
+            setShowSuitCheckModal(false);
+            setShowReturnModal(false);
+            setShowContingencyDrawer((prev) => !prev);
+          }}
+          onTriggerReturn={() => {
+            setShowFieldworkDrawer(false);
+            setShowContingencyDrawer(false);
+            setShowSuitCheckModal(false);
+            updateSimulation({
+              returnedToBase: true,
+              completedAt: new Date().toISOString(),
+            });
+            setShowReturnModal(true);
+          }}
+        />
 
         {/* ================================================================
             CENTERED MODAL: IN-SITU FIELDWORK STATION [E]
-            (Centered over live 3D scene without freezing WebGL loop)
+            (Contained inside the Marswalk visor viewport below the mission header)
             ================================================================ */}
         {showFieldworkDrawer && (
           <div
-            className="fixed inset-0 z-[1250] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+            className="absolute inset-0 z-[50] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
             role="dialog"
             aria-modal="true"
             aria-label="In-Situ Scientific Fieldwork and Sampling"
