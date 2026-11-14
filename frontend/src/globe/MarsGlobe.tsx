@@ -40,6 +40,24 @@ import {
 import type { Coordinates } from "../types";
 import type { TileLayerConfig } from "../services/dataProviders";
 import "./MarsGlobe.css";
+import type { Mesh } from "three";
+
+function RotatingMars() {
+  const marsRef = useRef<Mesh>(null);
+
+  useFrame((_, delta) => {
+    if (marsRef.current) {
+      marsRef.current.rotation.y += delta * 0.15;
+    }
+  });
+
+  return (
+    <mesh ref={marsRef}>
+      <sphereGeometry args={[1, 64, 64]} />
+      <meshStandardMaterial color="#c1440e" roughness={0.9} metalness={0} />
+    </mesh>
+  );
+}
 
 export type Location = {
   name: string;

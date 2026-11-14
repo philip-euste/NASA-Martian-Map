@@ -224,6 +224,7 @@
       body.hosted-visor #status,
       body.hosted-visor #hud,
       body.hosted-visor #open-map,
+      body.hosted-visor #layer-btn,
       body.hosted-visor #credit,
       body.hosted-visor #proximity-prompt {
         display: none !important;
@@ -233,6 +234,16 @@
         position: fixed;
         bottom: 12px;
         right: 16px;
+        z-index: 5;
+        padding: 7px 12px;
+        font-size: 11px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      #layer-btn {
+        position: fixed;
+        bottom: 12px;
+        right: 170px;
         z-index: 5;
         padding: 7px 12px;
         font-size: 11px;
@@ -379,6 +390,11 @@
           display: none;
         }
 
+        #layer-btn {
+          right: 10px;
+          bottom: 48px;
+        }
+
         .overlay-card {
           padding: 18px;
         }
@@ -406,6 +422,7 @@
       <span id="hud-mode">MARS 0.38G WALK</span>
     </div>
 
+    <button id="layer-btn" class="secondary" type="button">Layer: CTX Imagery [L]</button>
     <button id="open-map" class="secondary" type="button">Terrain Map [M]</button>
 
     <div id="credit"></div>
@@ -436,6 +453,7 @@
           <span><strong>R</strong> — Return to Habitat Base</span>
           <span><strong>M</strong> — Terrain Map / Teleport</span>
           <span><strong>F</strong> — Toggle Recon Flight</span>
+          <span><strong>L</strong> — Cycle Surface Layer</span>
         </div>
       </div>
     </div>

@@ -14,7 +14,7 @@ import MarswalkPage from "../../features/mission/MarswalkPage";
 import ExpeditionReviewPage from "../../features/mission/ExpeditionReviewPage";
 import ExpeditionReportPage from "../../features/mission/ExpeditionReportPage";
 
-import GlobeTestPage from "../../three/globe/MarsGlobe";
+import GlobeTestPage from "../../globe/MarsGlobe";
 
 import LoginPage from "../../features/auth/LoginPage";
 import RegisterPage from "../../features/auth/RegisterPage";

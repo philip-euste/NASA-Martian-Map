@@ -12,6 +12,8 @@ import { PointerLockControls } from "three/examples/jsm/controls/PointerLockCont
 import type { SimulatorEnvironmentConfig } from "./environment";
 import { verticalFovForAspect } from "./projection";
 
+export type SurfaceLayer = "imagery" | "hillshade" | "elevation" | "slope";
+
 export interface Manifest {
   name: string;
   source: { dem: string; ortho: string | null; credit: string };
@@ -72,7 +74,8 @@ interface ExpeditionTargetMessage {
     | "mars-explorer:contingency"
     | "mars-explorer:modal-state"
     | "mars-explorer:toggle-map"
-    | "mars-explorer:toggle-flight";
+    | "mars-explorer:toggle-flight"
+    | "mars-explorer:set-layer";
   regionId?: string;
   name?: string;
   latitude?: number;
@@ -80,6 +83,7 @@ interface ExpeditionTargetMessage {
   withinJezeroDem?: boolean;
   withinDem?: boolean;
   open?: boolean;
+  layer?: SurfaceLayer;
   targets?: {
     id: string;
     name: string;
@@ -152,6 +156,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   const mapCenterPlayer = document.getElementById("map-center-player") as HTMLButtonElement | null;
   const mapZoomLabel = document.getElementById("map-zoom-label") as HTMLElement | null;
   const openMapBtn = $<HTMLButtonElement>("open-map");
+  const layerBtn = document.getElementById("layer-btn") as HTMLButtonElement | null;
   const creditEl = $("credit");
 
   let externalModalOpen = false;
@@ -590,6 +595,96 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     }
   }
 
+  // ------------------------------------------------------------ surface layers
+  const LAYER_ORDER: SurfaceLayer[] = ["imagery", "hillshade", "elevation", "slope"];
+  const LAYER_LABEL: Record<SurfaceLayer, string> = {
+    imagery: "CTX Imagery",
+    hillshade: "Hillshade",
+    elevation: "Elevation",
+    slope: "Slope",
+  };
+  let surfaceLayer: SurfaceLayer = "imagery";
+
+  // THREE.Color(hex) converts to the linear working space, so lerping here is
+  // correct for vertexColors.
+  const ELEV_STOPS = [0x2b3a67, 0x3f8f8a, 0xc9b458, 0xb5683a, 0xf2ede6].map(
+    (h) => new THREE.Color(h)
+  );
+  const SLOPE_STOPS = [0x3d7a4a, 0xd9a441, 0xc2362b, 0x6b1a2e].map(
+    (h) => new THREE.Color(h)
+  );
+  const RAD2DEG = 180 / Math.PI;
+
+  function lerpStops(
+    stops: THREE.Color[],
+    i: number,
+    f: number,
+    out: Float32Array,
+    o: number
+  ) {
+    const a = stops[i];
+    const b = stops[i + 1];
+    out[o] = a.r + (b.r - a.r) * f;
+    out[o + 1] = a.g + (b.g - a.g) * f;
+    out[o + 2] = a.b + (b.b - a.b) * f;
+  }
+
+  function elevColor(t: number, out: Float32Array, o: number) {
+    const x = Math.min(Math.max(t, 0), 1) * (ELEV_STOPS.length - 1);
+    const i = Math.min(Math.floor(x), ELEV_STOPS.length - 2);
+    lerpStops(ELEV_STOPS, i, x - i, out, o);
+  }
+
+  // Knots follow the environment's hazard thresholds so colours match the HUD
+  // classes. Assumes 0 < slopeCautionDeg < slopeHazardDeg.
+  const SLOPE_KNOTS = [
+    0,
+    envConfig.hazards.slopeCautionDeg,
+    envConfig.hazards.slopeHazardDeg,
+    envConfig.hazards.slopeHazardDeg * 1.5,
+  ];
+
+  function slopeColor(deg: number, out: Float32Array, o: number) {
+    let i = 0;
+    while (i < 2 && deg > SLOPE_KNOTS[i + 1]) i++;
+    const f = Math.min(
+      Math.max((deg - SLOPE_KNOTS[i]) / (SLOPE_KNOTS[i + 1] - SLOPE_KNOTS[i]), 0),
+      1
+    );
+    lerpStops(SLOPE_STOPS, i, f, out, o);
+  }
+
+  const fallbackMat = new THREE.MeshLambertMaterial({
+    color: CONFIG.marsTint,
+  });
+  const vcMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+
+  let overviewMat: THREE.MeshLambertMaterial = fallbackMat;
+
+  function pickMaterial(t: Tile): THREE.Material {
+    switch (surfaceLayer) {
+      case "hillshade":
+        return fallbackMat; // flat tint, lit by the analytic normals
+      case "elevation":
+      case "slope":
+        return vcMat;
+      default:
+        return t.tex
+          ? new THREE.MeshLambertMaterial({ map: t.tex, color: CONFIG.marsTint })
+          : overviewMat;
+    }
+  }
+
+  const isSharedMat = (m: THREE.Material) =>
+    m === overviewMat || m === fallbackMat || m === vcMat;
+
+  function bindLayerColor(geo: THREE.BufferGeometry) {
+    geo.setAttribute(
+      "color",
+      geo.getAttribute(surfaceLayer === "slope" ? "colorSlope" : "colorElev")
+    );
+  }
+
   // ------------------------------------------------------------ meshing
   function getTileStep(tx: number, ty: number): number {
     if (tx < 0 || ty < 0 || tx >= M.tilesX || ty >= M.tilesY) {
@@ -619,6 +714,8 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
    *    continuous across tile boundaries.
    * 4. Places vertical skirts only on the outer perimeter of the DEM domain,
    *    eliminating interior skirt Z-fighting lines at shallow viewing angles.
+   * 5. Bakes elevation and slope colour attributes so layer switching only
+   *    swaps a material / attribute binding and never rebuilds geometry.
    */
   function buildTileGeometry(t: Tile, step: number): THREE.BufferGeometry {
     const T = M.tileSize;
@@ -650,11 +747,21 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const pos = new Float32Array(vCount * 3);
     const norm = new Float32Array(vCount * 3);
     const uv = new Float32Array(vCount * 2);
+    const colE = new Float32Array(vCount * 3);
+    const colS = new Float32Array(vCount * 3);
     const idx: number[] = [];
+
+    const copyColors = (dst: number, src: number) => {
+      for (let c = 0; c < 3; c++) {
+        colE[dst * 3 + c] = colE[src * 3 + c];
+        colS[dst * 3 + c] = colS[src * 3 + c];
+      }
+    };
 
     const useTile = !!t.tex;
     const halfTexel = useTile ? 0.5 / Math.max(256, M.textureSize) : 0;
     const hs = M.heightScale;
+    const hRange = Math.max(1e-6, M.heightMax - M.heightMin);
 
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
@@ -671,6 +778,9 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         pos[k * 3 + 2] = rowToZ(row);
 
         computeAnalyticalNormal(col, row, norm, k * 3);
+
+        elevColor(pos[k * 3 + 1] / hRange, colE, k * 3);
+        slopeColor(Math.acos(Math.min(1, norm[k * 3 + 1])) * RAD2DEG, colS, k * 3);
 
         if (useTile) {
           const fracU = (col - c0) / T;
@@ -754,6 +864,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         norm[sk * 3 + 2] = norm[g * 3 + 2];
         uv[sk * 2] = uv[g * 2];
         uv[sk * 2 + 1] = uv[g * 2 + 1];
+        copyColors(sk, g);
         sk++;
       }
       const botBase = sk;
@@ -766,6 +877,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         norm[sk * 3 + 2] = norm[g * 3 + 2];
         uv[sk * 2] = uv[g * 2];
         uv[sk * 2 + 1] = uv[g * 2 + 1];
+        copyColors(sk, g);
         sk++;
       }
 
@@ -782,17 +894,14 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     geo.setAttribute("normal", new THREE.BufferAttribute(norm, 3));
     geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    geo.setAttribute("colorElev", new THREE.BufferAttribute(colE, 3));
+    geo.setAttribute("colorSlope", new THREE.BufferAttribute(colS, 3));
+    bindLayerColor(geo);
     geo.setIndex(idx);
     geo.computeBoundingSphere();
 
     return geo;
   }
-
-  const fallbackMat = new THREE.MeshLambertMaterial({
-    color: CONFIG.marsTint,
-  });
-
-  let overviewMat: THREE.MeshLambertMaterial = fallbackMat;
 
   function setTileMesh(t: Tile, lod: number) {
     const step = lod < 0 ? CONFIG.farStep : CONFIG.lodSteps[lod];
@@ -814,19 +923,12 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     t.edgeKey = edgeKey;
 
     const geo = buildTileGeometry(t, step);
-
-    let mat: THREE.Material = overviewMat;
-    if (t.tex) {
-      mat = new THREE.MeshLambertMaterial({
-        map: t.tex,
-        color: CONFIG.marsTint,
-      });
-    }
+    const mat = pickMaterial(t);
 
     if (t.mesh) {
       t.mesh.geometry.dispose();
       const old = t.mesh.material as THREE.Material;
-      if (old !== overviewMat && old !== fallbackMat && old !== mat) {
+      if (!isSharedMat(old) && old !== mat) {
         old.dispose();
       }
       t.mesh.geometry = geo;
@@ -836,6 +938,30 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       t.mesh.matrixAutoUpdate = false;
       scene.add(t.mesh);
     }
+  }
+
+  function setSurfaceLayer(layer: SurfaceLayer) {
+    surfaceLayer = layer;
+    for (const t of tiles) {
+      if (!t.mesh) continue;
+      const old = t.mesh.material as THREE.Material;
+      const mat = pickMaterial(t);
+      t.mesh.material = mat;
+      if (!isSharedMat(old) && old !== mat) {
+        old.dispose();
+      }
+      bindLayerColor(t.mesh.geometry);
+    }
+    if (layerBtn) {
+      layerBtn.textContent = `Layer: ${LAYER_LABEL[layer]} [L]`;
+    }
+    emitTelemetrySync();
+  }
+
+  function cycleSurfaceLayer() {
+    setSurfaceLayer(
+      LAYER_ORDER[(LAYER_ORDER.indexOf(surfaceLayer) + 1) % LAYER_ORDER.length]
+    );
   }
 
   // ------------------------------------------------------------ loading
@@ -1278,6 +1404,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         totalTraverseMeters: Math.round(player.totalTraverseMeters),
         elapsedTimeSeconds: Math.round(player.elapsedSeconds),
         flyMode: player.fly,
+        surfaceLayer,
         isPointerLocked: controls.isLocked,
         mapOpen: !mapPanel.classList.contains("hidden"),
         nearestTarget: nearestBeacon
@@ -1661,6 +1788,10 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       emitTelemetrySync();
     }
 
+    if (e.code === "KeyL" && M && !e.repeat) {
+      cycleSurfaceLayer();
+    }
+
     if (e.code === "KeyE" && M) {
       externalModalOpen = true;
       keys.clear();
@@ -1746,6 +1877,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   });
 
   openMapBtn.addEventListener("click", openMap);
+  layerBtn?.addEventListener("click", cycleSurfaceLayer);
 
   mapCanvas.addEventListener("mousedown", (e) => {
     mapDragging = true;
@@ -1881,6 +2013,15 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         player.fly = !player.fly;
         hudMode.textContent = player.fly ? "RECON FLIGHT" : "MARS 0.38G WALK";
         emitTelemetrySync();
+        return;
+      }
+
+      if (data.type === "mars-explorer:set-layer" && M) {
+        if (data.layer && LAYER_ORDER.includes(data.layer)) {
+          setSurfaceLayer(data.layer);
+        } else {
+          cycleSurfaceLayer();
+        }
         return;
       }
 
