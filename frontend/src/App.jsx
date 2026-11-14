@@ -1,4 +1,4 @@
-﻿import MarsMap from "./components/map/MarsMap";
+import MarsMap from "./components/map/MarsMap";
 
 function App() {
   return (
