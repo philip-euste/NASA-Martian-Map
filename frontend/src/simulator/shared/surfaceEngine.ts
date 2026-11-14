@@ -11,8 +11,12 @@ import * as THREE from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import type { SimulatorEnvironmentConfig } from "./environment";
 import { verticalFovForAspect } from "./projection";
+import { MAP_LAYERS } from "../../data/mapLayers";
+import type { MapLayerId } from "../../data/mapLayers";
+import { composeWmtsCanvas } from "./wmtsLayers";
 
-export type SurfaceLayer = "imagery" | "hillshade" | "elevation" | "slope";
+type BuiltinLayer = "imagery" | "hillshade" | "elevation" | "slope";
+export type SurfaceLayer = BuiltinLayer | MapLayerId;
 
 export interface Manifest {
   name: string;
@@ -156,7 +160,8 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   const mapCenterPlayer = document.getElementById("map-center-player") as HTMLButtonElement | null;
   const mapZoomLabel = document.getElementById("map-zoom-label") as HTMLElement | null;
   const openMapBtn = $<HTMLButtonElement>("open-map");
-  const layerBtn = document.getElementById("layer-btn") as HTMLButtonElement | null;
+  const layerSelect = document.getElementById("layer-select") as HTMLSelectElement | null;
+  const layerStatusEl = document.getElementById("layer-status") as HTMLElement | null;
   const creditEl = $("credit");
 
   let externalModalOpen = false;
@@ -596,14 +601,30 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   }
 
   // ------------------------------------------------------------ surface layers
-  const LAYER_ORDER: SurfaceLayer[] = ["imagery", "hillshade", "elevation", "slope"];
-  const LAYER_LABEL: Record<SurfaceLayer, string> = {
-    imagery: "CTX Imagery",
+  const BUILTIN_LABEL: Record<BuiltinLayer, string> = {
+    imagery: "CTX Imagery (ortho)",
     hillshade: "Hillshade",
-    elevation: "Elevation",
+    elevation: "Elevation ramp",
     slope: "Slope",
   };
+  const MAP_LAYER_IDS = Object.keys(MAP_LAYERS) as MapLayerId[];
+  const LAYER_ORDER: SurfaceLayer[] = [
+    ...(Object.keys(BUILTIN_LABEL) as BuiltinLayer[]),
+    ...MAP_LAYER_IDS,
+  ];
+  const isMapLayer = (l: SurfaceLayer): l is MapLayerId => l in MAP_LAYERS;
+  const layerLabel = (l: SurfaceLayer) =>
+    isMapLayer(l) ? MAP_LAYERS[l].name : BUILTIN_LABEL[l];
   let surfaceLayer: SurfaceLayer = "imagery";
+
+  // WMTS layer materials: one shared material per layer, textured with a
+  // region-wide canvas composited from NASA Trek tiles (see wmtsLayers.ts).
+  const MAX_CACHED_WMTS = 4;
+  const wmtsMats = new Map<MapLayerId, THREE.Material>();
+  const wmtsPending = new Map<MapLayerId, Promise<THREE.Material>>();
+  const wmtsOrder: MapLayerId[] = [];
+  const wmtsInfo = new Map<MapLayerId, string>();
+  const sharedWmtsMats = new Set<THREE.Material>();
 
   // THREE.Color(hex) converts to the linear working space, so lerping here is
   // correct for vertexColors.
@@ -662,6 +683,9 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   let overviewMat: THREE.MeshLambertMaterial = fallbackMat;
 
   function pickMaterial(t: Tile): THREE.Material {
+    if (isMapLayer(surfaceLayer)) {
+      return wmtsMats.get(surfaceLayer) ?? fallbackMat; // flat tint while loading
+    }
     switch (surfaceLayer) {
       case "hillshade":
         return fallbackMat; // flat tint, lit by the analytic normals
@@ -676,12 +700,18 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   }
 
   const isSharedMat = (m: THREE.Material) =>
-    m === overviewMat || m === fallbackMat || m === vcMat;
+    m === overviewMat || m === fallbackMat || m === vcMat || sharedWmtsMats.has(m);
 
-  function bindLayerColor(geo: THREE.BufferGeometry) {
+  // Colour ramp attribute and UV set both depend on the active layer.
+  // uvImg: per-tile ortho UVs. uvGeo: whole-manifest lon/lat UVs for WMTS canvases.
+  function bindLayerAttrs(geo: THREE.BufferGeometry) {
     geo.setAttribute(
       "color",
       geo.getAttribute(surfaceLayer === "slope" ? "colorSlope" : "colorElev")
+    );
+    geo.setAttribute(
+      "uv",
+      geo.getAttribute(isMapLayer(surfaceLayer) ? "uvGeo" : "uvImg")
     );
   }
 
@@ -747,6 +777,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const pos = new Float32Array(vCount * 3);
     const norm = new Float32Array(vCount * 3);
     const uv = new Float32Array(vCount * 2);
+    const uvG = new Float32Array(vCount * 2);
     const colE = new Float32Array(vCount * 3);
     const colS = new Float32Array(vCount * 3);
     const idx: number[] = [];
@@ -756,6 +787,8 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         colE[dst * 3 + c] = colE[src * 3 + c];
         colS[dst * 3 + c] = colS[src * 3 + c];
       }
+      uvG[dst * 2] = uvG[src * 2];
+      uvG[dst * 2 + 1] = uvG[src * 2 + 1];
     };
 
     const useTile = !!t.tex;
@@ -781,6 +814,8 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
         elevColor(pos[k * 3 + 1] / hRange, colE, k * 3);
         slopeColor(Math.acos(Math.min(1, norm[k * 3 + 1])) * RAD2DEG, colS, k * 3);
+        uvG[k * 2] = (col + 0.5) / M.cols;
+        uvG[k * 2 + 1] = 1 - (row + 0.5) / M.rows;
 
         if (useTile) {
           const fracU = (col - c0) / T;
@@ -893,10 +928,11 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     geo.setAttribute("normal", new THREE.BufferAttribute(norm, 3));
-    geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    geo.setAttribute("uvImg", new THREE.BufferAttribute(uv, 2));
+    geo.setAttribute("uvGeo", new THREE.BufferAttribute(uvG, 2));
     geo.setAttribute("colorElev", new THREE.BufferAttribute(colE, 3));
     geo.setAttribute("colorSlope", new THREE.BufferAttribute(colS, 3));
-    bindLayerColor(geo);
+    bindLayerAttrs(geo);
     geo.setIndex(idx);
     geo.computeBoundingSphere();
 
@@ -940,8 +976,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     }
   }
 
-  function setSurfaceLayer(layer: SurfaceLayer) {
-    surfaceLayer = layer;
+  function applyLayerToTiles() {
     for (const t of tiles) {
       if (!t.mesh) continue;
       const old = t.mesh.material as THREE.Material;
@@ -950,10 +985,111 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       if (!isSharedMat(old) && old !== mat) {
         old.dispose();
       }
-      bindLayerColor(t.mesh.geometry);
+      bindLayerAttrs(t.mesh.geometry);
     }
-    if (layerBtn) {
-      layerBtn.textContent = `Layer: ${LAYER_LABEL[layer]} [L]`;
+  }
+
+  function disposeWmtsLayer(id: MapLayerId) {
+    const mat = wmtsMats.get(id) as THREE.MeshLambertMaterial | undefined;
+    if (!mat) return;
+    mat.map?.dispose();
+    mat.dispose();
+    sharedWmtsMats.delete(mat);
+    wmtsMats.delete(id);
+    wmtsInfo.delete(id);
+  }
+
+  function ensureMapLayerMaterial(id: MapLayerId): Promise<THREE.Material> {
+    const hit = wmtsMats.get(id);
+    if (hit) return Promise.resolve(hit);
+    let p = wmtsPending.get(id);
+    if (!p) {
+      p = composeWmtsCanvas(
+        id,
+        {
+          westLonDeg: M.proj.westLonDeg,
+          eastLonDeg: M.proj.eastLonDeg,
+          southLatDeg: M.proj.southLatDeg,
+          northLatDeg: M.proj.northLatDeg,
+          radius: M.proj.radius,
+        },
+        { maxPx: Math.min(4096, renderer.capabilities.maxTextureSize) }
+      )
+        .then((res) => {
+          const tex = new THREE.CanvasTexture(res.canvas);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+          tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+          tex.needsUpdate = true;
+          // Lit like the terrain; white so data colours are not tinted.
+          const mat = new THREE.MeshLambertMaterial({ map: tex });
+          wmtsMats.set(id, mat);
+          sharedWmtsMats.add(mat);
+          wmtsInfo.set(
+            id,
+            `${res.metersPerPixel.toFixed(res.metersPerPixel < 10 ? 1 : 0)} m/px · ` +
+              `${res.loaded}/${res.total} tiles`
+          );
+          wmtsOrder.push(id);
+          while (wmtsOrder.length > MAX_CACHED_WMTS) {
+            const vi = wmtsOrder.findIndex((v) => v !== surfaceLayer && v !== id);
+            if (vi < 0) break;
+            disposeWmtsLayer(wmtsOrder.splice(vi, 1)[0]);
+          }
+          return mat as THREE.Material;
+        })
+        .finally(() => wmtsPending.delete(id));
+      wmtsPending.set(id, p);
+    }
+    return p;
+  }
+
+  function setLayerStatus(
+    layer: SurfaceLayer,
+    state: "loading" | "ready" | "error",
+    err?: string
+  ) {
+    const label = layerLabel(layer);
+    const text =
+      state === "loading"
+        ? `Loading ${label}…`
+        : state === "error"
+          ? `${label}: ${err ?? "failed"}`
+          : isMapLayer(layer)
+            ? `${label} · ${wmtsInfo.get(layer) ?? ""}`
+            : label;
+    if (layerStatusEl) layerStatusEl.textContent = text;
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage(
+        { type: "marswalk:layer-status", layer, state, message: text },
+        "*"
+      );
+    }
+  }
+
+  let layerToken = 0;
+
+  function setSurfaceLayer(layer: SurfaceLayer) {
+    surfaceLayer = layer;
+    const token = ++layerToken;
+    if (layerSelect) layerSelect.value = layer;
+    applyLayerToTiles();
+
+    if (isMapLayer(layer) && M) {
+      setLayerStatus(layer, "loading");
+      ensureMapLayerMaterial(layer)
+        .then(() => {
+          if (token !== layerToken) return;
+          applyLayerToTiles();
+          setLayerStatus(layer, "ready");
+        })
+        .catch((e: unknown) => {
+          if (token !== layerToken) return;
+          console.warn("[wmts] layer failed", layer, e);
+          setLayerStatus(layer, "error", e instanceof Error ? e.message : String(e));
+        });
+    } else {
+      setLayerStatus(layer, "ready");
     }
     emitTelemetrySync();
   }
@@ -963,6 +1099,44 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       LAYER_ORDER[(LAYER_ORDER.indexOf(surfaceLayer) + 1) % LAYER_ORDER.length]
     );
   }
+
+  function populateLayerSelect() {
+    if (!layerSelect) return;
+    const group = (label: string, items: { id: string; name: string; title?: string }[]) => {
+      const g = document.createElement("optgroup");
+      g.label = label;
+      for (const it of items) {
+        const o = document.createElement("option");
+        o.value = it.id;
+        o.textContent = it.name;
+        if (it.title) o.title = it.title;
+        g.appendChild(o);
+      }
+      layerSelect.appendChild(g);
+    };
+    group(
+      "Terrain",
+      (Object.keys(BUILTIN_LABEL) as BuiltinLayer[]).map((id) => ({
+        id,
+        name: BUILTIN_LABEL[id],
+      }))
+    );
+    const byCat = new Map<string, { id: string; name: string; title: string }[]>();
+    for (const l of Object.values(MAP_LAYERS)) {
+      const arr = byCat.get(l.category) ?? [];
+      arr.push({ id: l.id, name: l.name, title: l.description });
+      byCat.set(l.category, arr);
+    }
+    for (const [cat, items] of byCat) {
+      group(`NASA Trek · ${cat}`, items);
+    }
+    layerSelect.value = surfaceLayer;
+    layerSelect.addEventListener("change", () => {
+      setSurfaceLayer(layerSelect.value as SurfaceLayer);
+      layerSelect.blur(); // keep WASD / L going to the game, not the dropdown
+    });
+  }
+  populateLayerSelect();
 
   // ------------------------------------------------------------ loading
   async function fetchBuffer(url: string) {
@@ -1877,7 +2051,6 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   });
 
   openMapBtn.addEventListener("click", openMap);
-  layerBtn?.addEventListener("click", cycleSurfaceLayer);
 
   mapCanvas.addEventListener("mousedown", (e) => {
     mapDragging = true;
