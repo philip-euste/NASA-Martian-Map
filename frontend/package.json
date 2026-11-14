@@ -3,13 +3,6 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
-    "build:map": "node src/simulator/jezero_crater/scripts/build-jezero.mjs"
-  },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
@@ -35,6 +28,14 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "tailwindcss": "^4.3.5",
-    "typescript": "^7.0.2"
-  }
+    "typescript": "^7.0.2",
+    "wrangler": "^4.162.0"
+  },
+  "scripts": {
+  "dev": "vite",
+  "build": "tsc --noEmit && vite build",
+  "preview": "vite preview",
+  "cf:preview": "wrangler pages dev dist",
+  "deploy": "npm run build && wrangler pages deploy dist"
+}
 }

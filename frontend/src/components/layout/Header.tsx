@@ -1,8 +1,9 @@
 
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { ArrowUpRight, Menu, X } from "lucide-react";
+import { ArrowUpRight, Menu, X, WifiOff, AlertTriangle, Database } from "lucide-react";
 import { useAuth } from "../../features/auth/AuthProvider";
+import { useConnectionStatus } from "../../services/connectionStatus";
 
 const NAV_ITEMS = [
     { to: "/", label: "Home", end: true },
