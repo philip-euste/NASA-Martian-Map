@@ -62,6 +62,12 @@ export default function WelcomePage() {
                     >
                         Mission Workspace
                     </Link>
+                    <Link
+                        className="mx-btn mx-btn--secondary"
+                        to="/mission/simulate"
+                    >
+                        Marswalk 3D EVA
+                    </Link>
                     <a className="mx-btn mx-btn--secondary" href="#about">
                         Learn More
                     </a>
@@ -101,9 +107,9 @@ export default function WelcomePage() {
               each stage builds on the shared mission record.
             </p>
 
-            <ol className="mt-12 grid list-none gap-px overflow-hidden rounded-[10px] border border-mx-border bg-mx-border p-0 sm:grid-cols-2 lg:grid-cols-4">
+            <ol className="mt-12 grid list-none gap-px overflow-hidden rounded-[10px] border border-mx-border bg-mx-border p-0 sm:grid-cols-2 lg:grid-cols-5">
               {WORKFLOW_STEPS.map((step, index) => (
-                <li key={step.id} className="flex flex-col bg-mx-bg p-6 sm:last:col-span-2">
+                <li key={step.id} className="flex flex-col bg-mx-bg p-6 sm:last:col-span-2 lg:last:col-span-1">
                   <span className="mx-mono text-mx-dim">{String(index + 1).padStart(2, "0")}</span>
                   <span className="mt-4 font-display text-lg font-semibold uppercase tracking-wide text-mx-text">
                     {step.stage}

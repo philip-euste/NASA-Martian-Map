@@ -1,15 +1,18 @@
 // frontend/src/features/mission/ExpeditionReviewPage.tsx
 // Expedition Review dashboard (Phase 6).
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Camera,
   Check,
   CircleAlert,
   ClipboardCheck,
   Compass,
   FlaskConical,
+  Layers,
   NotebookPen,
   Plus,
   Route as RouteIcon,
@@ -22,12 +25,17 @@ import {
 import {
   DataField,
   EmptyState,
+  ImagePending,
   SectionHeading,
   formatCoordinates,
   formatDistance,
 } from "../../components/ui";
 import { useMission } from "../../state/mission/MissionContext";
 import type { FieldNote } from "../../types";
+import {
+  computeStratigraphicTraverseProfile,
+  identifyGeologicUnitAt,
+} from "../../utils/jezeroStratigraphy";
 import MissionLayout from "./MissionLayout";
 import { createId, toMutable } from "./missionHelpers";
 
@@ -48,6 +56,32 @@ export default function ExpeditionReviewPage() {
   const simulatedSamples = mission.simulation.simulatedSamples ?? [];
   const suit = mission.simulation.suit;
   const env = mission.simulation.environment;
+
+  const stratigraphicProfile = useMemo(() => {
+    const waypoints =
+      selectedRoute && selectedRoute.waypoints.length >= 2
+        ? selectedRoute.waypoints
+        : mission.scientificTargets.map((t, idx) => ({
+            id: t.id,
+            name: t.name || `Target ${idx + 1}`,
+            coordinates: t.coordinates,
+            targetId: t.id,
+            visited: visitedSet.has(t.id),
+          }));
+
+    if (waypoints.length < 2) return null;
+    return computeStratigraphicTraverseProfile(
+      waypoints,
+      {},
+      selectedRoute?.returnRouteIncluded ?? false,
+      mission.configuration?.terrainPreferences.preferredSlopeDegrees ?? 15
+    );
+  }, [
+    mission.configuration?.terrainPreferences.preferredSlopeDegrees,
+    mission.scientificTargets,
+    selectedRoute,
+    visitedSet,
+  ]);
 
   function toggleTargetVisited(targetId: string): void {
     const current = [...mission.simulation.visitedTargetIds];
@@ -166,8 +200,8 @@ export default function ExpeditionReviewPage() {
               m), suit telemetry, and simulated samples ({simulatedSamples.length}).
             </p>
           </div>
-          <div className="rounded-lg border border-purple-500/30 bg-purple-950/20 p-2.5">
-            <span className="font-semibold text-purple-300">
+          <div className="rounded-lg border border-mx-accent/35 bg-mx-accent/10 p-2.5">
+            <span className="font-semibold text-[#ff9d66]">
               4. Generated Mission Summaries
             </span>
             <p className="m-0 mt-1 text-[11px] text-mx-muted">
@@ -244,6 +278,7 @@ export default function ExpeditionReviewPage() {
               <div className="flex flex-col gap-2.5">
                 {mission.scientificTargets.map((target) => {
                   const visited = visitedSet.has(target.id);
+                  const targetUnit = identifyGeologicUnitAt(target.coordinates);
                   return (
                     <div
                       key={target.id}
@@ -254,10 +289,21 @@ export default function ExpeditionReviewPage() {
                       }`}
                     >
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <h3 className="mx-heading m-0 text-sm">
                             {target.name}
                           </h3>
+                          <span
+                            className="rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold"
+                            style={{
+                              borderColor: targetUnit.color,
+                              backgroundColor: `${targetUnit.color}28`,
+                              color: "#f8fafc",
+                            }}
+                            title={targetUnit.unit_name}
+                          >
+                            {targetUnit.unit_code}
+                          </span>
                           <span className="mx-badge text-[10px]">
                             {visited ? "EVA Visited" : "Pending Visit"}
                           </span>
@@ -266,7 +312,8 @@ export default function ExpeditionReviewPage() {
                           {formatCoordinates(
                             target.coordinates.latitude,
                             target.coordinates.longitude
-                          )}
+                          )}{" "}
+                          · {targetUnit.unit_name}
                         </p>
                         {target.description && (
                           <p className="m-0 mt-1 text-xs text-mx-muted">
@@ -319,10 +366,16 @@ export default function ExpeditionReviewPage() {
               </EmptyState>
             ) : (
               <div className="flex flex-col gap-2.5">
-                {simulatedSamples.map((sample) => {
+                {simulatedSamples.map((sample, idx) => {
                   const targetName = mission.scientificTargets.find(
                     (t) => t.id === sample.targetId
                   )?.name;
+                  const unitCode =
+                    sample.geologicUnitCode ??
+                    identifyGeologicUnitAt(sample.coordinates).unit_code;
+                  const tubeSerial =
+                    sample.tubeId ??
+                    `JZ-EVA-${String(idx + 1).padStart(2, "0")}`;
                   return (
                     <div
                       key={sample.id}
@@ -332,10 +385,16 @@ export default function ExpeditionReviewPage() {
                         <strong className="text-sm text-mx-text">
                           {sample.name}
                         </strong>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="rounded border border-cyan-500/35 bg-cyan-500/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-cyan-200">
+                            {tubeSerial}
+                          </span>
+                          <span className="rounded border border-white/20 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-white">
+                            {unitCode}
+                          </span>
                           <span className="mx-badge">{sample.sampleType}</span>
-                          <span className="mx-badge border-amber-500/40 text-amber-300">
-                            SIMULATED SAMPLE
+                          <span className="mx-badge border-amber-500/40 font-mono text-[10px] text-amber-300">
+                            {sample.provenanceTier ?? "SIMULATED_EVA_ACTIVITY"}
                           </span>
                         </div>
                       </div>
@@ -549,6 +608,27 @@ export default function ExpeditionReviewPage() {
                         {obs.description}
                       </p>
                     )}
+
+                    {/* Attached Perseverance Ground-Truth Outcrop Frame */}
+                    {obs.surfaceImage && (
+                      <div className="mt-2.5 rounded-lg border border-cyan-500/30 bg-cyan-950/15 p-2.5 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                          <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold text-cyan-300">
+                            <Camera size={11} />
+                            PERSEVERANCE GROUND-TRUTH (SOL{" "}
+                            {obs.surfaceImage.sol} ·{" "}
+                            {obs.surfaceImage.instrument})
+                          </span>
+                          <span className="font-mono text-[10px] text-mx-muted">
+                            Site {obs.surfaceImage.site ?? "—"} / Drive{" "}
+                            {obs.surfaceImage.drive ?? "—"}
+                          </span>
+                        </div>
+                        <p className="m-0 mt-1 text-[11px] text-mx-muted">
+                          {obs.surfaceImage.caption}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ))}
 
@@ -619,6 +699,69 @@ export default function ExpeditionReviewPage() {
                   }
                   fallback="Spherical Geometry Estimate"
                 />
+              </div>
+            )}
+
+            {/* Phase 4/6: Traversed USGS SIM 3464 Stratigraphic Column & Contact Crossings */}
+            {stratigraphicProfile && (
+              <div className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-950/15 p-4 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-cyan-300">
+                    <Layers size={12} />
+                    TRAVERSED USGS SIM 3464 STRATIGRAPHIC COLUMN
+                  </span>
+                  <span className="font-mono text-[10px] text-cyan-200">
+                    {stratigraphicProfile.uniqueUnitsTraversed.length} Formations ·{" "}
+                    {stratigraphicProfile.contacts.length} Contacts
+                  </span>
+                </div>
+
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                  {stratigraphicProfile.uniqueUnitsTraversed.map((unit, idx) => (
+                    <div key={unit.unit_code} className="flex items-center gap-1.5">
+                      <span
+                        className="rounded border px-2 py-0.5 font-mono text-[10px] font-bold"
+                        style={{
+                          borderColor: unit.color,
+                          backgroundColor: `${unit.color}28`,
+                          color: "#f8fafc",
+                        }}
+                      >
+                        [{unit.unit_code}] {unit.unit_name}
+                      </span>
+                      {idx < stratigraphicProfile.uniqueUnitsTraversed.length - 1 && (
+                        <span className="font-mono text-mx-muted">→</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {stratigraphicProfile.contacts.length > 0 && (
+                  <ul className="m-0 mt-2.5 list-disc space-y-1 pl-4 text-[11px] text-mx-muted">
+                    {stratigraphicProfile.contacts.map((c) => (
+                      <li key={c.id} className="text-mx-text">
+                        {c.summary}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {(stratigraphicProfile.steepHazardSegments.length > 0 ||
+                  stratigraphicProfile.sandHazardSegments.length > 0) && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-cyan-500/20 pt-2 text-[11px] text-amber-200">
+                    <AlertTriangle size={12} className="text-amber-400" />
+                    <span>
+                      <strong>
+                        {stratigraphicProfile.steepHazardSegments.length +
+                          stratigraphicProfile.sandHazardSegments.length}{" "}
+                        Traversal Hazard Zone(s) Evaluated:
+                      </strong>{" "}
+                      {stratigraphicProfile.steepHazardSegments.length} steep slope
+                      (&gt;15°) · {stratigraphicProfile.sandHazardSegments.length}{" "}
+                      low-thermal-inertia sand unit(s).
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 

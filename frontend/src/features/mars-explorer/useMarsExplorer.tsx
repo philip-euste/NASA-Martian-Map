@@ -93,6 +93,10 @@ export function MarsExplorerProvider({
 
   const [selectedLayerId, setSelectedLayerIdState] = useState<MapLayerId>("mars_viking_global");
   const [opacity, setOpacity] = useState(1);
+  const [overlayLayerId, setOverlayLayerId] = useState<MapLayerId | null>(null);
+  const [overlayOpacity, setOverlayOpacity] = useState(0.65);
+  const [showGeologyOverlay, setShowGeologyOverlay] = useState(false);
+  const [geologyOpacity, setGeologyOpacity] = useState(0.55);
   const [tileConfig, setTileConfig] = useState<TileLayerConfig | null>(null);
   const [layerLoading, setLayerLoading] = useState(false);
   const [layerError, setLayerError] = useState<string | null>(null);
@@ -795,6 +799,14 @@ export function MarsExplorerProvider({
       setSelectedLayerId,
       opacity,
       setOpacity,
+      overlayLayerId,
+      setOverlayLayerId,
+      overlayOpacity,
+      setOverlayOpacity,
+      showGeologyOverlay,
+      setShowGeologyOverlay,
+      geologyOpacity,
+      setGeologyOpacity,
       tileConfig,
       layerLoading,
       layerError,

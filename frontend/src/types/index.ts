@@ -149,6 +149,7 @@ export interface MissionConfiguration {
   sciencePriorities: string[];
   explorationStrategy: string;
   equipment?: string[];
+  equipmentLoadout?: string[];
   missionConstraints?: string[];
   requireReturnToBase?: boolean;
 }
@@ -200,13 +201,16 @@ export interface Route {
 
 export interface SimulatedSample {
   id: string;
+  tubeId?: string;
   name: string;
   sampleType: "Regolith" | "Rock Core" | "Float Rock" | "Atmospheric Gas";
   coordinates: Coordinates;
   targetId?: string;
+  geologicUnitCode?: string;
   geologicalContext: string;
   collectedAt: string;
   isSimulated: true;
+  provenanceTier?: "SIMULATED_EVA_ACTIVITY";
 }
 
 export interface SuitTelemetry {

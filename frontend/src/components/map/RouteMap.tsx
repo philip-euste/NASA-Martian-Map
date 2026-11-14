@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import {
   CircleMarker,
+  GeoJSON,
   MapContainer,
   Polyline,
   TileLayer,
@@ -20,6 +21,7 @@ import {
   type TileLayerConfig,
 } from "../../services/dataProviders";
 import type { Coordinates, Waypoint } from "../../types";
+import { identifyGeologicUnitAt } from "../../utils/jezeroStratigraphy";
 import { formatCoordinates } from "../ui";
 import "./MarsMap.css";
 
@@ -99,8 +101,26 @@ export default function RouteMap({
   const [map, setMap] = useState<L.Map | null>(null);
   const [layerPickerOpen, setLayerPickerOpen] = useState(false);
   const [resetCounter, setResetCounter] = useState(0);
+  const [showGeology, setShowGeology] = useState(true);
+  const [geologyData, setGeologyData] = useState<any>(null);
 
   const layer = MAP_LAYERS[layerId];
+
+  useEffect(() => {
+    if (!showGeology) return;
+    let cancelled = false;
+    fetch("/data/jezero_geology_sim3464.geojson")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setGeologyData(data);
+      })
+      .catch(() => {
+        if (!cancelled) setGeologyData(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showGeology]);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,6 +178,29 @@ export default function RouteMap({
             url={tileConfig.tileUrlTemplate}
             attribution={tileConfig.attribution}
             zoomOffset={tileConfig.zoomOffset}
+          />
+        )}
+
+        {/* USGS SIM 3464 Jezero Geologic Units Overlay */}
+        {showGeology && geologyData && (
+          <GeoJSON
+            key="route-usgs-geology"
+            data={geologyData}
+            style={(feature) => ({
+              color: feature?.properties?.stroke_color || "#3b82f6",
+              weight: 1.8,
+              fillColor: feature?.properties?.color || "#3b82f6",
+              fillOpacity: 0.32,
+            })}
+            onEachFeature={(feature, geoLayer) => {
+              if (feature.properties) {
+                const p = feature.properties;
+                geoLayer.bindTooltip(
+                  `<strong>${p.unit_code}</strong>: ${p.unit_name}<br/><span style="font-size:10px;color:#cbd5e1">${p.lithology}</span>`,
+                  { sticky: true, className: "mx-site-label" }
+                );
+              }
+            }}
           />
         )}
 
@@ -222,23 +265,26 @@ export default function RouteMap({
           />
         )}
 
-        {draftWaypoints.map((wp, idx) => (
-          <CircleMarker
-            key={wp.id}
-            center={[wp.coordinates.latitude, wp.coordinates.longitude]}
-            radius={4.5}
-            pathOptions={{
-              color: "#93b98a",
-              weight: 2,
-              fillColor: "#141215",
-              fillOpacity: 1,
-            }}
-          >
-            <Tooltip direction="top" offset={[0, -6]} className="mx-site-label">
-              {wp.name ?? `Draft WP ${idx + 1}`}
-            </Tooltip>
-          </CircleMarker>
-        ))}
+        {draftWaypoints.map((wp, idx) => {
+          const unit = identifyGeologicUnitAt(wp.coordinates);
+          return (
+            <CircleMarker
+              key={wp.id}
+              center={[wp.coordinates.latitude, wp.coordinates.longitude]}
+              radius={5}
+              pathOptions={{
+                color: unit.color || "#93b98a",
+                weight: 2.5,
+                fillColor: "#141215",
+                fillOpacity: 1,
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -6]} className="mx-site-label">
+                {wp.name ?? `Draft WP ${idx + 1}`} [{unit.unit_code}]
+              </Tooltip>
+            </CircleMarker>
+          );
+        })}
 
         {/* Starting location marker */}
         {startingLocation && (
@@ -331,22 +377,34 @@ export default function RouteMap({
         </div>
 
         {layerPickerOpen && (
-          <div className="mx-panel mx-panel--floating w-64 p-3.5">
-            <label htmlFor="route-map-layer" className="mx-label">
-              Basemap layer
+          <div className="mx-panel mx-panel--floating w-64 space-y-3 p-3.5">
+            <div>
+              <label htmlFor="route-map-layer" className="mx-label">
+                Basemap layer
+              </label>
+              <select
+                id="route-map-layer"
+                className="mx-input text-xs"
+                value={layerId}
+                onChange={(e) => setLayerId(e.target.value as MapLayerId)}
+              >
+                {Object.values(MAP_LAYERS).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <label className="flex cursor-pointer items-center justify-between gap-2 border-t border-mx-border pt-2.5 text-xs text-mx-text">
+              <span>USGS SIM 3464 Geology</span>
+              <input
+                type="checkbox"
+                className="mx-checkbox"
+                checked={showGeology}
+                onChange={(e) => setShowGeology(e.target.checked)}
+              />
             </label>
-            <select
-              id="route-map-layer"
-              className="mx-input"
-              value={layerId}
-              onChange={(e) => setLayerId(e.target.value as MapLayerId)}
-            >
-              {Object.values(MAP_LAYERS).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
           </div>
         )}
       </div>

@@ -29,6 +29,14 @@ export default function MarsExplorerControls() {
     setSelectedLayerId,
     opacity,
     setOpacity,
+    overlayLayerId,
+    setOverlayLayerId,
+    overlayOpacity,
+    setOverlayOpacity,
+    showGeologyOverlay,
+    setShowGeologyOverlay,
+    geologyOpacity,
+    setGeologyOpacity,
     searchQuery,
     setSearchQuery,
     searchOpen,
@@ -243,10 +251,10 @@ export default function MarsExplorerControls() {
 
       {/* Dataset controls: upper-right, separate from navigation */}
       {layersOpen && (
-        <div className="mx-panel mx-panel--floating mx-explorer-layer-panel">
+        <div className="mx-panel mx-panel--floating mx-explorer-layer-panel max-h-[85vh] overflow-y-auto">
           <div className="mb-3 flex items-center justify-between">
             <span className="mx-eyebrow mx-eyebrow--accent">
-              Dataset layer
+              Worldview Multi-Layer Stack
             </span>
             <button
               type="button"
@@ -258,40 +266,34 @@ export default function MarsExplorerControls() {
             </button>
           </div>
 
-          <label htmlFor="mars-shared-layer" className="mx-label">
-            Surface layer
-          </label>
-
-          <select
-            id="mars-shared-layer"
-            className="mx-input"
-            value={selectedLayerId}
-            onChange={(event) =>
-              setSelectedLayerId(event.target.value as MapLayerId)
-            }
-          >
-            {Object.values(MAP_LAYERS).map((layer) => (
-              <option key={layer.id} value={layer.id}>
-                {layer.name}
-              </option>
-            ))}
-          </select>
-
-          <p className="mx-body m-0 mt-3 text-[13px]">
-            {selectedLayer.description}
-          </p>
-
-          <div className="mt-4">
-            <label
-              htmlFor="mars-shared-opacity"
-              className="mx-label flex justify-between"
-            >
-              <span>Map layer opacity</span>
-              <span className="mx-mono text-mx-muted">
-                {Math.round(opacity * 100)}%
+          {/* Primary Base Layer */}
+          <div className="space-y-2 border-b border-mx-border pb-3.5">
+            <label htmlFor="mars-shared-layer" className="mx-label flex justify-between">
+              <span>Primary Base Layer</span>
+              <span className="text-[11px] text-mx-accent">
+                {selectedLayer.coverage === "regional" ? "Regional Hi-Res" : "Global"}
               </span>
             </label>
 
+            <select
+              id="mars-shared-layer"
+              className="mx-input text-xs"
+              value={selectedLayerId}
+              onChange={(event) =>
+                setSelectedLayerId(event.target.value as MapLayerId)
+              }
+            >
+              {Object.values(MAP_LAYERS).map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name} {l.coverage === "regional" ? "★" : ""}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-mx-muted">Base Opacity</span>
+              <span className="mx-mono text-mx-text">{Math.round(opacity * 100)}%</span>
+            </div>
             <input
               id="mars-shared-opacity"
               className="mx-range"
@@ -302,10 +304,116 @@ export default function MarsExplorerControls() {
               value={opacity}
               onChange={(event) => setOpacity(Number(event.target.value))}
             />
+          </div>
 
-            <p className="mx-body m-0 mt-1 text-[11px] text-mx-dim">
-              Opacity applies to the 2D map layer.
-            </p>
+          {/* Secondary Blended Layer */}
+          <div className="mt-3.5 space-y-2 border-b border-mx-border pb-3.5">
+            <label htmlFor="mars-overlay-layer" className="mx-label flex justify-between">
+              <span>Comparative Overlay Layer</span>
+              <span className="text-[10px] text-mx-muted">MULTI-SENSOR BLEND</span>
+            </label>
+
+            <select
+              id="mars-overlay-layer"
+              className="mx-input text-xs"
+              value={overlayLayerId ?? ""}
+              onChange={(event) => {
+                const val = event.target.value;
+                setOverlayLayerId(val ? (val as MapLayerId) : null);
+              }}
+            >
+              <option value="">(None — Single Layer View)</option>
+              {Object.values(MAP_LAYERS).map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+
+            {overlayLayerId && (
+              <>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-mx-muted">Blend Opacity</span>
+                  <span className="mx-mono text-mx-accent">
+                    {Math.round(overlayOpacity * 100)}%
+                  </span>
+                </div>
+                <input
+                  id="mars-overlay-opacity"
+                  className="mx-range"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={overlayOpacity}
+                  onChange={(event) => setOverlayOpacity(Number(event.target.value))}
+                />
+              </>
+            )}
+          </div>
+
+          {/* USGS Geologic Units Vector Layer */}
+          <div className="mt-3.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-mx-text">
+                USGS Jezero Geology (SIM 3464)
+              </span>
+              <button
+                type="button"
+                className={`mx-btn mx-btn--xs ${
+                  showGeologyOverlay
+                    ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
+                    : "mx-btn--secondary"
+                }`}
+                onClick={() => setShowGeologyOverlay(!showGeologyOverlay)}
+              >
+                {showGeologyOverlay ? "Active" : "Disabled"}
+              </button>
+            </div>
+
+            {showGeologyOverlay && (
+              <div className="space-y-2 rounded border border-mx-border bg-mx-surface/60 p-2 text-xs">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-mx-muted">Polygon Fill Opacity</span>
+                  <span className="mx-mono text-mx-text">
+                    {Math.round(geologyOpacity * 100)}%
+                  </span>
+                </div>
+                <input
+                  className="mx-range"
+                  type="range"
+                  min="0.1"
+                  max="0.9"
+                  step="0.05"
+                  value={geologyOpacity}
+                  onChange={(event) => setGeologyOpacity(Number(event.target.value))}
+                />
+
+                <div className="mt-2 space-y-1 text-[11px]">
+                  <span className="mx-eyebrow text-[10px]">Stratigraphic Legend</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                    <span>HpHd_scarp: Western Delta Scarp (Lacustrine Mudstone)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-300" />
+                    <span>HpHd_top: Western Delta Topset (Fluvial Sandstone)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-600" />
+                    <span>HNcf_f: Crater Floor Fractured / Séítah (Olivine Cumulate)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-purple-500" />
+                    <span>Cc_b: Belva Impact Ejecta Breccia</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-pink-500" />
+                    <span>Hcf_m: Marginal Carbonate Bench</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

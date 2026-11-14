@@ -151,23 +151,28 @@ export default function Header() {
     }
 
     return (
-        <header className="relative z-[1100] border-b border-mx-border bg-mx-bg/95 backdrop-blur">
-            <div className="mx-auto flex h-[var(--mx-header-height)] max-w-[1440px] items-center justify-between px-5 sm:px-8">
+        <header className="sticky top-0 z-[1100] border-b border-mx-border bg-mx-bg/95 backdrop-blur-md">
+            <div className="mx-auto flex h-[var(--mx-header-height)] max-w-[1440px] items-center justify-between gap-4 px-5 sm:px-8">
 
-                {/* Logo */}
-                <Link
-                    to="/"
-                    className="flex items-center gap-2.5 text-mx-text no-underline"
-                    aria-label="Mars Explorer home"
-                >
-                    <BrandMark className="text-mx-accent" />
-                    <span className="font-display text-[15px] font-semibold uppercase tracking-[0.14em]">
-                        Mars Explorer
-                    </span>
-                </Link>
+                {/* Logo & Live Data Connection Status */}
+                <div className="flex items-center gap-4">
+                    <Link
+                        to="/"
+                        className="flex items-center gap-2.5 text-mx-text no-underline"
+                        aria-label="Mars Explorer home"
+                    >
+                        <BrandMark className="text-mx-accent" />
+                        <span className="font-display text-[15px] font-semibold uppercase tracking-[0.14em]">
+                            Mars Explorer
+                        </span>
+                    </Link>
+                    <div className="hidden md:block">
+                        <ConnectionStatusIndicator />
+                    </div>
+                </div>
 
                 {/* Desktop Navigation */}
-                <nav className="hidden items-center gap-8 lg:flex" aria-label="Primary">
+                <nav className="hidden items-center gap-7 lg:flex" aria-label="Primary">
                     {NAV_ITEMS.map((item) => (
                         <NavLink
                             key={item.label}

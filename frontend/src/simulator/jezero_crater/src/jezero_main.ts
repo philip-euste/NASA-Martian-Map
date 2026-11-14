@@ -112,12 +112,16 @@ interface ExpeditionTargetMessage {
     | "mars-explorer:targets"
     | "mars-explorer:teleport"
     | "mars-explorer:return-base"
-    | "mars-explorer:contingency";
+    | "mars-explorer:contingency"
+    | "mars-explorer:modal-state"
+    | "mars-explorer:toggle-map"
+    | "mars-explorer:toggle-flight";
   regionId?: string;
   name?: string;
   latitude?: number;
   longitude?: number;
   withinJezeroDem?: boolean;
+  open?: boolean;
   targets?: {
     id: string;
     name: string;
@@ -125,6 +129,7 @@ interface ExpeditionTargetMessage {
     longitude: number;
     description?: string;
     visited?: boolean;
+    kind?: string;
   }[];
   contingency?: string | null;
 }
@@ -132,6 +137,10 @@ interface ExpeditionTargetMessage {
 // ------------------------------------------------------------ dom
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
+
+if (window.parent && window.parent !== window) {
+  document.body.classList.add("hosted-visor");
+}
 
 const overlay = $("overlay");
 const startBtn = $<HTMLButtonElement>("start");
@@ -148,8 +157,15 @@ const mapCanvas = $<HTMLCanvasElement>("map-canvas");
 const mapInfo = $("map-info");
 const mapGo = $<HTMLButtonElement>("map-go");
 const mapClose = $<HTMLButtonElement>("map-close");
+const mapZoomIn = document.getElementById("map-zoom-in") as HTMLButtonElement | null;
+const mapZoomOut = document.getElementById("map-zoom-out") as HTMLButtonElement | null;
+const mapZoomReset = document.getElementById("map-zoom-reset") as HTMLButtonElement | null;
+const mapCenterPlayer = document.getElementById("map-center-player") as HTMLButtonElement | null;
+const mapZoomLabel = document.getElementById("map-zoom-label") as HTMLElement | null;
 const openMapBtn = $<HTMLButtonElement>("open-map");
 const creditEl = $("credit");
+
+let externalModalOpen = false;
 
 // ------------------------------------------------------------ renderer
 const renderer = new THREE.WebGLRenderer({
@@ -1335,59 +1351,139 @@ function updatePlayer(dt: number) {
 
   telemetryTimer += dt;
 
-  if (telemetryTimer >= 1.0) {
+  if (telemetryTimer >= 0.14) {
     telemetryTimer = 0;
-
     updateBeaconsHeightAndProximity();
-
-    if (window.parent && window.parent !== window) {
-      window.parent.postMessage(
-        {
-          type: "marswalk:telemetry-sync",
-          latitude: Number(lat.toFixed(5)),
-          longitude: Number(lon.toFixed(5)),
-          elevationMeters: Math.round(elev),
-          slopeDegrees: Number(slopeDeg.toFixed(1)),
-          distanceFromBaseMeters: Math.round(distFromBase),
-          totalTraverseMeters: Math.round(
-            player.totalTraverseMeters
-          ),
-          elapsedTimeSeconds: Math.round(
-            player.elapsedSeconds
-          ),
-          nearestTarget: nearestBeacon
-            ? {
-                id: nearestBeacon.beacon.id,
-                name: nearestBeacon.beacon.name,
-                distanceMeters: Math.round(
-                  nearestBeacon.distMeters
-                ),
-                isBase: Boolean(
-                  nearestBeacon.beacon.isBase
-                ),
-              }
-            : null,
-        },
-        "*"
-      );
-    }
+    emitTelemetrySync();
   }
 }
 
-// ------------------------------------------------------------ 2D map
+function getHeadingDegrees(): number {
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  // In world coordinates: +X is East, -Z is North
+  const rad = Math.atan2(dir.x, -dir.z);
+  return Math.round((((rad * 180) / Math.PI) + 360) % 360);
+}
+
+function emitTelemetrySync() {
+  if (!M || !window.parent || window.parent === window) return;
+
+  const { lon, lat } = colRowToLonLat(
+    xToCol(player.pos.x),
+    zToRow(player.pos.z)
+  );
+  const elev = CONFIG.groundOffset + (player.pos.y - CONFIG.eyeHeight);
+  const slopeDeg = sampleSlopeDegrees(player.pos.x, player.pos.z);
+  const distFromBase = Math.hypot(
+    player.pos.x - baseWorldPos.x,
+    player.pos.z - baseWorldPos.z
+  );
+  const headingDegrees = getHeadingDegrees();
+
+  window.parent.postMessage(
+    {
+      type: "marswalk:telemetry-sync",
+      latitude: Number(lat.toFixed(5)),
+      longitude: Number(lon.toFixed(5)),
+      elevationMeters: Math.round(elev),
+      elevation: Math.round(elev),
+      slopeDegrees: Number(slopeDeg.toFixed(1)),
+      slopeDeg: Number(slopeDeg.toFixed(1)),
+      headingDegrees,
+      distanceFromBaseMeters: Math.round(distFromBase),
+      totalTraverseMeters: Math.round(player.totalTraverseMeters),
+      elapsedTimeSeconds: Math.round(player.elapsedSeconds),
+      flyMode: player.fly,
+      isPointerLocked: controls.isLocked,
+      mapOpen: !mapPanel.classList.contains("hidden"),
+      nearestTarget: nearestBeacon
+        ? {
+            id: nearestBeacon.beacon.id,
+            name: nearestBeacon.beacon.name,
+            distanceMeters: Math.round(nearestBeacon.distMeters),
+            isBase: Boolean(nearestBeacon.beacon.isBase),
+          }
+        : null,
+    },
+    "*"
+  );
+}
+
+// ------------------------------------------------------------ 2D map (Zoomable & Pannable)
 let mapSel: {
   col: number;
   row: number;
 } | null = null;
 
+let mapZoom = 1.0;
+let mapPanX = 0; // Normalized center offset in [0..cols]
+let mapPanY = 0; // Normalized center offset in [0..rows]
+let mapDragging = false;
+let mapDragStartX = 0;
+let mapDragStartY = 0;
+let mapDragOriginPanX = 0;
+let mapDragOriginPanY = 0;
+let mapDragMovedDist = 0;
+
+function clampMapPan() {
+  if (!M) return;
+  const totalCols = M.tilesX * M.tileSize;
+  const totalRows = M.tilesY * M.tileSize;
+  const halfVisCols = totalCols / (2 * mapZoom);
+  const halfVisRows = totalRows / (2 * mapZoom);
+
+  if (mapPanX === 0 && mapPanY === 0) {
+    mapPanX = totalCols / 2;
+    mapPanY = totalRows / 2;
+  }
+
+  mapPanX = Math.min(Math.max(mapPanX, halfVisCols), totalCols - halfVisCols);
+  mapPanY = Math.min(Math.max(mapPanY, halfVisRows), totalRows - halfVisRows);
+}
+
+function getMapViewBounds() {
+  const totalCols = M.tilesX * M.tileSize;
+  const totalRows = M.tilesY * M.tileSize;
+  clampMapPan();
+  const visCols = totalCols / mapZoom;
+  const visRows = totalRows / mapZoom;
+  return {
+    colMin: mapPanX - visCols / 2,
+    rowMin: mapPanY - visRows / 2,
+    visCols,
+    visRows,
+    totalCols,
+    totalRows,
+  };
+}
+
+function setMapZoom(nextZoom: number) {
+  mapZoom = Math.min(6.0, Math.max(1.0, Number(nextZoom.toFixed(2))));
+  clampMapPan();
+  if (mapZoomLabel) {
+    mapZoomLabel.textContent = `${mapZoom.toFixed(1)}×`;
+  }
+  drawMap();
+}
+
+function centerMapOnPlayer() {
+  if (!M) return;
+  mapPanX = xToCol(player.pos.x);
+  mapPanY = zToRow(player.pos.z);
+  clampMapPan();
+  drawMap();
+}
+
 function drawMap() {
+  if (!M) return;
   const ctx = mapCanvas.getContext("2d")!;
 
   const rect = mapCanvas.getBoundingClientRect();
   const dpr = Math.min(window.devicePixelRatio, 2);
 
-  mapCanvas.width = Math.round(rect.width * dpr);
-  mapCanvas.height = Math.round(rect.height * dpr);
+  mapCanvas.width = Math.max(1, Math.round(rect.width * dpr));
+  mapCanvas.height = Math.max(1, Math.round(rect.height * dpr));
 
   const W = mapCanvas.width;
   const H = mapCanvas.height;
@@ -1395,15 +1491,33 @@ function drawMap() {
   ctx.fillStyle = "#120b08";
   ctx.fillRect(0, 0, W, H);
 
-  if (mapImg) {
-    ctx.drawImage(mapImg, 0, 0, W, H);
+  const { colMin, rowMin, visCols, visRows, totalCols, totalRows } =
+    getMapViewBounds();
+
+  const colToPx = (col: number) => ((col - colMin) / visCols) * W;
+  const rowToPy = (row: number) => ((row - rowMin) / visRows) * H;
+
+  if (mapImg && mapImg.complete && mapImg.naturalWidth > 0) {
+    const sx = (colMin / totalCols) * mapImg.naturalWidth;
+    const sy = (rowMin / totalRows) * mapImg.naturalHeight;
+    const sw = (visCols / totalCols) * mapImg.naturalWidth;
+    const sh = (visRows / totalRows) * mapImg.naturalHeight;
+    ctx.drawImage(mapImg, sx, sy, sw, sh, 0, 0, W, H);
   }
 
-  const sx =
-    W / (M.tilesX * M.tileSize);
-
-  const sy =
-    H / (M.tilesY * M.tileSize);
+  // Subtle coordinate graticule grid
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+  ctx.lineWidth = 1 * dpr;
+  for (let i = 1; i <= 4; i++) {
+    const gx = (W * i) / 5;
+    const gy = (H * i) / 5;
+    ctx.beginPath();
+    ctx.moveTo(gx, 0);
+    ctx.lineTo(gx, H);
+    ctx.moveTo(0, gy);
+    ctx.lineTo(W, gy);
+    ctx.stroke();
+  }
 
   const dot = (
     col: number,
@@ -1411,32 +1525,54 @@ function drawMap() {
     color: string,
     r: number
   ) => {
+    const px = colToPx(col);
+    const py = rowToPy(row);
     ctx.beginPath();
-
-    ctx.arc(
-      col * sx,
-      row * sy,
-      r * dpr,
-      0,
-      Math.PI * 2
-    );
-
+    ctx.arc(px, py, r * dpr, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-
-    ctx.lineWidth = 1.5 * dpr;
-    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.strokeStyle = "#0e0b0a";
     ctx.stroke();
   };
 
-  ctx.font = `${11.5 * dpr}px system-ui, sans-serif`;
+  // Planned route polyline connecting base & beacons
+  const validBeacons = missionBeacons.filter((b) =>
+    isLonLatInsideManifest(b.lon, b.lat)
+  );
+  if (validBeacons.length >= 2) {
+    ctx.save();
+    ctx.beginPath();
+    validBeacons.forEach((b, idx) => {
+      const p = lonLatToColRow(b.lon, b.lat);
+      const px = colToPx(p.col);
+      const py = rowToPy(p.row);
+      if (idx === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.65)";
+    ctx.lineWidth = 2 * dpr;
+    ctx.setLineDash([6 * dpr, 4 * dpr]);
+    ctx.stroke();
+    ctx.restore();
+  }
 
-  for (const b of missionBeacons) {
-    if (!isLonLatInsideManifest(b.lon, b.lat)) {
-      continue;
-    }
+  // Also plot reference Jezero landmarks if not already in missionBeacons
+  for (const lm of LANDMARKS) {
+    const already = validBeacons.some(
+      (b) => Math.hypot(b.lat - lm.lat, b.lon - lm.lon) < 0.003
+    );
+    if (already || !isLonLatInsideManifest(lm.lon, lm.lat)) continue;
+    const p = lonLatToColRow(lm.lon, lm.lat);
+    dot(p.col, p.row, "#94a3b8", 4);
+  }
 
+  ctx.font = `600 ${11 * dpr}px Inter, system-ui, sans-serif`;
+
+  for (const b of validBeacons) {
     const p = lonLatToColRow(b.lon, b.lat);
+    const px = colToPx(p.col);
+    const py = rowToPy(p.row);
 
     dot(
       p.col,
@@ -1444,78 +1580,113 @@ function drawMap() {
       b.isBase
         ? "#38bdf8"
         : b.visited
-          ? "#93b98a"
+          ? "#10b981"
           : "#f47738",
-      5.5
+      b.isBase ? 6.5 : 5.5
     );
 
-    ctx.fillStyle = "#f3efea";
-
-    ctx.fillText(
-      b.name,
-      p.col * sx + 8 * dpr,
-      p.row * sy + 4 * dpr
+    const label = b.name;
+    const textW = ctx.measureText(label).width;
+    ctx.fillStyle = "rgba(16, 14, 18, 0.82)";
+    ctx.fillRect(
+      px + 8 * dpr,
+      py - 9 * dpr,
+      textW + 8 * dpr,
+      16 * dpr
     );
+    ctx.fillStyle = b.isBase ? "#bae6fd" : b.visited ? "#a7f3d0" : "#f3efea";
+    ctx.fillText(label, px + 12 * dpr, py + 3 * dpr);
   }
 
+  // Astronaut position & heading cone/vector
   const pc = xToCol(player.pos.x);
   const pr = zToRow(player.pos.z);
+  const ppx = colToPx(pc);
+  const ppy = rowToPy(pr);
 
   camera.getWorldDirection(fwd);
+  const dirLen = 28 * dpr;
+  const dirAngle = Math.atan2(fwd.z, fwd.x);
+
+  // Heading view cone
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(ppx, ppy);
+  ctx.arc(ppx, ppy, dirLen * 1.35, dirAngle - 0.42, dirAngle + 0.42);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(255, 211, 107, 0.24)";
+  ctx.fill();
+  ctx.restore();
 
   ctx.beginPath();
-
-  ctx.moveTo(pc * sx, pr * sy);
-
+  ctx.moveTo(ppx, ppy);
   ctx.lineTo(
-    (pc + fwd.x * 60) * sx,
-    (pr + fwd.z * 60) * sy
+    ppx + Math.cos(dirAngle) * dirLen,
+    ppy + Math.sin(dirAngle) * dirLen
   );
-
   ctx.strokeStyle = "#ffd36b";
-  ctx.lineWidth = 2 * dpr;
+  ctx.lineWidth = 2.2 * dpr;
   ctx.stroke();
 
-  dot(pc, pr, "#ffd36b", 5);
+  dot(pc, pr, "#ffd36b", 5.5);
 
   if (mapSel) {
-    dot(
-      mapSel.col,
-      mapSel.row,
-      "#ff4d3a",
-      7
-    );
+    const spx = colToPx(mapSel.col);
+    const spy = rowToPy(mapSel.row);
+    ctx.beginPath();
+    ctx.arc(spx, spy, 9 * dpr, 0, Math.PI * 2);
+    ctx.strokeStyle = "#ff4d3a";
+    ctx.lineWidth = 2 * dpr;
+    ctx.stroke();
+    dot(mapSel.col, mapSel.row, "#ff4d3a", 4.5);
   }
 }
 
 function selectOnMap(e: MouseEvent) {
+  if (mapDragMovedDist > 6) {
+    return;
+  }
   const rect = mapCanvas.getBoundingClientRect();
+  const { colMin, rowMin, visCols, visRows } = getMapViewBounds();
 
   const col =
-    ((e.clientX - rect.left) / rect.width) *
-    M.tilesX *
-    M.tileSize;
-
+    colMin + ((e.clientX - rect.left) / rect.width) * visCols;
   const row =
-    ((e.clientY - rect.top) / rect.height) *
-    M.tilesY *
-    M.tileSize;
+    rowMin + ((e.clientY - rect.top) / rect.height) * visRows;
 
-  if (col >= M.cols || row >= M.rows) {
+  if (col < 0 || row < 0 || col >= M.cols || row >= M.rows) {
     return;
   }
 
   mapSel = { col, row };
 
   const { lon, lat } = colRowToLonLat(col, row);
-
   const elev =
     CONFIG.groundOffset +
-    sampleQ(Math.round(col), Math.round(row)) *
-      M.heightScale;
+    sampleQ(Math.round(col), Math.round(row)) * M.heightScale;
 
-  mapInfo.textContent =
-    `${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E · elevation ≈ ${elev.toFixed(0)} m`;
+  const selWorldX = colToX(col);
+  const selWorldZ = rowToZ(row);
+  const distFromPlayer = Math.hypot(
+    selWorldX - player.pos.x,
+    selWorldZ - player.pos.z
+  );
+
+  // Check if user clicked near a beacon
+  let snappedBeacon: MissionTargetBeacon | null = null;
+  for (const b of missionBeacons) {
+    if (!isLonLatInsideManifest(b.lon, b.lat)) continue;
+    const bp = lonLatToColRow(b.lon, b.lat);
+    if (Math.hypot(bp.col - col, bp.row - row) < 28 / mapZoom) {
+      snappedBeacon = b;
+      mapSel = { col: bp.col, row: bp.row };
+      break;
+    }
+  }
+
+  mapInfo.textContent = snappedBeacon
+    ? `Selected: ${snappedBeacon.name} (${snappedBeacon.lat.toFixed(4)}°N, ${snappedBeacon.lon.toFixed(4)}°E · Elev ≈ ${elev.toFixed(0)} m · ${Math.round(distFromPlayer)} m away)`
+    : `Selected: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E · Elevation ≈ ${elev.toFixed(0)} m · ${Math.round(distFromPlayer)} m from astronaut`;
 
   mapGo.disabled = false;
 
@@ -1532,12 +1703,17 @@ function openMap() {
   overlay.classList.add("hidden");
   mapPanel.classList.remove("hidden");
 
+  if (mapPanX === 0 && mapPanY === 0) {
+    mapPanX = (M.tilesX * M.tileSize) / 2;
+    mapPanY = (M.tilesY * M.tileSize) / 2;
+  }
+
   const aspect =
     (M.tilesX * M.tileSize * M.cellX) /
     (M.tilesY * M.tileSize * M.cellZ);
 
-  const maxW = window.innerWidth * 0.9;
-  const maxH = window.innerHeight * 0.72;
+  const maxW = Math.min(window.innerWidth * 0.84, 880);
+  const maxH = window.innerHeight * 0.56;
 
   let w = maxW;
   let h = w / aspect;
@@ -1547,19 +1723,25 @@ function openMap() {
     w = h * aspect;
   }
 
-  mapCanvas.style.width = `${w}px`;
-  mapCanvas.style.height = `${h}px`;
+  mapCanvas.style.width = `${Math.round(w)}px`;
+  mapCanvas.style.height = `${Math.round(h)}px`;
 
   drawMap();
+  emitTelemetrySync();
 }
 
 function closeMap() {
   mapPanel.classList.add("hidden");
+  emitTelemetrySync();
 }
 
 // ------------------------------------------------------------ input & messaging
 
 document.addEventListener("keydown", (e) => {
+  if (externalModalOpen && e.code !== "Escape" && e.code !== "KeyE") {
+    return;
+  }
+
   keys.add(e.code);
 
   if (e.code === "KeyM" && M) {
@@ -1567,19 +1749,25 @@ document.addEventListener("keydown", (e) => {
       openMap();
     } else {
       closeMap();
-      controls.lock();
+      if (!externalModalOpen) {
+        controls.lock();
+      }
     }
   }
 
-  if (e.code === "KeyF" && controls.isLocked) {
+  if (e.code === "KeyF" && M) {
     player.fly = !player.fly;
 
     hudMode.textContent = player.fly
       ? "RECON FLIGHT"
       : "MARS 0.38G WALK";
+    emitTelemetrySync();
   }
 
   if (e.code === "KeyE" && M) {
+    externalModalOpen = true;
+    keys.clear();
+    overlay.classList.add("hidden");
     controls.unlock();
 
     if (window.parent && window.parent !== window) {
@@ -1608,6 +1796,10 @@ document.addEventListener("keydown", (e) => {
   }
 
   if (e.code === "KeyR" && M) {
+    externalModalOpen = true;
+    keys.clear();
+    overlay.classList.add("hidden");
+
     const baseColRow = lonLatToColRow(
       baseLatLon.lon,
       baseLatLon.lat
@@ -1620,7 +1812,7 @@ document.addEventListener("keydown", (e) => {
     if (window.parent && window.parent !== window) {
       window.parent.postMessage(
         {
-          type: "marswalk:returned-to-base",
+          type: "marswalk:return-to-base",
           totalTraverseMeters: Math.round(
             player.totalTraverseMeters
           ),
@@ -1639,31 +1831,90 @@ document.addEventListener("keyup", (e) => {
 });
 
 startBtn.addEventListener("click", () => {
+  externalModalOpen = false;
   controls.lock();
 });
 
 renderer.domElement.addEventListener("click", () => {
-  if (M && mapPanel.classList.contains("hidden")) {
+  if (M && mapPanel.classList.contains("hidden") && !externalModalOpen) {
     controls.lock();
   }
 });
 
 controls.addEventListener("lock", () => {
+  externalModalOpen = false;
   overlay.classList.add("hidden");
   closeMap();
+  emitTelemetrySync();
 });
 
 controls.addEventListener("unlock", () => {
   keys.clear();
 
-  if (mapPanel.classList.contains("hidden")) {
+  if (mapPanel.classList.contains("hidden") && !externalModalOpen) {
     overlay.classList.remove("hidden");
   }
+  emitTelemetrySync();
 });
 
 openMapBtn.addEventListener("click", openMap);
 
+mapCanvas.addEventListener("mousedown", (e) => {
+  mapDragging = true;
+  mapDragMovedDist = 0;
+  mapDragStartX = e.clientX;
+  mapDragStartY = e.clientY;
+  mapDragOriginPanX = mapPanX;
+  mapDragOriginPanY = mapPanY;
+});
+
+window.addEventListener("mousemove", (e) => {
+  if (!mapDragging || mapPanel.classList.contains("hidden") || !M) return;
+  const dx = e.clientX - mapDragStartX;
+  const dy = e.clientY - mapDragStartY;
+  mapDragMovedDist = Math.hypot(dx, dy);
+  if (mapDragMovedDist > 3) {
+    const rect = mapCanvas.getBoundingClientRect();
+    const { visCols, visRows } = getMapViewBounds();
+    mapPanX = mapDragOriginPanX - (dx / Math.max(1, rect.width)) * visCols;
+    mapPanY = mapDragOriginPanY - (dy / Math.max(1, rect.height)) * visRows;
+    clampMapPan();
+    drawMap();
+  }
+});
+
+window.addEventListener("mouseup", () => {
+  mapDragging = false;
+});
+
+mapCanvas.addEventListener(
+  "wheel",
+  (e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.25 : 0.8;
+    setMapZoom(mapZoom * factor);
+  },
+  { passive: false }
+);
+
 mapCanvas.addEventListener("click", selectOnMap);
+
+mapZoomIn?.addEventListener("click", () => setMapZoom(mapZoom * 1.35));
+mapZoomOut?.addEventListener("click", () => setMapZoom(mapZoom / 1.35));
+mapZoomReset?.addEventListener("click", () => {
+  if (M) {
+    mapPanX = (M.tilesX * M.tileSize) / 2;
+    mapPanY = (M.tilesY * M.tileSize) / 2;
+  }
+  setMapZoom(1.0);
+});
+mapCenterPlayer?.addEventListener("click", () => {
+  if (mapZoom < 1.8) {
+    mapZoom = 2.0;
+    if (mapZoomLabel) mapZoomLabel.textContent = "2.0×";
+  }
+  centerMapOnPlayer();
+});
 
 mapGo.addEventListener("click", () => {
   if (!mapSel) {
@@ -1673,12 +1924,15 @@ mapGo.addEventListener("click", () => {
   teleport(mapSel.col, mapSel.row);
 
   closeMap();
+  emitTelemetrySync();
   controls.lock();
 });
 
 mapClose.addEventListener("click", () => {
   closeMap();
-  overlay.classList.remove("hidden");
+  if (!externalModalOpen && !controls.isLocked) {
+    overlay.classList.remove("hidden");
+  }
 });
 
 window.addEventListener("resize", () => {
@@ -1706,6 +1960,35 @@ window.addEventListener(
       return;
     }
 
+    if (data.type === "mars-explorer:modal-state") {
+      externalModalOpen = Boolean(data.open);
+      if (externalModalOpen) {
+        keys.clear();
+        overlay.classList.add("hidden");
+        controls.unlock();
+      }
+      emitTelemetrySync();
+      return;
+    }
+
+    if (data.type === "mars-explorer:toggle-map" && M) {
+      if (mapPanel.classList.contains("hidden")) {
+        openMap();
+      } else {
+        closeMap();
+      }
+      return;
+    }
+
+    if (data.type === "mars-explorer:toggle-flight" && M) {
+      player.fly = !player.fly;
+      hudMode.textContent = player.fly
+        ? "RECON FLIGHT"
+        : "MARS 0.38G WALK";
+      emitTelemetrySync();
+      return;
+    }
+
     if (data.type === "mars-explorer:expedition") {
       applyExpeditionSpawn(
         typeof data.latitude === "number"
@@ -1729,6 +2012,7 @@ window.addEventListener(
           }))
         );
       }
+      emitTelemetrySync();
     } else if (
       data.type === "mars-explorer:targets" &&
       Array.isArray(data.targets)
@@ -1743,6 +2027,7 @@ window.addEventListener(
           visited: t.visited,
         }))
       );
+      emitTelemetrySync();
     } else if (
       data.type === "mars-explorer:teleport" &&
       typeof data.latitude === "number" &&
@@ -1761,6 +2046,7 @@ window.addEventListener(
         );
 
         teleport(c.col, c.row);
+        emitTelemetrySync();
       }
     } else if (
       data.type === "mars-explorer:return-base" &&
@@ -1772,6 +2058,7 @@ window.addEventListener(
       );
 
       teleport(baseColRow.col, baseColRow.row);
+      emitTelemetrySync();
     } else if (
       data.type === "mars-explorer:contingency"
     ) {
