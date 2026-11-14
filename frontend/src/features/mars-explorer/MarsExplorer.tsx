@@ -1,4 +1,12 @@
-import { Compass, Globe, Map as MapIcon } from "lucide-react";
+
+import {
+  Compass,
+  Globe,
+  Map as MapIcon,
+  Minus,
+  Plus,
+  RotateCcw,
+} from "lucide-react";
 import MarsGlobe from "../../globe/MarsGlobe";
 import MarsMap from "../../components/map/MarsMap";
 import { useMission } from "../../state/mission/MissionContext";
@@ -15,6 +23,8 @@ export default function MarsExplorer() {
     triggerZoomInToMap,
     triggerZoomOutToGlobe,
     transitionState,
+    requestNavigationAction,
+    resetExplorerView,
   } = useMarsExplorer();
 
   const { mission } = useMission();
@@ -28,6 +38,14 @@ export default function MarsExplorer() {
       ? "mx-explorer-stage--to-map"
       : "mx-explorer-stage--to-globe"
     : "";
+
+  const handleSwitchView = () => {
+    if (viewMode === "globe") {
+      triggerZoomInToMap(focusCoordinates);
+    } else if (viewMode === "map") {
+      triggerZoomOutToGlobe(focusCoordinates);
+    }
+  };
 
   return (
     <div className="mx-explorer-root relative h-full w-full overflow-hidden bg-[#0e0d10]">
@@ -70,6 +88,67 @@ export default function MarsExplorer() {
           </div>
 
           <MarsExplorerControls />
+
+          <div className="absolute left-4 top-[176px] z-[1200] flex flex-col gap-2 sm:left-6">
+            <div
+              className="flex flex-col gap-2"
+              role="toolbar"
+              aria-label="Mars explorer navigation"
+              aria-orientation="vertical"
+            >
+              <button
+                type="button"
+                className="mx-icon-btn"
+                aria-label="Zoom in"
+                title="Zoom in"
+                onClick={() => requestNavigationAction("zoom-in")}
+              >
+                <Plus size={17} aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                className="mx-icon-btn"
+                aria-label="Zoom out"
+                title="Zoom out"
+                onClick={() => requestNavigationAction("zoom-out")}
+              >
+                <Minus size={17} aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                className="mx-icon-btn"
+                aria-label="Reset view"
+                title="Reset view"
+                onClick={resetExplorerView}
+              >
+                <RotateCcw size={17} aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                className="mx-icon-btn"
+                aria-label={
+                  viewMode === "globe"
+                    ? "Switch to 2D map"
+                    : "Switch to 3D globe"
+                }
+                title={
+                  viewMode === "globe"
+                    ? "Switch to 2D map"
+                    : "Switch to 3D globe"
+                }
+                onClick={handleSwitchView}
+              >
+                {viewMode === "globe" ? (
+                  <MapIcon size={17} aria-hidden="true" />
+                ) : (
+                  <Globe size={17} aria-hidden="true" />
+                )}
+              </button>
+            </div>
+          </div>
         </>
       )}
 

@@ -1,11 +1,12 @@
-/* frontend/src/features/mars-explorer/MarsExplorer.css
-   Shared styles for the unified 3D Globe, 2D Map, and Expedition Simulation workspace. */
+
+/* Shared styles for the unified 3D Globe, 2D Map, and Expedition Simulation workspace. */
 
 .mx-explorer-root {
   position: relative;
   width: 100%;
   height: 100%;
   background: #0e0d10;
+  isolation: isolate;
 }
 
 .mx-explorer-stage {
@@ -28,6 +29,7 @@
     opacity: 0.45;
     transform: scale(1.045);
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -39,12 +41,52 @@
     opacity: 0.45;
     transform: scale(0.96);
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
   }
 }
 
+/* Search and saved-location controls: upper-left */
+.mx-explorer-search-controls {
+  position: absolute;
+  z-index: 1100;
+  top: 76px;
+  left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100% - 48px));
+  pointer-events: auto;
+}
+
+/* Dataset layer panel: left side, offset from navigation controls */
+.mx-explorer-layer-panel {
+  position: absolute;
+  z-index: 1100;
+  top: 176px;
+  left: 88px;
+  display: flex;
+  flex-direction: column;
+  width: min(350px, calc(100% - 112px));
+  max-height: calc(100% - 200px);
+  overflow-y: auto;
+  padding: 16px;
+  pointer-events: auto;
+}
+
+/* Shared floating panel behavior */
+.mx-explorer-floating-panel {
+  position: relative;
+  z-index: 1100;
+  width: 100%;
+  max-height: min(420px, calc(100vh - 180px));
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+/* Existing location panel */
 .mx-explorer-location-panel {
   position: absolute;
   z-index: 1120;
@@ -59,21 +101,75 @@
   pointer-events: auto;
 }
 
+/* Temporal toolbar: bottom-right */
+.mx-temporal-toolbar {
+  position: absolute;
+  z-index: 1090;
+  right: 24px;
+  bottom: 24px;
+  width: min(350px, calc(100% - 48px));
+  max-height: min(42vh, 360px);
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+/* Consistent sizing for floating controls */
+.mx-explorer-search-controls,
+.mx-explorer-layer-panel,
+.mx-temporal-toolbar,
+.mx-explorer-location-panel {
+  box-sizing: border-box;
+}
+
 @media (max-width: 1024px) {
   .mx-explorer-location-panel {
     top: 76px;
     max-height: calc(100% - 96px);
   }
+
+  .mx-explorer-layer-panel {
+    top: 176px;
+    left: 70px;
+    width: min(315px, calc(100% - 96px));
+    max-height: calc(100% - 200px);
+  }
+
+  .mx-temporal-toolbar {
+    right: 16px;
+    bottom: 16px;
+    width: min(320px, calc(100% - 32px));
+  }
 }
 
 @media (max-width: 640px) {
+  .mx-explorer-search-controls {
+    top: 68px;
+    left: 12px;
+    width: calc(100% - 24px);
+  }
+
+  .mx-explorer-layer-panel {
+    top: 176px;
+    left: 64px;
+    right: 12px;
+    width: auto;
+    max-height: calc(100% - 300px);
+  }
+
   .mx-explorer-location-panel {
-    right: 16px;
-    left: 16px;
+    right: 12px;
+    left: 12px;
     top: auto;
     bottom: 168px;
     width: auto;
     max-height: calc(100% - 240px);
     padding: 16px;
+  }
+
+  .mx-temporal-toolbar {
+    right: 12px;
+    bottom: 12px;
+    width: min(320px, calc(100% - 24px));
+    max-height: 30vh;
   }
 }
