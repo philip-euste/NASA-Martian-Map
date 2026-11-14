@@ -37,23 +37,6 @@ import {
 import PerseveranceImageryPanel from "../mission/PerseveranceImageryPanel";
 import type { Observation } from "../../types";
 
-function getElevationSourceLabel(elevation: DemElevation): string {
-  if (elevation.isFallback) {
-    return "Local CTX DEM";
-  }
-
-  switch (elevation.source?.toUpperCase()) {
-    case "HIRISE":
-      return "HiRISE Digital Terrain Model";
-    case "MOLA":
-      return "MOLA Global Topography";
-    case "CTX":
-      return "CTX Digital Terrain Model";
-    default:
-      return elevation.source ?? "Unknown source";
-  }
-}
-
 export default function LocationPage() {
   const { siteId } = useParams<{ siteId: string }>();
   const navigate = useNavigate();
@@ -342,7 +325,7 @@ export default function LocationPage() {
                   label="Elevation"
                   value={
                     elevationLoading
-                      ? "Querying DEM…"
+                      ? "Querying Mars DEM…"
                       : elevation
                         ? `${elevation.elevation.toFixed(2)} ${elevation.unit}`
                         : undefined
@@ -355,34 +338,10 @@ export default function LocationPage() {
                 />
 
                 {elevation && (
-                  <div className="mt-2 space-y-1">
-                    <p className="mx-mono text-[11px] text-mx-accent">
-                      {getElevationSourceLabel(elevation)}
-                    </p>
-
-                    {elevation.resolution_meters != null && (
-                      <p className="mx-mono text-[10px] text-mx-dim">
-                        Resolution: approximately{" "}
-                        {elevation.resolution_meters.toLocaleString()} m/pixel
-                      </p>
-                    )}
-
-                    {elevation.vertical_reference && (
-                      <p className="mx-mono text-[10px] text-mx-dim">
-                        Vertical reference: {elevation.vertical_reference}
-                      </p>
-                    )}
-
-                    <p className="break-all text-[10px] text-mx-dim">
-                      Dataset: {elevation.product_id}
-                    </p>
-
-                    {elevation.isFallback && (
-                      <p className="text-[10px] text-mx-dim">
-                        Local fallback dataset
-                      </p>
-                    )}
-                  </div>
+                  <p className="mx-mono mt-2 break-all text-[11px] text-mx-accent">
+                    DEM product: {elevation.product_id || "Unknown"} · row{" "}
+                    {elevation.row}, col {elevation.column}
+                  </p>
                 )}
 
                 {elevationError && (
