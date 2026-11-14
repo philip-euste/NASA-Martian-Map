@@ -23,3 +23,5 @@ __pycache__/
 frontend/data/raw/
 **/datasets/meda
 
+
+__pycache__, .venv, frontend/node_modules/, dist/, coverage/, .vite/, .env, .env.*, !.env.example, .venv/, venv/, __pycache__/, *.py[cod], *.egg-info/, .pytest_cache/, .mypy_cache/, /.agents/skills/, frontend/data/raw/, **/datasets/meda

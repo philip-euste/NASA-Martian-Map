@@ -51,8 +51,12 @@ type MarsGlobeProps = {
 };
 
 const LOCATIONS: Location[] = EXPLORATION_SITES;
+const EMPTY_SAVED_LOCATIONS: SavedLocation[] = [];
 
-const LAYER_OPTIONS = Object.entries(MAP_LAYERS) as [MapLayerId, MapLayer][];
+const LAYER_OPTIONS = Object.entries(MAP_LAYERS) as [
+  MapLayerId,
+  MapLayer
+][];
 
 const LAYER_CATEGORIES: MapLayerCategory[] = [
   "basemap",
@@ -101,16 +105,28 @@ function PointMarker({
         renderOrder={5}
         onClick={(event) => {
           if (!onSelect) return;
+
           event.stopPropagation();
           onSelect();
         }}
       >
-        <sphereGeometry args={[selected ? 0.022 : 0.014, 18, 18]} />
-        <meshBasicMaterial color={selected ? selectedColor : color} />
+        <sphereGeometry
+          args={[
+            selected ? 0.022 : 0.014,
+            12,
+            12,
+          ]}
+        />
+
+        <meshBasicMaterial
+          color={selected ? selectedColor : color}
+        />
       </mesh>
+
       {selected && (
         <mesh renderOrder={4}>
-          <sphereGeometry args={[0.032, 18, 18]} />
+          <sphereGeometry args={[0.032, 12, 12]} />
+
           <meshBasicMaterial
             color="#f47738"
             transparent
@@ -157,76 +173,160 @@ function GlobeScene({
   onSelectSite: (location: Location) => void;
   onSelectSaved: (location: SavedLocation) => void;
   onSelectSurfacePoint: (coordinates: Coordinates) => void;
-  onCameraUpdate: (coordinates: Coordinates, distance: number) => void;
+  onCameraUpdate: (
+    coordinates: Coordinates,
+    distance: number
+  ) => void;
   onTextureLoaded: (message: string) => void;
 }) {
   const { camera } = useThree();
+
   const flyToDirection = useRef<THREE.Vector3 | null>(null);
   const flyToDistance = useRef<number | null>(null);
+
   const initializedRef = useRef(false);
+
   const lastReportRef = useRef(0);
 
-  // Position camera directly over current focusCoordinates on first mount
+  const lastReportedDirectionRef = useRef(
+    new THREE.Vector3()
+  );
+
+  const lastReportedDistanceRef = useRef<number | null>(
+    null
+  );
+
+  // Keep the newest focus values available without making ordinary
+  // camera-coordinate updates trigger the fly-to effect.
+  const latestFocusRef = useRef(focusCoordinates);
+  const latestDistanceRef = useRef(initialDistance);
+
+  latestFocusRef.current = focusCoordinates;
+  latestDistanceRef.current = initialDistance;
+
+  // Initialize the camera only once.
   useEffect(() => {
     if (initializedRef.current) return;
+
     initializedRef.current = true;
+
     const startVector = coordinatesToVector(
       focusCoordinates.latitude,
       focusCoordinates.longitude,
       initialDistance
     );
+
     camera.position.copy(startVector);
     camera.lookAt(0, 0, 0);
-  }, [camera, focusCoordinates.latitude, focusCoordinates.longitude, initialDistance]);
+  }, [camera, focusCoordinates, initialDistance]);
 
-  // Smoothly animate camera orientation when focusRequestVersion updates
+  // Only a deliberate focus request should trigger a fly-to.
+  // Camera updates caused by OrbitControls must not trigger this effect.
   useEffect(() => {
+    const focus = latestFocusRef.current;
+
     flyToDirection.current = coordinatesToVector(
-      focusCoordinates.latitude,
-      focusCoordinates.longitude,
+      focus.latitude,
+      focus.longitude,
       1
     ).normalize();
-    flyToDistance.current = Math.min(Math.max(initialDistance, 1.75), 3.4);
-  }, [
-    focusCoordinates.latitude,
-    focusCoordinates.longitude,
-    focusRequestVersion,
-    initialDistance,
-  ]);
+
+    flyToDistance.current = Math.min(
+      Math.max(latestDistanceRef.current, 1.75),
+      3.4
+    );
+  }, [focusRequestVersion]);
 
   useFrame((_, delta) => {
     const goal = flyToDirection.current;
 
     if (goal) {
-      const currentDist = camera.position.length();
+      const currentDistance = camera.position.length();
+
       direction.copy(camera.position).normalize();
 
       const progress = 1 - Math.exp(-delta * 6.5);
+
       rotation.setFromUnitVectors(direction, goal);
-      stepRotation.identity().slerp(rotation, progress);
+
+      stepRotation.identity().slerp(
+        rotation,
+        progress
+      );
+
       direction.applyQuaternion(stepRotation).normalize();
 
-      const targetDist = flyToDistance.current ?? currentDist;
-      const nextDist = THREE.MathUtils.lerp(currentDist, targetDist, progress);
+      const targetDistance =
+        flyToDistance.current ?? currentDistance;
 
-      camera.position.copy(direction).multiplyScalar(nextDist);
+      const nextDistance = THREE.MathUtils.lerp(
+        currentDistance,
+        targetDistance,
+        progress
+      );
+
+      camera.position
+        .copy(direction)
+        .multiplyScalar(nextDistance);
+
       camera.lookAt(0, 0, 0);
 
       if (
         direction.dot(goal) > 0.99995 &&
-        Math.abs(nextDist - targetDist) < 0.01
+        Math.abs(nextDistance - targetDistance) < 0.01
       ) {
         flyToDirection.current = null;
         flyToDistance.current = null;
       }
     }
 
+    // Report camera movement less frequently and only when
+    // the position or distance has changed meaningfully.
     const now = performance.now();
-    if (now - lastReportRef.current > 120) {
-      lastReportRef.current = now;
-      const coords = vectorToCoordinates(camera.position);
-      onCameraUpdate(coords, camera.position.length());
+
+    if (now - lastReportRef.current < 250) {
+      return;
     }
+
+    lastReportRef.current = now;
+
+    const currentDistance = camera.position.length();
+
+    const currentDirection = direction
+      .copy(camera.position)
+      .normalize();
+
+    const previousDirection =
+      lastReportedDirectionRef.current;
+
+    const previousDistance =
+      lastReportedDistanceRef.current;
+
+    const directionChanged =
+      previousDistance === null ||
+      currentDirection.angleTo(previousDirection) >
+        THREE.MathUtils.degToRad(0.05);
+
+    const distanceChanged =
+      previousDistance === null ||
+      Math.abs(currentDistance - previousDistance) > 0.008;
+
+    if (!directionChanged && !distanceChanged) {
+      return;
+    }
+
+    previousDirection.copy(currentDirection);
+
+    lastReportedDistanceRef.current = currentDistance;
+
+    const coordinates = vectorToCoordinates(
+      camera.position
+    );
+
+    onCameraUpdate(
+      coordinates,
+      currentDistance
+    );
   });
 
   return (
@@ -241,7 +341,9 @@ function GlobeScene({
 
       {sites.map((location) => {
         const isSelected =
-          selectedKind === "site" && selectedSiteName === location.name;
+          selectedKind === "site" &&
+          selectedSiteName === location.name;
+
         return (
           <PointMarker
             key={location.name}
@@ -255,7 +357,9 @@ function GlobeScene({
 
       {savedLocations.map((location) => {
         const isSelected =
-          selectedKind === "saved" && selectedSavedId === location.id;
+          selectedKind === "saved" &&
+          selectedSavedId === location.id;
+
         return (
           <PointMarker
             key={location.id}
@@ -279,8 +383,8 @@ function GlobeScene({
       <Stars
         radius={80}
         depth={50}
-        count={2500}
-        factor={4}
+        count={1000}
+        factor={3}
         fade
       />
 
@@ -305,104 +409,168 @@ export default function MarsGlobe({
 }: MarsGlobeProps = {}) {
   const shared = useOptionalMarsExplorer();
 
-  // Standalone state fallback when rendered outside MarsExplorerProvider
+  // Keep the latest context available to stable callbacks.
+  const sharedRef = useRef(shared);
+  sharedRef.current = shared;
+
   const [localSelectedLocation, setLocalSelectedLocation] =
     useState<Location | null>(null);
+
   const [localLayerId, setLocalLayerId] =
     useState<MapLayerId>("mars_viking_global");
+
   const [localStatus, setLocalStatus] =
     useState("Loading NASA imagery...");
-  const [localFocus, setLocalFocus] = useState<Coordinates>({
-    latitude: 18.4,
-    longitude: 77.5,
-  });
-  const [localFocusVersion, setLocalFocusVersion] = useState(1);
 
-  const distanceRef = useRef(shared?.globeDistance ?? 3.2);
+  const [localFocus, setLocalFocus] =
+    useState<Coordinates>({
+      latitude: 18.4,
+      longitude: 77.5,
+    });
+
+  const [localFocusVersion, setLocalFocusVersion] =
+    useState(1);
+
+  const distanceRef = useRef(
+    shared?.globeDistance ?? 3.2
+  );
+
   const cameraCoordsRef = useRef<Coordinates>(
     shared?.focusCoordinates ?? localFocus
   );
 
-  const selectedLayerId = shared ? shared.selectedLayerId : localLayerId;
-  const selectedLayer = MAP_LAYERS[selectedLayerId];
-  const textureStatus = shared ? shared.textureStatus : localStatus;
+  const selectedLayerId = shared
+    ? shared.selectedLayerId
+    : localLayerId;
 
+  const selectedLayer = MAP_LAYERS[selectedLayerId];
+
+  const textureStatus = shared
+    ? shared.textureStatus
+    : localStatus;
+
+  // Stable callback: context object changes will not restart
+  // MarsSurface's NASA texture initialization effect.
   const handleTextureLoaded = useCallback(
     (message: string) => {
-      if (shared) {
-        shared.setTextureStatus(message);
+      const currentShared = sharedRef.current;
+
+      if (currentShared) {
+        currentShared.setTextureStatus(message);
       } else {
         setLocalStatus(message);
       }
     },
-    [shared]
+    []
   );
 
   const handleSelectSite = useCallback(
     (location: Location) => {
-      if (shared) {
+      const currentShared = sharedRef.current;
+
+      if (currentShared) {
         const site = getSiteByName(location.name);
+
         if (site) {
-          shared.selectSite(site, { focus: true });
+          currentShared.selectSite(site, {
+            focus: true,
+          });
         } else {
-          shared.selectCustomCoordinates(location, { focus: true });
+          currentShared.selectCustomCoordinates(
+            location,
+            { focus: true }
+          );
         }
       } else {
         setLocalSelectedLocation(location);
+
         setLocalFocus({
           latitude: location.latitude,
           longitude: location.longitude,
         });
-        setLocalFocusVersion((v) => v + 1);
+
+        setLocalFocusVersion((version) => version + 1);
       }
     },
-    [shared]
+    []
   );
 
   const handleSelectSaved = useCallback(
     (location: SavedLocation) => {
-      if (shared) {
-        shared.goToSavedLocation(location, { focus: true });
-      }
+      const currentShared = sharedRef.current;
+
+      if (!currentShared) return;
+
+      currentShared.goToSavedLocation(location, {
+        focus: true,
+      });
     },
-    [shared]
+    []
   );
 
   const handleSelectSurfacePoint = useCallback(
     (coordinates: Coordinates) => {
-      if (shared) {
-        shared.selectCustomCoordinates(coordinates, { focus: false });
-      }
+      const currentShared = sharedRef.current;
+
+      if (!currentShared) return;
+
+      currentShared.selectCustomCoordinates(
+        coordinates,
+        { focus: false }
+      );
     },
-    [shared]
+    []
   );
 
+  // Avoid unnecessary context updates while the camera is moving.
   const handleCameraUpdate = useCallback(
-    (coordinates: Coordinates, distance: number) => {
+    (
+      coordinates: Coordinates,
+      distance: number
+    ) => {
       distanceRef.current = distance;
       cameraCoordsRef.current = coordinates;
-      if (shared) {
-        shared.updateCameraFocus(coordinates);
-        shared.setGlobeDistance(distance);
-      }
+
+      const currentShared = sharedRef.current;
+
+      if (!currentShared) return;
+
+      currentShared.updateCameraFocus(coordinates);
+      currentShared.setGlobeDistance(distance);
     },
-    [shared]
+    []
   );
 
-  // Seamless zoom-in transition from 3D Globe into 2D Map as user approaches surface
   const handleWheel = useCallback(
     (event: React.WheelEvent<HTMLDivElement>) => {
-      if (!shared) return;
-      if (event.deltaY < 0 && distanceRef.current <= 1.54) {
-        const sel = shared.selectedLocation;
+      const currentShared = sharedRef.current;
+
+      if (!currentShared) return;
+
+      if (
+        event.deltaY < 0 &&
+        distanceRef.current <= 1.54
+      ) {
+        const selectedLocation =
+          currentShared.selectedLocation;
+
         const target =
-          sel && sameCoords(sel, cameraCoordsRef.current, 18)
-            ? { latitude: sel.latitude, longitude: sel.longitude }
+          selectedLocation &&
+          sameCoords(
+            selectedLocation,
+            cameraCoordsRef.current,
+            18
+          )
+            ? {
+                latitude: selectedLocation.latitude,
+                longitude: selectedLocation.longitude,
+              }
             : cameraCoordsRef.current;
-        shared.triggerZoomInToMap(target);
+
+        currentShared.triggerZoomInToMap(target);
       }
     },
-    [shared]
+    []
   );
 
   const selectedKind = shared
@@ -430,14 +598,22 @@ export default function MarsGlobe({
       : null
     : localSelectedLocation;
 
-  const focusCoordinates = shared ? shared.focusCoordinates : localFocus;
+  const focusCoordinates = shared
+    ? shared.focusCoordinates
+    : localFocus;
+
   const focusRequestVersion = shared
     ? shared.focusRequestVersion
     : localFocusVersion;
 
+  const savedLocations =
+    shared?.savedLocations ?? EMPTY_SAVED_LOCATIONS;
+
   return (
-    <div className="mars-globe" onWheel={handleWheel}>
-      {/* Standalone controls are only shown when MarsGlobe is rendered outside MarsExplorer */}
+    <div
+      className="mars-globe"
+      onWheel={handleWheel}
+    >
       {!shared && (
         <>
           <div className="mars-globe-header">
@@ -447,23 +623,40 @@ export default function MarsGlobe({
             </div>
 
             <div className="mars-globe-layer-control">
-              <label htmlFor="mars-globe-layer">Surface layer</label>
+              <label htmlFor="mars-globe-layer">
+                Surface layer
+              </label>
+
               <select
                 id="mars-globe-layer"
                 value={selectedLayerId}
                 onChange={(event) => {
-                  setLocalLayerId(event.target.value as MapLayerId);
+                  setLocalLayerId(
+                    event.target.value as MapLayerId
+                  );
                 }}
               >
                 {LAYER_CATEGORIES.map((category) => {
-                  const categoryLayers = LAYER_OPTIONS.filter(
-                    ([, layer]) => layer.category === category
-                  );
-                  if (categoryLayers.length === 0) return null;
+                  const categoryLayers =
+                    LAYER_OPTIONS.filter(
+                      ([, layer]) =>
+                        layer.category === category
+                    );
+
+                  if (categoryLayers.length === 0) {
+                    return null;
+                  }
+
                   return (
-                    <optgroup key={category} label={CATEGORY_LABELS[category]}>
+                    <optgroup
+                      key={category}
+                      label={CATEGORY_LABELS[category]}
+                    >
                       {categoryLayers.map(([id, layer]) => (
-                        <option key={id} value={id}>
+                        <option
+                          key={id}
+                          value={id}
+                        >
                           {layer.name}
                         </option>
                       ))}
@@ -473,7 +666,9 @@ export default function MarsGlobe({
               </select>
             </div>
 
-            <span className="mars-globe-status">{textureStatus}</span>
+            <span className="mars-globe-status">
+              {textureStatus}
+            </span>
           </div>
 
           <div className="mars-globe-layer-description">
@@ -490,13 +685,17 @@ export default function MarsGlobe({
             near: 0.05,
             far: 200,
           }}
-          dpr={[1, 2]}
+          dpr={[1, 1.25]}
           gl={{
             antialias: true,
             alpha: false,
+            powerPreference: "high-performance",
           }}
         >
-          <color attach="background" args={["#05070d"]} />
+          <color
+            attach="background"
+            args={["#05070d"]}
+          />
 
           <GlobeScene
             selectedLayerId={selectedLayerId}
@@ -504,16 +703,20 @@ export default function MarsGlobe({
             sharedConfig={shared?.tileConfig}
             focusCoordinates={focusCoordinates}
             focusRequestVersion={focusRequestVersion}
-            initialDistance={shared?.globeDistance ?? 3.2}
+            initialDistance={
+              shared?.globeDistance ?? 3.2
+            }
             sites={LOCATIONS}
-            savedLocations={shared?.savedLocations ?? []}
+            savedLocations={savedLocations}
             selectedPoint={selectedPoint}
             selectedKind={selectedKind}
             selectedSiteName={selectedSiteName}
             selectedSavedId={selectedSavedId}
             onSelectSite={handleSelectSite}
             onSelectSaved={handleSelectSaved}
-            onSelectSurfacePoint={handleSelectSurfacePoint}
+            onSelectSurfacePoint={
+              handleSelectSurfacePoint
+            }
             onCameraUpdate={handleCameraUpdate}
             onTextureLoaded={handleTextureLoaded}
           />
@@ -526,7 +729,8 @@ export default function MarsGlobe({
               type="button"
               onClick={() => handleSelectSite(location)}
               className={
-                selectedKind === "site" && selectedSiteName === location.name
+                selectedKind === "site" &&
+                selectedSiteName === location.name
                   ? "active"
                   : ""
               }
@@ -535,13 +739,14 @@ export default function MarsGlobe({
             </button>
           ))}
 
-          {shared?.savedLocations.map((location) => (
+          {savedLocations.map((location) => (
             <button
               key={location.id}
               type="button"
               onClick={() => handleSelectSaved(location)}
               className={
-                selectedKind === "saved" && selectedSavedId === location.id
+                selectedKind === "saved" &&
+                selectedSavedId === location.id
                   ? "active"
                   : ""
               }
@@ -559,21 +764,31 @@ export default function MarsGlobe({
               <button
                 type="button"
                 aria-label="Close selected location"
-                onClick={() => setLocalSelectedLocation(null)}
+                onClick={() => {
+                  setLocalSelectedLocation(null);
+                }}
               >
                 ×
               </button>
 
               <h3>{localSelectedLocation.name}</h3>
-              <p>{localSelectedLocation.description}</p>
+
+              <p>
+                {localSelectedLocation.description}
+              </p>
+
               <small>
-                {localSelectedLocation.latitude.toFixed(2)}° latitude,{" "}
-                {localSelectedLocation.longitude.toFixed(2)}° longitude
+                {localSelectedLocation.latitude.toFixed(2)}°
+                latitude,{" "}
+                {localSelectedLocation.longitude.toFixed(2)}°
+                longitude
               </small>
 
               {renderLocationActions && (
                 <div className="mars-globe-location-actions">
-                  {renderLocationActions(localSelectedLocation)}
+                  {renderLocationActions(
+                    localSelectedLocation
+                  )}
                 </div>
               )}
             </div>
