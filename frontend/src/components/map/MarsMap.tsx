@@ -1,3 +1,4 @@
+// frontend/src/components/map/MarsMap.tsx
 
 import { useEffect, useState } from "react";
 import {
@@ -18,6 +19,8 @@ import {
   getDataProvider,
   type TileLayerConfig,
 } from "../../services/dataProviders";
+
+import { marsDemProvider } from "../../services/providers/marsDem";
 
 interface Coordinates {
   latitude: number;
@@ -87,6 +90,17 @@ export default function MarsMap() {
   const [coordinates, setCoordinates] =
     useState<Coordinates | null>(null);
 
+  const [elevation, setElevation] =
+    useState<Awaited<
+      ReturnType<typeof marsDemProvider.getElevation>
+    > | null>(null);
+
+  const [elevationLoading, setElevationLoading] =
+    useState(false);
+
+  const [elevationError, setElevationError] =
+    useState<string | null>(null);
+
   const [savedLocations, setSavedLocations] =
     useState<SavedLocation[]>([]);
 
@@ -102,6 +116,51 @@ export default function MarsMap() {
   const [message, setMessage] = useState("");
 
   const layer = MAP_LAYERS[selectedLayer];
+
+  // Retrieve real DEM elevation whenever a map location is selected.
+  useEffect(() => {
+    if (!coordinates) {
+      setElevation(null);
+      setElevationError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadElevation() {
+      setElevationLoading(true);
+      setElevation(null);
+      setElevationError(null);
+
+      try {
+        const result = await marsDemProvider.getElevation(
+          coordinates!
+        );
+
+        if (!cancelled) {
+          setElevation(result);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setElevationError(
+            err instanceof Error
+              ? err.message
+              : "Unable to retrieve elevation."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setElevationLoading(false);
+        }
+      }
+    }
+
+    loadElevation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [coordinates]);
 
   useEffect(() => {
     let cancelled = false;
@@ -236,7 +295,15 @@ export default function MarsMap() {
         <MapContainer
           center={layer.center}
           zoom={layer.zoom}
+          minZoom={1}
+          maxZoom={12}
           crs={L.CRS.EPSG4326}
+          maxBounds={[
+            [-90, -180],
+            [90, 180],
+          ]}
+          maxBoundsViscosity={0.8}
+          worldCopyJump={false}
           style={{ height: "100%", width: "100%" }}
         >
           <MapController
@@ -339,6 +406,33 @@ export default function MarsMap() {
           <p>
             Longitude: {coordinates.longitude.toFixed(5)}°
           </p>
+
+          {elevationLoading && (
+            <p>Retrieving elevation from HiRISE DEM...</p>
+          )}
+
+          {elevationError && (
+            <p role="alert">
+              Elevation unavailable: {elevationError}
+            </p>
+          )}
+
+          {elevation && (
+            <div>
+              <h4>HiRISE Elevation</h4>
+              <p>
+                {elevation.elevation.toFixed(2)}{" "}
+                {elevation.unit}
+              </p>
+              <p>
+                DEM product: {elevation.product_id}
+              </p>
+              <p>
+                Raster pixel: row {elevation.row}, column{" "}
+                {elevation.column}
+              </p>
+            </div>
+          )}
 
           <input
             type="text"

@@ -1,3 +1,4 @@
+// frontend\src\data\mapLayers.ts
 export interface MapLayer {
   id: string;
   name: string;

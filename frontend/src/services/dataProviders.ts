@@ -1,4 +1,4 @@
-// dataProviders.ts
+// frontend\src\services\dataProviders.ts
 import { nasaTrekProvider } from "./providers/nasaTrek";
 
 export interface TileLayerConfig {

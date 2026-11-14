@@ -1,4 +1,4 @@
-
+// frontend\src\app\routes\AppRoutes.tsx
 import { Navigate, Route, Routes } from "react-router-dom";
 import WelcomePage from "../../features/welcome/WelcomePage";
 import ExplorerPage from "../../features/planetary-explorer/ExplorerPage";
