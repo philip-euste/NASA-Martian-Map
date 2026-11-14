@@ -1,13 +1,25 @@
-// frontend\src\services\dataProviders.ts
 import { nasaTrekProvider } from "./providers/nasaTrek";
+
+export interface TileMatrixLevel {
+  id: string;
+  matrixWidth: number;
+  matrixHeight: number;
+  tileWidth: number;
+  tileHeight: number;
+  scaleDenominator: number;
+  topLeftX: number;
+  topLeftY: number;
+}
 
 export interface TileLayerConfig {
   tileUrlTemplate: string;
   zoomOffset: number;
   attribution: string;
   matrixSet?: string;
+  supportedCRS?: string;
   style?: string;
   matrixIds?: string[];
+  matrixLevels?: TileMatrixLevel[];
 }
 
 export interface DataProvider {

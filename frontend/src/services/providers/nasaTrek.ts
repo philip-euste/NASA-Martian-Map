@@ -1,7 +1,6 @@
-// frontend/src/services/providers/nasaTrek.ts
-
 import type {
   TileLayerConfig,
+  TileMatrixLevel,
   DataProvider,
 } from "../dataProviders";
 
@@ -104,9 +103,20 @@ function getElements(
   element: Element | Document,
   name: string
 ): Element[] {
-  return Array.from(
-    element.getElementsByTagNameNS("*", name)
-  );
+  return Array.from(element.getElementsByTagNameNS("*", name));
+}
+
+function getNumber(
+  element: Element,
+  name: string
+): number {
+  const value = Number(getText(element, name));
+
+  if (!Number.isFinite(value)) {
+    throw new Error(`Invalid WMTS value: ${name}`);
+  }
+
+  return value;
 }
 
 async function fetchCapabilities(
@@ -189,25 +199,70 @@ async function fetchCapabilities(
     );
   }
 
-  const matrixIds = getElements(
+  const supportedCRS = getText(
     matrixSetDefinition,
-    "TileMatrix"
-  )
-    .map((item) => getText(item, "Identifier"))
-    .filter((id): id is string => Boolean(id));
-
-  if (matrixIds.length === 0) {
-    throw new Error("No tile matrix levels found.");
-  }
-
-  const sequential = matrixIds.every(
-    (id, index) => id === String(index)
+    "SupportedCRS"
   );
 
-  if (!sequential) {
-    throw new Error(
-      `Unsupported tile matrix identifiers: ${matrixIds.join(", ")}`
+  const matrixElements = getElements(
+    matrixSetDefinition,
+    "TileMatrix"
+  );
+
+  const matrixLevels: TileMatrixLevel[] = matrixElements
+    .map((item) => {
+      const identifier = getText(item, "Identifier");
+      const topLeft = getText(item, "TopLeftCorner");
+
+      if (!identifier || !topLeft) {
+        throw new Error("Incomplete WMTS tile matrix.");
+      }
+
+      const coordinates = topLeft
+        .split(/\s+/)
+        .map(Number);
+
+      if (
+        coordinates.length < 2 ||
+        !coordinates.every(Number.isFinite)
+      ) {
+        throw new Error(
+          `Invalid TopLeftCorner for matrix ${identifier}`
+        );
+      }
+
+      let [topLeftX, topLeftY] = coordinates;
+
+      // EPSG:4326 uses latitude, longitude axis order.
+      // CRS84 uses longitude, latitude axis order.
+      if (
+        supportedCRS?.includes("EPSG") &&
+        supportedCRS.includes("4326")
+      ) {
+        [topLeftX, topLeftY] = [
+          coordinates[1],
+          coordinates[0],
+        ];
+      }
+
+      return {
+        id: identifier,
+        matrixWidth: getNumber(item, "MatrixWidth"),
+        matrixHeight: getNumber(item, "MatrixHeight"),
+        tileWidth: getNumber(item, "TileWidth"),
+        tileHeight: getNumber(item, "TileHeight"),
+        scaleDenominator: getNumber(item, "ScaleDenominator"),
+        topLeftX,
+        topLeftY,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.scaleDenominator - a.scaleDenominator
     );
+
+  if (matrixLevels.length === 0) {
+    throw new Error("No tile matrix levels found.");
   }
 
   const resources = getElements(
@@ -219,7 +274,12 @@ async function fetchCapabilities(
     (item) => item.getAttribute("resourceType") === "tile"
   );
 
-  const template = tileResource?.getAttribute("template");
+  const advertisedTemplate =
+    tileResource?.getAttribute("template");
+
+  const template =
+    advertisedTemplate ??
+    layer.tileUrlTemplate;
 
   if (!template) {
     throw new Error("No WMTS tile URL template found.");
@@ -234,11 +294,13 @@ async function fetchCapabilities(
 
   return {
     tileUrlTemplate: resolvedTileUrl,
-    zoomOffset: -1,
+    zoomOffset: layer.zoomOffset ?? -1,
     attribution: "NASA Mars Trek",
     matrixSet: matrixSetId,
+    supportedCRS,
     style: styleId,
-    matrixIds,
+    matrixIds: matrixLevels.map((level) => level.id),
+    matrixLevels,
   };
 }
 
@@ -256,14 +318,6 @@ export const nasaTrekProvider: DataProvider = {
 
     if (!layer) {
       throw new Error(`Unknown NASA layer: ${layerId}`);
-    }
-
-    if (layer.static && layer.tileUrlTemplate) {
-      return {
-        tileUrlTemplate: layer.tileUrlTemplate,
-        zoomOffset: layer.zoomOffset ?? -1,
-        attribution: "NASA Mars Trek",
-      };
     }
 
     return fetchCapabilities(layer);
