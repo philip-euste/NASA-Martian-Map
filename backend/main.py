@@ -2,8 +2,11 @@ import httpx
 import xml.etree.ElementTree as ET
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from terrain_dem import router as terrain_dem_router
+
 
 app = FastAPI(title="Marswalk API")
+app.include_router(terrain_dem_router)  
 
 app.add_middleware(
     CORSMiddleware,
