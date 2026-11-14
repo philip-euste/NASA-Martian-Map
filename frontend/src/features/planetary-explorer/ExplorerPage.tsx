@@ -14,18 +14,14 @@ import AppLayout from "../../components/layout/AppLayout";
 import { useMission } from "../../state/mission/MissionContext";
 import { getSiteByName } from "../../data/explorationSites";
 
-// ==========================================
-// TYPES
-// ==========================================
-
-type ExplorerView = "globe" | "map";
-
-// ==========================================
-// MAIN PAGE
-// ==========================================
+type ExplorerView = "globe" | "map" | "jezero";
 
 export default function ExplorerPage() {
   const [searchParams] = useSearchParams();
+
+  const { mission, setRegion } = useMission();
+
+  const isJezeroRegion = mission.region?.id === "jezero-crater";
 
   const [view, setView] = useState<ExplorerView>(
     searchParams.get("view") === "map" ? "map" : "globe"
@@ -35,16 +31,24 @@ export default function ExplorerPage() {
     searchParams.get("site")
   );
 
-  const { mission, setRegion } = useMission();
-
-  // Keep deep-link state synchronized when the URL changes.
   useEffect(() => {
     const requestedView = searchParams.get("view");
     const requestedSite = searchParams.get("site");
 
-    setView(requestedView === "map" ? "map" : "globe");
+    if (requestedView === "jezero" && isJezeroRegion) {
+      setView("jezero");
+    } else {
+      setView(requestedView === "map" ? "map" : "globe");
+    }
+
     setFocusSiteId(requestedSite);
-  }, [searchParams]);
+  }, [searchParams, isJezeroRegion]);
+
+  useEffect(() => {
+    if (!isJezeroRegion && view === "jezero") {
+      setView("globe");
+    }
+  }, [isJezeroRegion, view]);
 
   const tabClass = (active: boolean) =>
     `mx-chip ${active ? "mx-chip--active" : ""}`;
@@ -76,6 +80,18 @@ export default function ExplorerPage() {
             <MapIcon size={13} aria-hidden="true" />
             2D Map
           </button>
+
+          {isJezeroRegion && (
+            <button
+              type="button"
+              className={tabClass(view === "jezero")}
+              aria-pressed={view === "jezero"}
+              onClick={() => setView("jezero")}
+            >
+              <MapPin size={13} aria-hidden="true" />
+              Jezero Walk
+            </button>
+          )}
         </div>
 
         <div className="h-full w-full">
@@ -141,9 +157,14 @@ export default function ExplorerPage() {
                 );
               }}
             />
+          ) : view === "map" ? (
+            <MarsMap focusSiteId={focusSiteId ?? undefined} />
           ) : (
-            <MarsMap
-              focusSiteId={focusSiteId ?? undefined}
+            <iframe
+              title="Jezero Crater First-Person Explorer"
+              src="/src/simulator/jezero_crater/scripts/jezero-simulator.html"
+              className="absolute inset-0 h-full w-full border-0"
+              allow="fullscreen; pointer-lock"
             />
           )}
         </div>
