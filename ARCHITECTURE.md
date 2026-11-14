@@ -14,32 +14,66 @@ NASAMartianMap
 └── frontend
     ├── dist
     ├── node_modules
+    ├── public
     └── src
         ├── app\routes
         │   └── AppRoutes.tsx
-        ├── components\map
-        │   └── MarsMap.tsx 
+        ├── components
+        │   |── layout
+        |   |   |── AppLayout.tsx
+        │   |   └── Header.tsx
+        │   |── map
+        |   |   |── MarsMap.css
+        |   |   |── MarsMap.tsx
+        |   |   └── RouteMap.tsx
+        │   └── ui
+        |       └── index.tsx
         ├── data
         │   |── mapLayers.ts 
+        |   |── explorationSites.ts
         |   └── marsLocations.ts
         ├── features
+        |   ├── mission
+        │   │   |── EvidenceInspectorPage.tsx
+        │   │   |── ExpeditionReportPage.tsx
+        │   │   |── ExperiditionReviewPage.tsx
+        │   │   |── InvestigationPage.tsx
+        │   │   |── KnowledgeGapsPage.tsx
+        │   │   |── missionHelpers.ts
+        │   │   |── MissionLayout.tsx
+        │   │   |── RoutePlannerPage.tsx
+        │   │   └── workflow.ts
         │   ├── planetary-explorer
+        │   │   |── LocationPage.tsx
         │   │   └── ExplorerPage.tsx
         │   └── welcome
+        |       |── Welcomeassets
+        │       |── WelcomePage.css
         │       └── WelcomePage.tsx
         ├── globe
         │   ├── components
         │   ├── utils
+        │   ├── MarsGlobe.css
+        │   ├── MarsSurface.tsx
         │   └── MarsGlobe.tsx
         ├── mars_walking
         │   ├── main.ts
         │   └── style.css
         ├── services
-        │   └── providers
-        │       ├── nasaTrek.ts 
+        │   |── providers
+        │   |   ├── nasaTrek.ts 
+        │   |   └── marsDem.ts
         │   └── dataProviders.ts 
+        ├── simulator\jezero-crater
+        │   |── scripts
+        │   |   ├── build-jezero.mjs
+        │   |   └── jezero_simulator.html
+        │   └── src
+        │       └── jezero_main.ts
         ├── state\mission
         │   └── MissionContext.tsx
+        ├── styles
+        │   └── theme.css
         ├── types
         │   ├── assets.d.ts
         │   └── index.ts

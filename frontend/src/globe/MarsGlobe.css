@@ -1,0 +1,317 @@
+/* frontend/src/globe/MarsGlobe.css
+   Styling for the 3D Mars globe overlay markup (mars-globe-* classes). */
+
+.mars-globe {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #05070d;
+}
+
+.mars-globe-canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #05070d;
+}
+
+/* ---------- Header + description: standalone floating panel, top-left ---------- */
+
+.mars-globe-header,
+.mars-globe-layer-description {
+  position: relative;
+  z-index: 10;
+  width: min(320px, calc(100% - 32px));
+  margin-left: 24px;
+  border: 1px solid var(--color-mx-border);
+  background: rgb(26 24 28 / 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.mars-globe-header {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 20px;
+  padding: 16px 16px 14px;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+}
+
+.mars-globe-header h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-mx-accent);
+}
+
+.mars-globe-header p {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-mx-text);
+}
+
+.mars-globe-layer-control label {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-mx-dim);
+}
+
+#mars-globe-layer {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 32px 8px 12px;
+  border: 1px solid var(--color-mx-border-strong);
+  border-radius: 6px;
+  background-color: var(--color-mx-bg);
+  color: var(--color-mx-text);
+  font-size: 13px;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-mx-muted) 50%),
+    linear-gradient(135deg, var(--color-mx-muted) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+#mars-globe-layer:focus-visible {
+  outline: 2px solid var(--color-mx-accent);
+  outline-offset: 2px;
+}
+
+.mars-globe-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--color-mx-muted);
+}
+
+.mars-globe-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-mx-accent);
+}
+
+.mars-globe-layer-description {
+  padding: 0 16px 16px;
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-mx-muted);
+}
+
+/* ---------- Site quick-select, bottom-left above temporal toolbar ---------- */
+
+.mars-globe-controls {
+  position: absolute;
+  z-index: 10;
+  left: 24px;
+  bottom: 132px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: min(460px, calc(100% - 48px));
+}
+
+.mars-globe-controls button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--color-mx-border-strong);
+  border-radius: 6px;
+  background: rgb(20 18 21 / 0.9);
+  color: var(--color-mx-text);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+.mars-globe-controls button::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  color: var(--color-mx-muted);
+}
+
+.mars-globe-controls button:hover {
+  border-color: var(--color-mx-muted);
+}
+
+.mars-globe-controls button.active {
+  border-color: var(--color-mx-accent);
+  color: var(--color-mx-accent);
+}
+
+.mars-globe-controls button.active::before {
+  background: var(--color-mx-accent);
+  color: var(--color-mx-accent);
+}
+
+/* ---------- Selected location panel (standalone fallback) ---------- */
+
+.mars-globe-location {
+  position: absolute;
+  z-index: 11;
+  top: 20px;
+  right: 24px;
+  width: min(340px, calc(100% - 48px));
+  padding: 20px;
+  border: 1px solid var(--color-mx-border);
+  border-radius: 10px;
+  background: rgb(26 24 28 / 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--mx-shadow);
+}
+
+.mars-globe-location::before {
+  content: "Selected location";
+  display: block;
+  margin-bottom: 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-mx-accent);
+}
+
+.mars-globe-location > button[aria-label="Close selected location"] {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-mx-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mars-globe-location > button[aria-label="Close selected location"]:hover {
+  background: rgb(255 255 255 / 0.06);
+  color: var(--color-mx-text);
+}
+
+.mars-globe-location h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-mx-text);
+}
+
+.mars-globe-location p {
+  margin: 10px 0 12px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-mx-muted);
+}
+
+.mars-globe-location small {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--color-mx-text);
+}
+
+.mars-globe-location-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-mx-border);
+}
+
+/* ---------- Interaction hint, bottom-right ---------- */
+
+.mars-globe-hint {
+  position: absolute;
+  z-index: 10;
+  right: 24px;
+  bottom: 24px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-mx-dim);
+  pointer-events: none;
+}
+
+@media (max-width: 1023px) {
+  .mars-globe-header {
+    margin-top: 76px;
+  }
+
+  .mars-globe-location {
+    top: 76px;
+  }
+}
+
+@media (max-width: 767px) {
+  .mars-globe-header,
+  .mars-globe-layer-description {
+    width: calc(100% - 24px);
+    margin-left: 12px;
+  }
+
+  .mars-globe-header p {
+    font-size: 15px;
+  }
+
+  .mars-globe-layer-description {
+    display: none;
+  }
+
+  .mars-globe-header {
+    border-bottom: 1px solid var(--color-mx-border);
+    border-radius: 10px;
+  }
+
+  .mars-globe-location {
+    top: auto;
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    width: auto;
+  }
+
+  .mars-globe-controls {
+    left: 12px;
+    bottom: 148px;
+    max-width: calc(100% - 24px);
+  }
+
+  .mars-globe-hint {
+    display: none;
+  }
+
+  .mars-globe-canvas:has(.mars-globe-location) .mars-globe-controls {
+    display: none;
+  }
+}

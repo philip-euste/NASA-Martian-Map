@@ -2,6 +2,7 @@ Infrastructure needed:
 
 
 Backend:
+- https, fastapi, rasterio
 - Python
 
 Frontend:

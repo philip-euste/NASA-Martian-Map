@@ -1,0 +1,103 @@
+/* frontend/src/features/welcome/WelcomePage.css
+   Landing hero (Figma: Landing Page — Desktop).
+   Tailwind and design tokens are loaded globally from src/index.css. */
+
+.planetary-background {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: max(620px, calc(100vh - var(--mx-header-height) - 96px));
+  background-color: var(--color-mx-bg);
+  background-image:
+    linear-gradient(90deg, rgb(20 18 21 / 0.92) 0%, rgb(20 18 21 / 0.55) 38%, rgb(20 18 21 / 0) 62%),
+    url('./Welcomeassets/Landingpage-background.jpg');
+  background-size: cover;
+  background-position: 70% center;
+  background-repeat: no-repeat;
+}
+
+.welcome-container {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 72px 20px;
+}
+
+@media (min-width: 640px) {
+  .welcome-container {
+    padding: 72px 32px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .welcome-container {
+    padding: 72px 56px;
+  }
+}
+
+.sectionlabel {
+  margin: 0 0 28px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-mx-muted);
+}
+
+.Title h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(64px, 9vw, 112px);
+  line-height: 0.94;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  color: var(--color-mx-text);
+}
+
+.introduction {
+  max-width: 420px;
+  margin: 28px 0 36px;
+}
+
+.introduction p {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--color-mx-muted);
+}
+
+.buttonstarting {
+  min-height: 46px;
+  padding: 0 22px;
+}
+
+.planet-caption {
+  position: absolute;
+  right: 56px;
+  bottom: 40px;
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (min-width: 1024px) {
+  .planet-caption {
+    display: flex;
+  }
+}
+
+@media (max-width: 767px) {
+  .planetary-background {
+    background-image:
+      linear-gradient(180deg, rgb(20 18 21 / 0.5) 0%, rgb(20 18 21 / 0.92) 70%),
+      url('./Welcomeassets/Landingpage-background.jpg');
+    background-position: 75% top;
+  }
+}
