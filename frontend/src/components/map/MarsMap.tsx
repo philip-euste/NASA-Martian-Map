@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   MapContainer,
   TileLayer,
+  AttributionControl,
   useMap,
   useMapEvents,
   CircleMarker,
@@ -749,7 +750,7 @@ export default function MarsMap({
   }
 
   return (
-    <section className="relative h-full min-h-0 w-full">
+    <section className="mx-map relative h-full min-h-0 w-full">
       <div
         className="relative h-full min-h-0 w-full"
         style={{ background: "#171717" }}
@@ -759,6 +760,8 @@ export default function MarsMap({
           zoom={layer.zoom}
           minZoom={1}
           maxZoom={12}
+          zoomControl={false}
+          attributionControl={false}
           crs={L.CRS.EPSG4326}
           maxBounds={[
             [-90, -180],
@@ -772,6 +775,8 @@ export default function MarsMap({
             width: "100%",
           }}
         >
+          <AttributionControl prefix={false} />
+
           <MapReference onMapReady={setMap} />
 
           <MapController
@@ -799,7 +804,6 @@ export default function MarsMap({
             />
           ) : null}
 
-          
           {EXPLORATION_SITES.map((site) => {
             const active = site.id === selectedSiteId;
 
@@ -834,7 +838,6 @@ export default function MarsMap({
               </CircleMarker>
             );
           })}
-
 
           {coordinates && !selectedSite && (
             <CircleMarker

@@ -1,0 +1,29 @@
+2021-02-19T22:01:41.98Z	urn:nasa:pds:mars2020_meda:data_derived_env:we__0001___________der_ancillary___________p
+2021-02-20T22:38:19.18Z	urn:nasa:pds:mars2020_meda:data_derived_env:we__0002___________der_ancillary___________p
+2021-02-19T21:50:17.98Z	urn:nasa:pds:mars2020_meda:data_calibrated_env:we__0001___________cal_ats_________________p
+2021-02-20T22:40:31.43Z	urn:nasa:pds:mars2020_meda:data_calibrated_env:we__0002___________cal_ats_________________p
+2021-02-19T22:02:54.98Z	urn:nasa:pds:mars2020_meda:data_derived_env:we__0001___________der_ps__________________p
+2021-02-20T22:40:19.68Z	urn:nasa:pds:mars2020_meda:data_derived_env:we__0002___________der_ps__________________p
+2021-02-19T21:51:05.98Z	urn:nasa:pds:mars2020_meda:data_calibrated_env:we__0001___________cal_rds_________________p
+2021-02-20T22:40:25.68Z	urn:nasa:pds:mars2020_meda:data_calibrated_env:we__0002___________cal_rds_________________p
+2021-02-19T21:50:37.47Z	urn:nasa:pds:mars2020_meda:data_derived_env:we__0001___________der_rhs_________________p
+2021-02-20T22:40:37.18Z	urn:nasa:pds:mars2020_meda:data_derived_env:we__0002___________der_rhs_________________p
+2021-02-19T21:37:24.47Z	urn:nasa:pds:mars2020_meda:data_derived_env:we__0001___________der_tirs________________p
+2021-02-20T22:37:28.68Z	urn:nasa:pds:mars2020_meda:data_derived_env:we__0002___________der_tirs________________p
+2021-03-27T16:47:26.10Z	urn:nasa:pds:mars2020_meda:data_derived_env:we__0036___________der_ws__________________p
+2021-03-28T20:13:20.38Z	urn:nasa:pds:mars2020_meda:data_derived_env:we__0037___________der_ws__________________p
+
+urn:nasa:pds:mars2020_meda:data_derived_env:we__0001___________der_ancillary___________p
+urn:nasa:pds:mars2020_meda:data_derived_env:we__0002___________der_ancillary___________p
+urn:nasa:pds:mars2020_meda:data_calibrated_env:we__0001___________cal_ats_________________p
+urn:nasa:pds:mars2020_meda:data_calibrated_env:we__0002___________cal_ats_________________p
+urn:nasa:pds:mars2020_meda:data_derived_env:we__0001___________der_ps__________________p
+urn:nasa:pds:mars2020_meda:data_derived_env:we__0002___________der_ps__________________p
+urn:nasa:pds:mars2020_meda:data_calibrated_env:we__0001___________cal_rds_________________p
+urn:nasa:pds:mars2020_meda:data_calibrated_env:we__0002___________cal_rds_________________p
+urn:nasa:pds:mars2020_meda:data_derived_env:we__0001___________der_rhs_________________p
+urn:nasa:pds:mars2020_meda:data_derived_env:we__0002___________der_rhs_________________p
+urn:nasa:pds:mars2020_meda:data_derived_env:we__0001___________der_tirs________________p
+urn:nasa:pds:mars2020_meda:data_derived_env:we__0002___________der_tirs________________p
+urn:nasa:pds:mars2020_meda:data_derived_env:we__0036___________der_ws__________________p
+urn:nasa:pds:mars2020_meda:data_derived_env:we__0037___________der_ws__________________p
