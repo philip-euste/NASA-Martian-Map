@@ -1,4 +1,4 @@
-// frontend\src\simulator\jezero_crater\src\main.ts
+// frontend\src\simulator\jezero_crater\src\jezero_main.ts
 // Marswalk — Jezero Crater Explorer
 // Real-terrain renderer driven by the USGS/NASA CTX DEM built by
 // scripts/build-jezero.mjs (see README). Three.js, first-person.
@@ -79,6 +79,15 @@ interface Tile {
   texLoading: boolean;
 }
 
+interface ExpeditionTargetMessage {
+  type: "mars-explorer:expedition";
+  regionId?: string;
+  name?: string;
+  latitude?: number;
+  longitude?: number;
+  withinJezeroDem?: boolean;
+}
+
 // ------------------------------------------------------------ dom
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const overlay = $("overlay");
@@ -134,7 +143,6 @@ const player = {
 const keys = new Set<string>();
 
 // ------------------------------------------------------------ coords
-const D2R = Math.PI / 180;
 // Linear planetocentric mapping from the manifest's anchored bounds. The
 // manifest decides where the raster sits on Mars; this class never sees the
 // source GeoTIFF's own (inconsistent) coordinate metadata.
@@ -156,6 +164,17 @@ const colToX = (c: number) => c * M.cellX - halfW;
 const rowToZ = (r: number) => r * M.cellZ - halfD;
 const xToCol = (x: number) => (x + halfW) / M.cellX;
 const zToRow = (z: number) => (z + halfD) / M.cellZ;
+
+function isLonLatInsideManifest(lon: number, lat: number): boolean {
+  if (!M) return false;
+  const p = M.proj;
+  return (
+    lon >= p.westLonDeg &&
+    lon <= p.eastLonDeg &&
+    lat >= p.southLatDeg &&
+    lat <= p.northLatDeg
+  );
+}
 
 // ------------------------------------------------------------ height sampling
 function overviewH(oc: number, or: number) {
@@ -287,6 +306,7 @@ function setTileMesh(t: Tile, lod: number) {
     scene.add(t.mesh);
   }
   t.lod = lod;
+  t.texKey = texKey;
 }
 
 // ------------------------------------------------------------ loading
@@ -432,6 +452,41 @@ function teleport(col: number, row: number) {
 }
 let pendingSnap = 0;
 
+function applyExpeditionSpawn(
+  lat: number | null,
+  lon: number | null,
+  name?: string | null
+) {
+  if (!M) return;
+
+  const hasValidCoords =
+    lat !== null &&
+    lon !== null &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lon);
+
+  if (hasValidCoords && isLonLatInsideManifest(lon!, lat!)) {
+    const target = lonLatToColRow(lon!, lat!);
+    teleport(target.col, target.row);
+    camera.position.copy(player.pos);
+    camera.lookAt(player.pos.x - 100, player.pos.y, player.pos.z - 100);
+    const label = name?.trim() || "Selected Expedition Site";
+    statusEl.textContent = `${label} · ${lat!.toFixed(4)}°N ${lon!.toFixed(4)}°E`;
+    return;
+  }
+
+  const fallback = lonLatToColRow(LANDMARKS[0].lon, LANDMARKS[0].lat);
+  teleport(fallback.col, fallback.row);
+  camera.position.copy(player.pos);
+  camera.lookAt(player.pos.x - 100, player.pos.y, player.pos.z - 100);
+
+  if (name?.trim()) {
+    statusEl.textContent = `${name.trim()} (Jezero Crater Reference DEM · Octavia E. Butler Landing)`;
+  } else {
+    statusEl.textContent = "Jezero crater · Octavia E. Butler Landing";
+  }
+}
+
 const fwd = new THREE.Vector3(), right = new THREE.Vector3(), move = new THREE.Vector3();
 function updatePlayer(dt: number) {
   const sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
@@ -566,7 +621,7 @@ function closeMap() {
   mapPanel.classList.add("hidden");
 }
 
-// ------------------------------------------------------------ input
+// ------------------------------------------------------------ input & messaging
 document.addEventListener("keydown", (e) => {
   keys.add(e.code);
   if (e.code === "KeyM" && M) {
@@ -610,6 +665,16 @@ window.addEventListener("resize", () => {
   if (!mapPanel.classList.contains("hidden")) openMap();
 });
 
+window.addEventListener("message", (event: MessageEvent<ExpeditionTargetMessage>) => {
+  const data = event.data;
+  if (!data || data.type !== "mars-explorer:expedition") return;
+  applyExpeditionSpawn(
+    typeof data.latitude === "number" ? data.latitude : null,
+    typeof data.longitude === "number" ? data.longitude : null,
+    data.name ?? null
+  );
+});
+
 // ------------------------------------------------------------ boot
 async function boot() {
   try {
@@ -625,9 +690,6 @@ async function boot() {
   }
   CONFIG.farStep = M.overview.step;
   CONFIG.groundOffset = M.heightMin;
-  // World height is areoid elevation minus the raster's lowest sample, so the
-  // lowest ground sits at y = 0. The HUD adds groundOffset back to report the
-  // true areoid elevation.
   halfW = (M.tilesX * M.tileSize * M.cellX) / 2;
   halfD = (M.tilesY * M.tileSize * M.cellZ) / 2;
   overview = new Uint16Array(await fetchBuffer(`${CONFIG.dataUrl}overview.u16`));
@@ -651,25 +713,33 @@ async function boot() {
       setTileMesh(t, -1);
     }
 
-  const s = lonLatToColRow(LANDMARKS[0].lon, LANDMARKS[0].lat);
-  teleport(s.col, s.row);
-  camera.position.copy(player.pos);
-  camera.lookAt(player.pos.x - 100, player.pos.y, player.pos.z - 100); // face NW toward the delta
+  const params = new URLSearchParams(window.location.search);
+  const paramLat = params.has("lat") ? Number(params.get("lat")) : null;
+  const paramLon = params.has("lon") ? Number(params.get("lon")) : null;
+  const paramName = params.get("name");
+
+  applyExpeditionSpawn(paramLat, paramLon, paramName);
 
   loadingEl.classList.add("hidden");
-  statusEl.textContent = "Jezero crater · Octavia E. Butler Landing";
   startBtn.disabled = false;
+
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: "jezero-simulation-ready" }, "*");
+  }
+
   // Add ?debug=1 to the URL to watch tile loading state.
-  const debug = new URLSearchParams(location.search).has("debug");
-  setInterval(() => {
-    const withTex = tiles.filter((t) => t.tex).length;
-    const withH = tiles.filter((t) => t.full).length;
-    const errs = (window as unknown as { __mwErrors?: string[] }).__mwErrors ?? [];
-    console.log(
-      `[marswalk] grid ${M.tilesX}x${M.tilesY} | full-res ${withH} | textured ${withTex}/${withH} | loading ${activeLoads} | pos ${player.pos.x.toFixed(0)},${player.pos.y.toFixed(0)},${player.pos.z.toFixed(0)}`,
-    );
-    if (errs.length) console.warn("[marswalk] errors:", errs);
-  }, 2000);
+  const debug = params.has("debug");
+  if (debug) {
+    setInterval(() => {
+      const withTex = tiles.filter((t) => t.tex).length;
+      const withH = tiles.filter((t) => t.full).length;
+      const errs = (window as unknown as { __mwErrors?: string[] }).__mwErrors ?? [];
+      console.log(
+        `[marswalk] grid ${M.tilesX}x${M.tilesY} | full-res ${withH} | textured ${withTex}/${withH} | loading ${activeLoads} | pos ${player.pos.x.toFixed(0)},${player.pos.y.toFixed(0)},${player.pos.z.toFixed(0)}`,
+      );
+      if (errs.length) console.warn("[marswalk] errors:", errs);
+    }, 2000);
+  }
 }
 
 const clock = new THREE.Clock();

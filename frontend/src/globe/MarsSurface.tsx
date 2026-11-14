@@ -1,73 +1,55 @@
-
 import {
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-
 import {
   useFrame,
   useThree,
+  type ThreeEvent,
 } from "@react-three/fiber";
-
 import * as THREE from "three";
-
-import {
-  type MapLayerId,
-} from "../data/mapLayers";
-
+import type { MapLayerId } from "../data/mapLayers";
 import {
   getDataProvider,
   type TileLayerConfig,
   type TileMatrixLevel,
 } from "../services/dataProviders";
-
-// ==========================================
-// TYPES
-// ==========================================
+import { loadCachedTileImage } from "../features/mars-explorer/marsExplorer.types";
+import type { Coordinates } from "../types";
 
 type DetailTile = {
   key: string;
   url: string;
   level: TileMatrixLevel;
+  levelIndex: number;
   x: number;
   y: number;
+  score: number;
 };
 
 type LoadedDetailTile = DetailTile & {
   texture: THREE.Texture;
+  loadedAt: number;
 };
 
-// ==========================================
-// CONFIGURATION
-// ==========================================
-
 const BASE_RADIUS = 1;
-const DETAIL_RADIUS = 1.006;
-
-const MAX_DETAIL_TILES = 24;
+const DETAIL_RADIUS = 1.0008;
+const MAX_DETAIL_TILES = 28;
 const DETAIL_CONCURRENCY = 6;
+const MAX_TEXTURE_CACHE = 96;
 
-// ==========================================
-// CACHES AND REUSABLE OBJECTS
-// ==========================================
-
-const imageCache = new Map<
-  string,
-  Promise<HTMLImageElement>
->();
-
-// ==========================================
-// COORDINATE UTILITIES
-// ==========================================
+const textureCache = new Map<string, THREE.Texture>();
 
 export function coordinatesToVector(
   latitude: number,
   longitude: number,
   radius = BASE_RADIUS
 ): THREE.Vector3 {
-  const lat = THREE.MathUtils.degToRad(latitude);
+  const lat = THREE.MathUtils.degToRad(
+    THREE.MathUtils.clamp(latitude, -90, 90)
+  );
   const lon = THREE.MathUtils.degToRad(longitude);
 
   return new THREE.Vector3(
@@ -77,42 +59,18 @@ export function coordinatesToVector(
   );
 }
 
-// ==========================================
-// IMAGE LOADING
-// ==========================================
-
-function loadImage(
-  url: string
-): Promise<HTMLImageElement> {
-  const cached = imageCache.get(url);
-
-  if (cached) {
-    return cached;
-  }
-
-  const promise = new Promise<HTMLImageElement>(
-    (resolve, reject) => {
-      const image = new Image();
-
-      image.crossOrigin = "anonymous";
-
-      image.onload = () => resolve(image);
-
-      image.onerror = () => {
-        imageCache.delete(url);
-
-        reject(
-          new Error(`Failed to load NASA tile: ${url}`)
-        );
-      };
-
-      image.src = url;
-    }
+export function vectorToCoordinates(vector: THREE.Vector3): Coordinates {
+  const normalized = vector.clone().normalize();
+  const latitude = THREE.MathUtils.radToDeg(
+    Math.asin(THREE.MathUtils.clamp(normalized.y, -1, 1))
   );
-
-  imageCache.set(url, promise);
-
-  return promise;
+  const longitude = THREE.MathUtils.radToDeg(
+    Math.atan2(-normalized.z, normalized.x)
+  );
+  return {
+    latitude: Number(latitude.toFixed(6)),
+    longitude: Number(longitude.toFixed(6)),
+  };
 }
 
 function buildTileUrl(
@@ -127,65 +85,39 @@ function buildTileUrl(
     .replaceAll("{x}", String(x));
 }
 
-// ==========================================
-// CONCURRENT REQUEST HANDLING
-// ==========================================
-
 async function runLimited<T, R>(
   items: T[],
   concurrency: number,
   worker: (item: T) => Promise<R>
 ): Promise<PromiseSettledResult<R>[]> {
-  const results: PromiseSettledResult<R>[] =
-    new Array(items.length);
-
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
   let nextIndex = 0;
 
   async function runWorker() {
     while (true) {
       const index = nextIndex++;
-
       if (index >= items.length) {
         return;
       }
-
       try {
         const value = await worker(items[index]);
-
-        results[index] = {
-          status: "fulfilled",
-          value,
-        };
+        results[index] = { status: "fulfilled", value };
       } catch (reason) {
-        results[index] = {
-          status: "rejected",
-          reason,
-        };
+        results[index] = { status: "rejected", reason };
       }
     }
   }
 
   const workers = Array.from(
-    {
-      length: Math.min(concurrency, items.length),
-    },
+    { length: Math.min(concurrency, items.length) },
     () => runWorker()
   );
-
   await Promise.all(workers);
-
   return results;
 }
 
-// ==========================================
-// TEXTURE CREATION
-// ==========================================
-
-function createCanvasTexture(
-  canvas: HTMLCanvasElement
-): THREE.CanvasTexture {
+function createCanvasTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
-
   texture.mapping = THREE.UVMapping;
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.ClampToEdgeWrapping;
@@ -195,786 +127,597 @@ function createCanvasTexture(
   texture.generateMipmaps = true;
   texture.anisotropy = 4;
   texture.needsUpdate = true;
-
   return texture;
 }
 
-function createImageTexture(
+function getOrCreateTileTexture(
+  key: string,
   image: HTMLImageElement
 ): THREE.Texture {
-  const texture = new THREE.Texture(image);
+  const existing = textureCache.get(key);
+  if (existing) {
+    textureCache.delete(key);
+    textureCache.set(key, existing);
+    return existing;
+  }
 
+  const texture = new THREE.Texture(image);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.generateMipmaps = true;
+  texture.anisotropy = 4;
   texture.needsUpdate = true;
+
+  textureCache.set(key, texture);
+  while (textureCache.size > MAX_TEXTURE_CACHE) {
+    const oldestKey = textureCache.keys().next().value;
+    if (!oldestKey) break;
+    const oldest = textureCache.get(oldestKey);
+    textureCache.delete(oldestKey);
+    oldest?.dispose();
+  }
 
   return texture;
 }
 
-// ==========================================
-// GLOBAL PREVIEW
-// ==========================================
-
-async function loadGlobalPreview(
-  config: TileLayerConfig
-): Promise<THREE.CanvasTexture> {
-  const level = config.matrixLevels?.[0];
-
-  if (!level) {
-    throw new Error(
-      "NASA layer has no tile matrix metadata."
-    );
-  }
-
-  const totalWidth =
-    level.matrixWidth * level.tileWidth;
-
-  const totalHeight =
-    level.matrixHeight * level.tileHeight;
-
-  if (
-    totalWidth <= 0 ||
-    totalHeight <= 0 ||
-    totalWidth > 4096 ||
-    totalHeight > 4096
-  ) {
-    throw new Error(
-      `Invalid global preview dimensions: ${totalWidth}x${totalHeight}`
-    );
-  }
+async function stitchGlobalLevelToCanvas(
+  config: TileLayerConfig,
+  level: TileMatrixLevel,
+  baseCanvas: HTMLCanvasElement | null,
+  signal: AbortSignal
+): Promise<HTMLCanvasElement> {
+  const rawWidth = level.matrixWidth * level.tileWidth;
+  const rawHeight = level.matrixHeight * level.tileHeight;
+  const scale = Math.min(1, 2048 / rawWidth, 1024 / rawHeight);
+  const targetWidth = Math.max(1, Math.round(rawWidth * scale));
+  const targetHeight = Math.max(1, Math.round(rawHeight * scale));
 
   const canvas = document.createElement("canvas");
-
-  canvas.width = totalWidth;
-  canvas.height = totalHeight;
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
 
   const context = canvas.getContext("2d");
-
   if (!context) {
-    throw new Error(
-      "Unable to create preview canvas."
-    );
+    throw new Error("Unable to create global preview canvas.");
   }
 
-  const tiles: {
-    url: string;
-    x: number;
-    y: number;
-  }[] = [];
+  // Paint previous resolution underneath so any missing tile retains valid imagery
+  if (baseCanvas) {
+    context.drawImage(baseCanvas, 0, 0, targetWidth, targetHeight);
+  }
 
-  for (
-    let y = 0;
-    y < level.matrixHeight;
-    y++
-  ) {
-    for (
-      let x = 0;
-      x < level.matrixWidth;
-      x++
-    ) {
+  const tiles: { url: string; x: number; y: number }[] = [];
+  for (let y = 0; y < level.matrixHeight; y++) {
+    for (let x = 0; x < level.matrixWidth; x++) {
       tiles.push({
-        url: buildTileUrl(
-          config.tileUrlTemplate,
-          level.id,
-          x,
-          y
-        ),
+        url: buildTileUrl(config.tileUrlTemplate, level.id, x, y),
         x,
         y,
       });
     }
   }
 
-  const results = await runLimited(
-    tiles,
-    6,
-    (tile) => loadImage(tile.url)
+  const results = await runLimited(tiles, DETAIL_CONCURRENCY, (tile) =>
+    loadCachedTileImage(tile.url, signal)
   );
 
+  if (signal.aborted) {
+    throw new DOMException("Aborted", "AbortError");
+  }
+
   let successfulTiles = 0;
+  const drawWidth = targetWidth / level.matrixWidth;
+  const drawHeight = targetHeight / level.matrixHeight;
 
   results.forEach((result, index) => {
-    if (result.status !== "fulfilled") {
-      console.warn(
-        "Global preview tile failed:",
-        tiles[index].url,
-        result.reason
-      );
-
-      return;
-    }
-
+    if (result.status !== "fulfilled") return;
     const tile = tiles[index];
-
     context.drawImage(
       result.value,
-      tile.x * level.tileWidth,
-      tile.y * level.tileHeight,
-      level.tileWidth,
-      level.tileHeight
+      tile.x * drawWidth,
+      tile.y * drawHeight,
+      drawWidth + 0.35,
+      drawHeight + 0.35
     );
-
     successfulTiles++;
   });
 
-  if (successfulTiles === 0) {
-    throw new Error(
-      "NASA returned no usable global preview tiles."
-    );
+  if (successfulTiles === 0 && !baseCanvas) {
+    throw new Error("NASA returned no usable global preview tiles.");
   }
 
-  console.log("Global preview loaded:", {
-    layer: config.matrixSet,
-    successfulTiles,
-    totalTiles: tiles.length,
-    width: canvas.width,
-    height: canvas.height,
-  });
-
-  return createCanvasTexture(canvas);
+  return canvas;
 }
 
-// ==========================================
-// TILE COORDINATES
-// ==========================================
+function getTileCoordinates(level: TileMatrixLevel, x: number, y: number) {
+  const longitudeSpan = 360 / level.matrixWidth;
+  const latitudeSpan = 180 / level.matrixHeight;
 
-function getTileCoordinates(
+  const west = level.topLeftX + x * longitudeSpan;
+  const east = west + longitudeSpan;
+  const north = level.topLeftY - y * latitudeSpan;
+  const south = north - latitudeSpan;
+
+  return { west, east, north, south };
+}
+
+function getTileBoundingSphere(
   level: TileMatrixLevel,
   x: number,
   y: number
-) {
-  const longitudeSpan =
-    360 / level.matrixWidth;
+): THREE.Sphere {
+  const bounds = getTileCoordinates(level, x, y);
+  const points: THREE.Vector3[] = [];
+  const samples = 3;
 
-  const latitudeSpan =
-    180 / level.matrixHeight;
+  for (let row = 0; row <= samples; row++) {
+    const vertical = row / samples;
+    const latitude = bounds.north + (bounds.south - bounds.north) * vertical;
+    for (let column = 0; column <= samples; column++) {
+      const horizontal = column / samples;
+      const longitude = bounds.west + (bounds.east - bounds.west) * horizontal;
+      points.push(coordinatesToVector(latitude, longitude, DETAIL_RADIUS));
+    }
+  }
 
-  const west =
-    level.topLeftX + x * longitudeSpan;
+  const center = new THREE.Vector3();
+  for (const point of points) {
+    center.add(point);
+  }
+  center.divideScalar(points.length);
 
-  const east =
-    west + longitudeSpan;
+  let maxDistance = 0;
+  for (const point of points) {
+    const d = point.distanceTo(center);
+    if (d > maxDistance) maxDistance = d;
+  }
 
-  const north =
-    level.topLeftY - y * latitudeSpan;
-
-  const south =
-    north - latitudeSpan;
-
-  return {
-    west,
-    east,
-    north,
-    south,
-  };
+  return new THREE.Sphere(center, maxDistance + 0.004);
 }
 
-// ==========================================
-// VISIBLE TILE SELECTION
-// ==========================================
+function chooseDetailLevelIndex(
+  levels: TileMatrixLevel[],
+  camera: THREE.Camera,
+  viewportHeight: number,
+  baseLevelIndex: number
+): number {
+  const distance = Math.max(camera.position.length(), BASE_RADIUS + 0.05);
+  // At broader orbital distances, the stitched 2048x1024 global canvas already
+  // provides a continuous gap-free surface; only stream detail tiles when zooming closer.
+  if (distance > 2.45 || levels.length <= baseLevelIndex + 1) {
+    return -1;
+  }
+
+  const perspective = camera as THREE.PerspectiveCamera;
+  const fovRad = THREE.MathUtils.degToRad(perspective.fov || 45);
+  const focalPixels = viewportHeight / (2 * Math.tan(fovRad / 2));
+  const surfaceDistance = Math.max(0.15, distance - BASE_RADIUS);
+  const desiredWidth = (2 * Math.PI * BASE_RADIUS * focalPixels) / surfaceDistance;
+
+  let chosenIndex = baseLevelIndex + 1;
+  for (let i = baseLevelIndex + 1; i < levels.length; i++) {
+    const levelWidth = levels[i].matrixWidth * levels[i].tileWidth;
+    chosenIndex = i;
+    if (levelWidth >= desiredWidth * 0.85) {
+      break;
+    }
+  }
+
+  return Math.min(chosenIndex, levels.length - 1);
+}
 
 function getVisibleTiles(
   config: TileLayerConfig,
   level: TileMatrixLevel,
-  cameraPosition: THREE.Vector3
+  levelIndex: number,
+  camera: THREE.Camera
 ): DetailTile[] {
-  const visible: {
-    tile: DetailTile;
-    score: number;
-  }[] = [];
+  camera.updateMatrixWorld();
 
-  const cameraDirection =
-    cameraPosition.clone().normalize();
+  const viewProjection = new THREE.Matrix4().multiplyMatrices(
+    camera.projectionMatrix,
+    camera.matrixWorldInverse
+  );
+  const frustum = new THREE.Frustum();
+  frustum.setFromProjectionMatrix(viewProjection);
 
-  for (
-    let y = 0;
-    y < level.matrixHeight;
-    y++
-  ) {
-    for (
-      let x = 0;
-      x < level.matrixWidth;
-      x++
-    ) {
-      const bounds = getTileCoordinates(
-        level,
-        x,
-        y
-      );
+  const cameraDirection = camera.position.clone().normalize();
+  const distance = camera.position.length();
+  // Horizon dot-product threshold tightens as camera approaches the surface
+  const horizonDot = Math.max(0.08, (BASE_RADIUS / Math.max(distance, 1.05)) * 0.72);
 
-      const centerLatitude =
-        (bounds.north + bounds.south) / 2;
+  const visible: DetailTile[] = [];
 
-      const centerLongitude =
-        (bounds.west + bounds.east) / 2;
+  for (let y = 0; y < level.matrixHeight; y++) {
+    for (let x = 0; x < level.matrixWidth; x++) {
+      const bounds = getTileCoordinates(level, x, y);
+      const centerLatitude = (bounds.north + bounds.south) / 2;
+      const centerLongitude = (bounds.west + bounds.east) / 2;
+      const centerNormal = coordinatesToVector(centerLatitude, centerLongitude, 1).normalize();
+      const score = centerNormal.dot(cameraDirection);
 
-      const center = coordinatesToVector(
-        centerLatitude,
-        centerLongitude,
-        1
-      ).normalize();
-
-      const score = center.dot(cameraDirection);
-
-      // Skip tiles on the far side of the planet.
-      if (score < -0.08) {
+      if (score < horizonDot) {
         continue;
       }
 
-      const tile: DetailTile = {
-        key: `${level.id}/${x}/${y}`,
-
-        url: buildTileUrl(
-          config.tileUrlTemplate,
-          level.id,
-          x,
-          y
-        ),
-
-        level,
-        x,
-        y,
-      };
+      const sphere = getTileBoundingSphere(level, x, y);
+      if (!frustum.intersectsSphere(sphere)) {
+        continue;
+      }
 
       visible.push({
-        tile,
+        key: `${level.id}/${x}/${y}`,
+        url: buildTileUrl(config.tileUrlTemplate, level.id, x, y),
+        level,
+        levelIndex,
+        x,
+        y,
         score,
       });
     }
   }
 
-  visible.sort(
-    (a, b) => b.score - a.score
-  );
-
-  return visible
-    .slice(0, MAX_DETAIL_TILES)
-    .map((item) => item.tile);
+  visible.sort((a, b) => b.score - a.score);
+  return visible.slice(0, MAX_DETAIL_TILES);
 }
-
-// ==========================================
-// DETAIL TILE GEOMETRY
-// ==========================================
 
 function createTileGeometry(
   level: TileMatrixLevel,
   x: number,
-  y: number
+  y: number,
+  radiusOffset = 0
 ): THREE.BufferGeometry {
-  const bounds = getTileCoordinates(
-    level,
-    x,
-    y
-  );
-
-  const segments = 16;
+  const bounds = getTileCoordinates(level, x, y);
+  const segments = 24;
+  const radius = DETAIL_RADIUS + radiusOffset;
 
   const positions: number[] = [];
   const uvs: number[] = [];
+  const alphas: number[] = [];
   const indices: number[] = [];
 
-  for (
-    let row = 0;
-    row <= segments;
-    row++
-  ) {
+  for (let row = 0; row <= segments; row++) {
     const vertical = row / segments;
+    const latitude = bounds.north + (bounds.south - bounds.north) * vertical;
 
-    const latitude =
-      bounds.north +
-      (bounds.south - bounds.north) * vertical;
-
-    for (
-      let column = 0;
-      column <= segments;
-      column++
-    ) {
+    for (let column = 0; column <= segments; column++) {
       const horizontal = column / segments;
+      const longitude = bounds.west + (bounds.east - bounds.west) * horizontal;
 
-      const longitude =
-        bounds.west +
-        (bounds.east - bounds.west) * horizontal;
+      const position = coordinatesToVector(latitude, longitude, radius);
+      positions.push(position.x, position.y, position.z);
+      uvs.push(horizontal, 1 - vertical);
 
-      const position = coordinatesToVector(
-        latitude,
-        longitude,
-        DETAIL_RADIUS
-      );
-
-      positions.push(
-        position.x,
-        position.y,
-        position.z
-      );
-
-      // The top of the tile image is its northern edge.
-      uvs.push(
-        horizontal,
-        1 - vertical
-      );
+      // Subtle feather at outer perimeter vertices to blend smoothly with base globe
+      const edgeDist = Math.min(horizontal, 1 - horizontal, vertical, 1 - vertical);
+      const edgeFactor = THREE.MathUtils.smoothstep(edgeDist, 0, 0.04);
+      alphas.push(0.92 + 0.08 * edgeFactor);
     }
   }
 
-  for (
-    let row = 0;
-    row < segments;
-    row++
-  ) {
-    for (
-      let column = 0;
-      column < segments;
-      column++
-    ) {
-      const a =
-        row * (segments + 1) + column;
-
+  for (let row = 0; row < segments; row++) {
+    for (let column = 0; column < segments; column++) {
+      const a = row * (segments + 1) + column;
       const b = a + segments + 1;
-
-      indices.push(
-        a,
-        b,
-        a + 1,
-        b,
-        b + 1,
-        a + 1
-      );
+      indices.push(a, b, a + 1, b, b + 1, a + 1);
     }
   }
 
   const geometry = new THREE.BufferGeometry();
-
-  geometry.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute(
-      positions,
-      3
-    )
-  );
-
-  geometry.setAttribute(
-    "uv",
-    new THREE.Float32BufferAttribute(
-      uvs,
-      2
-    )
-  );
-
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute("alpha", new THREE.Float32BufferAttribute(alphas, 1));
   geometry.setIndex(indices);
-
   geometry.computeVertexNormals();
-
   return geometry;
 }
 
-// ==========================================
-// DETAIL TILE MESH
-// ==========================================
-
 function DetailTileMesh({
   tile,
+  isCurrentLevel,
 }: {
   tile: LoadedDetailTile;
+  isCurrentLevel: boolean;
 }) {
+  const materialRef = useRef<THREE.MeshBasicMaterial | null>(null);
+
   const geometry = useMemo(
     () =>
       createTileGeometry(
         tile.level,
         tile.x,
-        tile.y
+        tile.y,
+        isCurrentLevel ? 0.0002 : 0
       ),
-    [
-      tile.level,
-      tile.x,
-      tile.y,
-    ]
+    [isCurrentLevel, tile.level, tile.x, tile.y]
   );
 
   useEffect(() => {
     return () => {
       geometry.dispose();
-      tile.texture.dispose();
     };
-  }, [
-    geometry,
-    tile.texture,
-  ]);
+  }, [geometry]);
+
+  useFrame(() => {
+    const mat = materialRef.current;
+    if (!mat) return;
+    const elapsed = performance.now() - tile.loadedAt;
+    const targetOpacity = Math.min(1, elapsed / 180);
+    if (Math.abs(mat.opacity - targetOpacity) > 0.01) {
+      mat.opacity = targetOpacity;
+    }
+  });
 
   return (
     <mesh
       geometry={geometry}
-      renderOrder={2}
+      renderOrder={isCurrentLevel ? 3 : 2}
     >
       <meshBasicMaterial
+        ref={materialRef}
         map={tile.texture}
-        side={THREE.DoubleSide}
+        side={THREE.FrontSide}
+        transparent
+        opacity={0.05}
+        depthWrite={false}
         toneMapped={false}
         polygonOffset
-        polygonOffsetFactor={-1}
+        polygonOffsetFactor={isCurrentLevel ? -2 : -1}
+        polygonOffsetUnits={isCurrentLevel ? -2 : -1}
       />
     </mesh>
   );
 }
 
-// ==========================================
-// MARS SURFACE
-// ==========================================
-
 export default function MarsSurface({
   layerId,
   layerName,
+  sharedConfig,
   onTextureLoaded,
+  onSelectSurfacePoint,
 }: {
   layerId: MapLayerId;
   layerName: string;
+  sharedConfig?: TileLayerConfig | null;
   onTextureLoaded: (message: string) => void;
+  onSelectSurfacePoint?: (coordinates: Coordinates) => void;
 }) {
-  const { camera } = useThree();
-
-  const [config, setConfig] =
-    useState<TileLayerConfig | null>(null);
+  const { camera, size } = useThree();
 
   const [previewTexture, setPreviewTexture] =
     useState<THREE.CanvasTexture | null>(null);
+  const [detailTiles, setDetailTiles] = useState<LoadedDetailTile[]>([]);
+  const [activeLevelIndex, setActiveLevelIndex] = useState<number>(-1);
 
-  const [detailTiles, setDetailTiles] =
-    useState<LoadedDetailTile[]>([]);
+  const activeConfigRef = useRef<TileLayerConfig | null>(null);
+  const baseLevelIndexRef = useRef(0);
+  const lastCheckTimeRef = useRef(0);
+  const lastRequestedKeysRef = useRef("");
+  const detailAbortRef = useRef<AbortController | null>(null);
+  const pointerDownPosRef = useRef<{ x: number; y: number } | null>(null);
 
-  const [detailStatus, setDetailStatus] =
-    useState("");
-
-  const lastUpdate = useRef(0);
-
-  const activeConfig =
-    useRef<TileLayerConfig | null>(null);
-
-  const requestedTiles =
-    useRef<DetailTile[]>([]);
-
-  const lastRequestedKeys =
-    useRef("");
-
-  const [requestVersion, setRequestVersion] =
-    useState(0);
-
-  // ========================================
-  // FETCH NASA METADATA AND GLOBAL PREVIEW
-  // ========================================
-
+  // Load and progressively refine the continuous global base texture (level 0 -> 1 -> 2)
   useEffect(() => {
+    const controller = new AbortController();
     let active = true;
+    const createdTextures: THREE.CanvasTexture[] = [];
 
-    let loadedPreview: THREE.CanvasTexture | null =
-      null;
-
-    activeConfig.current = null;
-    lastRequestedKeys.current = "";
-
-    setConfig(null);
-    setPreviewTexture(null);
+    activeConfigRef.current = null;
+    baseLevelIndexRef.current = 0;
+    lastRequestedKeysRef.current = "";
     setDetailTiles([]);
-    setDetailStatus("");
+    setActiveLevelIndex(-1);
 
-    onTextureLoaded(
-      `Loading ${layerName}...`
-    );
+    onTextureLoaded(`Loading ${layerName}...`);
 
     async function initialize() {
-      const provider =
-        getDataProvider("nasaTrek");
-
-      const nextConfig =
-        await provider.getLayerConfig(layerId);
+      const config =
+        sharedConfig ??
+        (await getDataProvider("nasaTrek").getLayerConfig(layerId));
 
       if (!active) return;
 
-      if (
-        !nextConfig.matrixLevels ||
-        nextConfig.matrixLevels.length === 0
-      ) {
-        throw new Error(
-          "NASA layer did not provide matrix levels."
-        );
+      const levels = config.matrixLevels;
+      if (!levels || levels.length === 0) {
+        throw new Error("NASA layer did not provide matrix levels.");
       }
 
-      activeConfig.current = nextConfig;
+      activeConfigRef.current = config;
 
-      setConfig(nextConfig);
+      // Determine progressive global canvas levels whose total tile count <= 32
+      const maxGlobalIndex = levels.reduce((acc, lvl, idx) => {
+        const count = lvl.matrixWidth * lvl.matrixHeight;
+        return count <= 32 ? idx : acc;
+      }, 0);
 
-      const preview =
-        await loadGlobalPreview(nextConfig);
+      let currentCanvas: HTMLCanvasElement | null = null;
 
-      if (!active) {
-        preview.dispose();
-        return;
+      for (let idx = 0; idx <= maxGlobalIndex; idx++) {
+        if (!active || controller.signal.aborted) return;
+        const level = levels[idx];
+        try {
+          currentCanvas = await stitchGlobalLevelToCanvas(
+            config,
+            level,
+            currentCanvas,
+            controller.signal
+          );
+          if (!active || controller.signal.aborted) return;
+
+          const nextTex = createCanvasTexture(currentCanvas);
+          createdTextures.push(nextTex);
+          baseLevelIndexRef.current = idx;
+          setPreviewTexture(nextTex);
+
+          onTextureLoaded(
+            idx === maxGlobalIndex
+              ? `${layerName} ready`
+              : `${layerName} preview loaded · refining surface...`
+          );
+        } catch (err) {
+          if (idx === 0) throw err;
+          break;
+        }
       }
-
-      loadedPreview = preview;
-
-      setPreviewTexture(preview);
-
-      onTextureLoaded(
-        `${layerName} preview loaded`
-      );
     }
 
-    initialize().catch(
-      (error: unknown) => {
-        if (!active) return;
-
-        console.error(
-          `Failed to initialize NASA layer ${layerId}:`,
-          error
-        );
-
-        onTextureLoaded(
-          `Failed to load ${layerName}`
-        );
+    initialize().catch((error: unknown) => {
+      if (!active) return;
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
       }
-    );
+      console.error(`Failed to initialize NASA layer ${layerId}:`, error);
+      onTextureLoaded(`Failed to load ${layerName}`);
+    });
 
     return () => {
       active = false;
-
-      activeConfig.current = null;
-
-      loadedPreview?.dispose();
+      controller.abort();
+      detailAbortRef.current?.abort();
+      activeConfigRef.current = null;
+      createdTextures.forEach((tex) => tex.dispose());
     };
-  }, [
-    layerId,
-    layerName,
-    onTextureLoaded,
-  ]);
+  }, [layerId, layerName, onTextureLoaded, sharedConfig]);
 
-  // ========================================
-  // DETERMINE DETAIL LEVEL BASED ON CAMERA
-  // ========================================
-
+  // Progressive detail tile streaming for close-up camera views
   useFrame(() => {
-    const currentConfig =
-      activeConfig.current;
-
-    if (!currentConfig?.matrixLevels) {
-      return;
-    }
+    const config = activeConfigRef.current;
+    if (!config?.matrixLevels) return;
 
     const now = performance.now();
+    if (now - lastCheckTimeRef.current < 220) {
+      return;
+    }
+    lastCheckTimeRef.current = now;
 
-    // Avoid recalculating tile visibility every frame.
-    if (now - lastUpdate.current < 500) {
+    const levels = config.matrixLevels;
+    const chosenIndex = chooseDetailLevelIndex(
+      levels,
+      camera,
+      size.height,
+      baseLevelIndexRef.current
+    );
+
+    if (chosenIndex < 0) {
+      if (lastRequestedKeysRef.current !== "") {
+        lastRequestedKeysRef.current = "";
+        detailAbortRef.current?.abort();
+        setDetailTiles([]);
+        setActiveLevelIndex(-1);
+      }
       return;
     }
 
-    lastUpdate.current = now;
+    const level = levels[chosenIndex];
+    const visible = getVisibleTiles(config, level, chosenIndex, camera);
+    const nextKeySignature = `${chosenIndex}:${visible.map((t) => t.key).join("|")}`;
 
-    const levels =
-      currentConfig.matrixLevels;
-
-    if (levels.length < 2) {
+    if (nextKeySignature === lastRequestedKeysRef.current) {
       return;
     }
 
-    const distance =
-      camera.position.length();
+    lastRequestedKeysRef.current = nextKeySignature;
+    setActiveLevelIndex(chosenIndex);
 
-    // Move through higher matrix levels as the user zooms in.
-    const zoomProgress = Math.max(
-      0,
-      Math.log2(3.2 / distance)
-    );
+    detailAbortRef.current?.abort();
+    const controller = new AbortController();
+    detailAbortRef.current = controller;
 
-    const levelIndex = Math.min(
-      levels.length - 1,
-      Math.max(
-        1,
-        Math.floor(zoomProgress) + 1
-      )
-    );
+    runLimited(visible, DETAIL_CONCURRENCY, async (tile): Promise<LoadedDetailTile> => {
+      const image = await loadCachedTileImage(tile.url, controller.signal);
+      const texture = getOrCreateTileTexture(`${layerId}:${tile.key}`, image);
+      return {
+        ...tile,
+        texture,
+        loadedAt: performance.now(),
+      };
+    })
+      .then((results) => {
+        if (controller.signal.aborted) return;
 
-    const selectedLevel =
-      levels[levelIndex];
+        const fulfilled = results
+          .filter(
+            (r): r is PromiseFulfilledResult<LoadedDetailTile> =>
+              r.status === "fulfilled"
+          )
+          .map((r) => r.value);
 
-    const visibleTiles = getVisibleTiles(
-      currentConfig,
-      selectedLevel,
-      camera.position
-    );
+        const requestedKeySet = new Set(visible.map((t) => t.key));
 
-    const nextKeys = visibleTiles
-      .map((tile) => tile.key)
-      .join("|");
+        setDetailTiles((previous) => {
+          const nextByKey = new Map<string, LoadedDetailTile>();
 
-    // Do not request the same set of tiles repeatedly.
-    if (lastRequestedKeys.current === nextKeys) {
-      return;
-    }
+          // Retain already-loaded tiles from the current request so theirloadedAt timestamp stays intact
+          for (const prev of previous) {
+            if (requestedKeySet.has(prev.key)) {
+              nextByKey.set(prev.key, prev);
+            }
+          }
 
-    lastRequestedKeys.current = nextKeys;
+          for (const loaded of fulfilled) {
+            if (!nextByKey.has(loaded.key)) {
+              nextByKey.set(loaded.key, loaded);
+            }
+          }
 
-    // Store requested tile list for the loading effect.
-    requestedTiles.current = visibleTiles;
+          // If some requested tiles failed or are still missing, keep fallback tiles from the previous level
+          if (fulfilled.length < visible.length) {
+            for (const prev of previous) {
+              if (prev.levelIndex !== chosenIndex && nextByKey.size < MAX_DETAIL_TILES + 8) {
+                nextByKey.set(prev.key, prev);
+              }
+            }
+          }
 
-    setDetailStatus(
-      `${visibleTiles.length} detail tiles requested`
-    );
-
-    setRequestVersion(
-      (version) => version + 1
-    );
+          return Array.from(nextByKey.values());
+        });
+      })
+      .catch(() => {
+        // Ignore aborted batches
+      });
   });
 
-  // ========================================
-  // FETCH VISIBLE DETAIL TILES
-  // ========================================
+  const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
+    pointerDownPosRef.current = { x: event.clientX, y: event.clientY };
+  };
 
-  useEffect(() => {
-    const currentConfig =
-      activeConfig.current;
-
-    if (
-      !currentConfig ||
-      requestVersion === 0
-    ) {
-      return;
+  const handleClick = (event: ThreeEvent<MouseEvent>) => {
+    if (!onSelectSurfacePoint) return;
+    const down = pointerDownPosRef.current;
+    if (down) {
+      const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+      if (moved > 5) return;
     }
-
-    let active = true;
-
-    const requested =
-      requestedTiles.current;
-
-    async function loadDetails() {
-      const results = await runLimited(
-        requested,
-        DETAIL_CONCURRENCY,
-        async (
-          tile
-        ): Promise<LoadedDetailTile> => {
-          const image = await loadImage(tile.url);
-
-          return {
-            ...tile,
-            texture: createImageTexture(image),
-          };
-        }
-      );
-
-      if (!active) {
-        results.forEach((result) => {
-          if (result.status === "fulfilled") {
-            result.value.texture.dispose();
-          }
-        });
-
-        return;
-      }
-
-      const successful = results
-        .filter(
-          (
-            result
-          ): result is PromiseFulfilledResult<LoadedDetailTile> =>
-            result.status === "fulfilled"
-        )
-        .map((result) => result.value);
-
-      const failed =
-        results.length - successful.length;
-
-      setDetailTiles((previous) => {
-        const nextMap = new Map(
-          successful.map((tile) => [
-            tile.key,
-            tile,
-          ])
-        );
-
-        // Preserve already loaded tiles still in the requested view.
-        for (const tile of previous) {
-          if (
-            requested.some(
-              (requestedTile) =>
-                requestedTile.key === tile.key
-            ) &&
-            !nextMap.has(tile.key)
-          ) {
-            nextMap.set(tile.key, tile);
-          }
-        }
-
-        const next =
-          Array.from(nextMap.values());
-
-        // Dispose textures that are no longer displayed.
-        for (const tile of previous) {
-          if (!nextMap.has(tile.key)) {
-            tile.texture.dispose();
-          }
-        }
-
-        return next;
-      });
-
-      setDetailStatus(
-        failed > 0
-          ? `${successful.length} detail tiles loaded · ${failed} unavailable`
-          : `${successful.length} detail tiles loaded`
-      );
-    }
-
-    loadDetails().catch(
-      (error: unknown) => {
-        if (active) {
-          console.error(
-            "Detail tile loading failed:",
-            error
-          );
-        }
-      }
-    );
-
-    return () => {
-      active = false;
-    };
-  }, [requestVersion]);
-
-  // ========================================
-  // RENDER
-  // ========================================
+    event.stopPropagation();
+    const coords = vectorToCoordinates(event.point);
+    onSelectSurfacePoint(coords);
+  };
 
   return (
     <>
-      {/* Base planetary sphere */}
-      <mesh>
-        <sphereGeometry
-          args={[
-            BASE_RADIUS,
-            128,
-            128,
-          ]}
-        />
-
+      <mesh
+        renderOrder={1}
+        onPointerDown={handlePointerDown}
+        onClick={handleClick}
+      >
+        <sphereGeometry args={[BASE_RADIUS, 128, 128]} />
         <meshBasicMaterial
           key={previewTexture ? "preview" : "flat"}
           map={previewTexture}
-          color={
-            previewTexture
-              ? "#ffffff"
-              : "#b75c35"
-          }
-          side={THREE.DoubleSide}
+          color={previewTexture ? "#ffffff" : "#b75c35"}
+          side={THREE.FrontSide}
           toneMapped={false}
         />
       </mesh>
 
-      {/* Higher-resolution surface tiles */}
       {detailTiles.map((tile) => (
         <DetailTileMesh
           key={tile.key}
           tile={tile}
+          isCurrentLevel={tile.levelIndex === activeLevelIndex}
         />
       ))}
     </>

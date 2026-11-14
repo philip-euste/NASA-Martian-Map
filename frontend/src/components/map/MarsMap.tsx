@@ -1,5 +1,4 @@
-
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -7,74 +6,38 @@ import {
   useMap,
   useMapEvents,
   CircleMarker,
-  Popup,
   Tooltip,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { Crosshair, Globe, Minus, Plus } from "lucide-react";
 
+import { MAP_LAYERS, type MapLayerId } from "../../data/mapLayers";
 import {
-  Bookmark,
-  Crosshair,
-  Layers,
-  Minus,
-  Plus,
-  Search,
-  X,
-  CalendarDays,
-  Clock3,
-  Telescope,
-} from "lucide-react";
-
-import {
-  MAP_LAYERS,
-  type MapLayerId,
-} from "../../data/mapLayers";
-
-import {
-  getDataProvider,
   type TileLayerConfig,
   type TileMatrixLevel,
 } from "../../services/dataProviders";
-
-import { marsDemProvider } from "../../services/providers/marsDem";
-
+import { EXPLORATION_SITES, getSiteById } from "../../data/explorationSites";
+import type { Coordinates } from "../../types";
 import {
-  EXPLORATION_SITES,
-  getSiteById,
-  type ExplorationSite,
-} from "../../data/explorationSites";
-
-import { useMission } from "../../state/mission/MissionContext";
-
+  loadCachedTileImage,
+  normalizeCoordinates,
+} from "../../features/mars-explorer/marsExplorer.types";
 import {
-  buildRegion,
-  buildTarget,
-  hasTargetAt,
-  toMutable,
-} from "../../features/mission/missionHelpers";
-
-import {
-  DataField,
-  ImagePending,
-  formatCoordinates,
-} from "../ui";
+  MarsExplorerProvider,
+  useMarsExplorer,
+  useOptionalMarsExplorer,
+} from "../../features/mars-explorer/useMarsExplorer";
+import MarsExplorerControls from "../../features/mars-explorer/MarsExplorerControls";
+import { MarsExplorerLocationPanel } from "../../features/mars-explorer/MarsExplorerUI";
+import { formatCoordinates } from "../ui";
 
 import "./MarsMap.css";
 
-interface Coordinates {
-  latitude: number;
-  longitude: number;
-}
-
-interface SavedLocation extends Coordinates {
-  id: number;
-  name: string;
-}
-
 interface MapControllerProps {
   layerId: MapLayerId;
-  focusLocation: Coordinates | null;
+  focusCoordinates: Coordinates;
+  focusRequestVersion: number;
   resetCounter: number;
 }
 
@@ -86,36 +49,20 @@ interface MapReferenceProps {
   onMapReady: (map: L.Map) => void;
 }
 
+interface MapViewportSyncProps {
+  onMoveFocus: (coordinates: Coordinates) => void;
+  onZoomChange: (zoom: number) => void;
+  onZoomOutToGlobe: (coordinates: Coordinates) => void;
+}
+
 interface WmtsTileLayerProps {
   config: TileLayerConfig;
   opacity: number;
 }
 
-const EARLIEST_TEMPORAL_DATE = "1965-01-01";
-const MAX_FUTURE_SOLS = 30;
-
-function normalizeCoordinates(
-  coordinates: Coordinates
-): Coordinates | null {
-  const { latitude, longitude } = coordinates;
-
-  if (
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude) ||
-    latitude < -90 ||
-    latitude > 90
-  ) {
-    return null;
-  }
-
-  const normalizedLongitude =
-    ((longitude + 180) % 360 + 360) % 360 - 180;
-
-  return {
-    latitude,
-    longitude: normalizedLongitude,
-  };
-}
+const TRANSPARENT_PIXEL =
+  "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+const MAP_ZOOM_OUT_TO_GLOBE_THRESHOLD = 2;
 
 function getMatrixForZoom(
   levels: TileMatrixLevel[],
@@ -124,19 +71,13 @@ function getMatrixForZoom(
   const available = levels.filter(
     (level) => level.matrixWidth <= 2 ** (zoom + 1)
   );
-
   if (available.length === 0) {
     return levels.reduce((smallest, current) =>
-      current.matrixWidth < smallest.matrixWidth
-        ? current
-        : smallest
+      current.matrixWidth < smallest.matrixWidth ? current : smallest
     );
   }
-
   return available.reduce((largest, current) =>
-    current.matrixWidth > largest.matrixWidth
-      ? current
-      : largest
+    current.matrixWidth > largest.matrixWidth ? current : largest
   );
 }
 
@@ -154,7 +95,6 @@ class MarsWmtsGridLayer extends L.GridLayer {
     const smallestMatrixWidth = Math.min(
       ...levels.map((level) => level.matrixWidth)
     );
-
     const largestMatrixWidth = Math.max(
       ...levels.map((level) => level.matrixWidth)
     );
@@ -164,10 +104,10 @@ class MarsWmtsGridLayer extends L.GridLayer {
       opacity,
       attribution: config.attribution,
       noWrap: true,
-      bounds: L.latLngBounds(
-        [-90, -180],
-        [90, 180]
-      ),
+      keepBuffer: 4,
+      updateWhenIdle: false,
+      updateWhenZooming: false,
+      bounds: L.latLngBounds([-90, -180], [90, 180]),
       minNativeZoom: Math.max(
         0,
         Math.ceil(Math.log2(smallestMatrixWidth)) - 1
@@ -185,46 +125,28 @@ class MarsWmtsGridLayer extends L.GridLayer {
     this.levels = levels;
   }
 
-  createTile(
-    coords: L.Coords,
-    done: L.DoneCallback
-  ): HTMLElement {
+  createTile(coords: L.Coords, done: L.DoneCallback): HTMLElement {
     const tile = document.createElement("img");
-
     tile.alt = "";
     tile.setAttribute("role", "presentation");
+    tile.decoding = "async";
     tile.width = 256;
     tile.height = 256;
 
-    const matrix = getMatrixForZoom(
-      this.levels,
-      coords.z
-    );
-
+    const matrix = getMatrixForZoom(this.levels, coords.z);
     const northWest = this.mapInstance.unproject(
-      L.point(
-        coords.x * 256,
-        coords.y * 256
-      ),
+      L.point(coords.x * 256, coords.y * 256),
       coords.z
     );
 
-    const matrixTileWidth =
-      360 / matrix.matrixWidth;
-
-    const matrixTileHeight =
-      180 / matrix.matrixHeight;
+    const matrixTileWidth = 360 / matrix.matrixWidth;
+    const matrixTileHeight = 180 / matrix.matrixHeight;
 
     const column = Math.floor(
-      (northWest.lng - matrix.topLeftX) /
-        matrixTileWidth +
-        0.000000001
+      (northWest.lng - matrix.topLeftX) / matrixTileWidth + 1e-9
     );
-
     const row = Math.floor(
-      (matrix.topLeftY - northWest.lat) /
-        matrixTileHeight +
-        0.000000001
+      (matrix.topLeftY - northWest.lat) / matrixTileHeight + 1e-9
     );
 
     const validTile =
@@ -234,60 +156,43 @@ class MarsWmtsGridLayer extends L.GridLayer {
       row < matrix.matrixHeight;
 
     if (!validTile) {
-      tile.src =
-        "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
-
+      tile.src = TRANSPARENT_PIXEL;
       done(undefined, tile);
       return tile;
     }
 
     const tileUrl = this.config.tileUrlTemplate
-      .replaceAll(
-        "{z}",
-        encodeURIComponent(matrix.id)
-      )
+      .replaceAll("{z}", encodeURIComponent(matrix.id))
       .replaceAll("{x}", String(column))
       .replaceAll("{y}", String(row));
 
-    tile.onload = () => {
-      done(undefined, tile);
-    };
-
-    tile.onerror = () => {
-      done(
-        new Error(
-          `NASA tile failed: ${matrix.id}/${row}/${column}`
-        ),
-        tile
-      );
-    };
-
-    tile.src = tileUrl;
+    loadCachedTileImage(tileUrl)
+      .then((cachedImg) => {
+        tile.src = cachedImg.src;
+        done(undefined, tile);
+      })
+      .catch(() => {
+        tile.onload = () => done(undefined, tile);
+        tile.onerror = () =>
+          done(
+            new Error(`NASA tile failed: ${matrix.id}/${row}/${column}`),
+            tile
+          );
+        tile.src = tileUrl;
+      });
 
     return tile;
   }
 }
 
-function WmtsTileLayer({
-  config,
-  opacity,
-}: WmtsTileLayerProps) {
+function WmtsTileLayer({ config, opacity }: WmtsTileLayerProps) {
   const map = useMap();
 
   useEffect(() => {
     const levels = config.matrixLevels;
+    if (!levels?.length) return;
 
-    if (!levels?.length) {
-      return;
-    }
-
-    const gridLayer = new MarsWmtsGridLayer(
-      map,
-      config,
-      levels,
-      opacity
-    );
-
+    const gridLayer = new MarsWmtsGridLayer(map, config, levels, opacity);
     gridLayer.addTo(map);
 
     return () => {
@@ -298,26 +203,19 @@ function WmtsTileLayer({
   return null;
 }
 
-function MapReference({
-  onMapReady,
-}: MapReferenceProps) {
+function MapReference({ onMapReady }: MapReferenceProps) {
   const map = useMap();
 
   useEffect(() => {
     onMapReady(map);
 
     const invalidate = () => {
-      map.invalidateSize({
-        pan: false,
-        animate: false,
-      });
+      map.invalidateSize({ pan: false, animate: false });
     };
 
     const frame = requestAnimationFrame(invalidate);
     const secondFrame = requestAnimationFrame(invalidate);
-
     const observer = new ResizeObserver(invalidate);
-
     observer.observe(map.getContainer());
 
     return () => {
@@ -332,38 +230,90 @@ function MapReference({
 
 function MapController({
   layerId,
-  focusLocation,
+  focusCoordinates,
+  focusRequestVersion,
   resetCounter,
 }: MapControllerProps) {
   const map = useMap();
+  const lastFocusVersionRef = useRef<number>(-1);
+  const lastResetRef = useRef<number>(resetCounter);
 
   useEffect(() => {
     const layer = MAP_LAYERS[layerId];
 
-    if (focusLocation) {
-      map.flyTo(
-        [
-          focusLocation.latitude,
-          focusLocation.longitude,
-        ],
-        Math.max(map.getZoom(), 4)
-      );
-    } else {
-      map.setView(layer.center, layer.zoom);
+    if (resetCounter !== lastResetRef.current) {
+      lastResetRef.current = resetCounter;
+      map.setView(layer.center, Math.max(layer.zoom, 3), { animate: true });
+      return;
     }
-  }, [
-    layerId,
-    focusLocation,
-    resetCounter,
-    map,
-  ]);
+
+    if (focusRequestVersion !== lastFocusVersionRef.current) {
+      lastFocusVersionRef.current = focusRequestVersion;
+      const valid = normalizeCoordinates(focusCoordinates);
+      if (valid) {
+        const nextZoom = Math.max(map.getZoom(), 4);
+        map.flyTo([valid.latitude, valid.longitude], nextZoom, {
+          duration: 0.55,
+        });
+      }
+    }
+  }, [layerId, focusCoordinates, focusRequestVersion, resetCounter, map]);
 
   return null;
 }
 
-function MapClickHandler({
-  onSelect,
-}: MapClickHandlerProps) {
+function MapViewportSync({
+  onMoveFocus,
+  onZoomChange,
+  onZoomOutToGlobe,
+}: MapViewportSyncProps) {
+  const map = useMapEvents({
+    moveend() {
+      const center = map.getCenter();
+      const normalized = normalizeCoordinates({
+        latitude: center.lat,
+        longitude: center.lng,
+      });
+      if (normalized) {
+        onMoveFocus(normalized);
+      }
+    },
+    zoomend() {
+      onZoomChange(map.getZoom());
+    },
+  });
+
+  useEffect(() => {
+    const container = map.getContainer();
+    let zoomOutWheelAccum = 0;
+
+    const handleWheel = (event: WheelEvent) => {
+      if (event.deltaY > 0 && map.getZoom() <= MAP_ZOOM_OUT_TO_GLOBE_THRESHOLD) {
+        zoomOutWheelAccum += event.deltaY;
+        if (zoomOutWheelAccum >= 90) {
+          zoomOutWheelAccum = 0;
+          const center = map.getCenter();
+          const normalized = normalizeCoordinates({
+            latitude: center.lat,
+            longitude: center.lng,
+          });
+          onZoomOutToGlobe(normalized ?? { latitude: 0, longitude: 0 });
+        }
+      } else {
+        zoomOutWheelAccum = 0;
+      }
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: true });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+    };
+  }, [map, onZoomOutToGlobe]);
+
+  return null;
+}
+
+function MapClickHandler({ onSelect }: MapClickHandlerProps) {
   useMapEvents({
     click(event) {
       onSelect({
@@ -376,441 +326,68 @@ function MapClickHandler({
   return null;
 }
 
-export default function MarsMap({
-  focusSiteId,
-}: {
-  focusSiteId?: string;
-}) {
-  const [selectedLayer, setSelectedLayer] =
-    useState<MapLayerId>("mars_viking_global");
-
-  const [tileConfig, setTileConfig] =
-    useState<TileLayerConfig | null>(null);
-
-  const [coordinates, setCoordinates] =
-    useState<Coordinates | null>(null);
-
-  const [focusLocation, setFocusLocation] =
-    useState<Coordinates | null>(null);
+function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
+  const {
+    selectedLayerId,
+    tileConfig,
+    layerLoading,
+    layerError,
+    opacity,
+    focusCoordinates,
+    focusRequestVersion,
+    updateCameraFocus,
+    mapZoom,
+    setMapZoom,
+    selectedLocation,
+    selectSite,
+    selectCustomCoordinates,
+    savedLocations,
+    goToSavedLocation,
+    statusMessage,
+    triggerZoomOutToGlobe,
+  } = useMarsExplorer();
 
   const [resetCounter, setResetCounter] = useState(0);
-
   const [map, setMap] = useState<L.Map | null>(null);
 
-  const [elevation, setElevation] =
-    useState<
-      Awaited<
-        ReturnType<typeof marsDemProvider.getElevation>
-      > | null
-    >(null);
-
-  const [elevationLoading, setElevationLoading] =
-    useState(false);
-
-  const [elevationError, setElevationError] =
-    useState<string | null>(null);
-
-  const [savedLocations, setSavedLocations] =
-    useState<SavedLocation[]>([]);
-
-  const [locationName, setLocationName] = useState("");
-
-  const [opacity, setOpacity] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
-
-  const [selectedSiteId, setSelectedSiteId] =
-    useState<string | null>(null);
-
-  const [layersOpen, setLayersOpen] = useState(false);
-  const [savedOpen, setSavedOpen] = useState(false);
-
-  const [query, setQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
-
-  const {
-    mission,
-    setRegion,
-    updateMission,
-    updateTemporal,
-  } = useMission();
-
-  const layer = MAP_LAYERS[selectedLayer];
-
-  const selectedSite = getSiteById(
-    selectedSiteId ?? undefined
-  );
-
-  const temporal = mission.temporal;
-  const todayUTC = new Date().toISOString().slice(0, 10);
+  const layer = MAP_LAYERS[selectedLayerId];
 
   useEffect(() => {
     if (!focusSiteId) return;
-
     const site = getSiteById(focusSiteId);
-
-    if (!site) return;
-
-    setSelectedSiteId(site.id);
-
-    const siteCoordinates = normalizeCoordinates({
-      latitude: site.latitude,
-      longitude: site.longitude,
-    });
-
-    if (!siteCoordinates) return;
-
-    setCoordinates(siteCoordinates);
-    setFocusLocation(siteCoordinates);
-  }, [focusSiteId]);
-
-  useEffect(() => {
-    if (!coordinates) {
-      setElevation(null);
-      setElevationError(null);
-      setElevationLoading(false);
-      return;
+    if (site) {
+      selectSite(site, { focus: true });
     }
+  }, [focusSiteId, selectSite]);
 
-    const validCoordinates =
-      normalizeCoordinates(coordinates);
-
-    if (!validCoordinates) {
-      setElevation(null);
-      setElevationError(
-        "Invalid latitude or longitude."
-      );
-      setElevationLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadElevation() {
-      setElevationLoading(true);
-      setElevation(null);
-      setElevationError(null);
-
-      try {
-        const result =
-          await marsDemProvider.getElevation(
-            validCoordinates!
-          );
-
-        if (!cancelled) {
-          setElevation(result);
-        }
-      } catch (err: unknown) {
-        if (!cancelled) {
-          const isNetworkError =
-            err instanceof TypeError &&
-            err.message.toLowerCase().includes("fetch");
-
-          setElevationError(
-            isNetworkError
-              ? "Cannot reach the DEM API. Check that the FastAPI backend is running and VITE_API_BASE_URL is correct."
-              : err instanceof Error
-                ? err.message
-                : "Unable to retrieve elevation."
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setElevationLoading(false);
-        }
-      }
-    }
-
-    loadElevation();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [coordinates]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadLayer() {
-      setLoading(true);
-      setError(null);
-      setTileConfig(null);
-
-      try {
-        const provider = getDataProvider(layer.provider);
-
-        const config =
-          await provider.getLayerConfig(selectedLayer);
-
-        if (!cancelled) {
-          setTileConfig(config);
-        }
-      } catch (err: unknown) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "An unexpected error occurred."
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadLayer();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedLayer, layer.provider]);
-
-  function selectCoordinates(
-    nextCoordinates: Coordinates
-  ): void {
-    const validCoordinates =
-      normalizeCoordinates(nextCoordinates);
-
-    if (!validCoordinates) {
-      setMessage(
-        "Selected point is outside Mars' valid latitude range."
+  function handleZoomOutButton() {
+    if (!map) return;
+    if (map.getZoom() <= MAP_ZOOM_OUT_TO_GLOBE_THRESHOLD) {
+      const center = map.getCenter();
+      triggerZoomOutToGlobe(
+        normalizeCoordinates({
+          latitude: center.lat,
+          longitude: center.lng,
+        }) ?? focusCoordinates
       );
       return;
     }
-
-    setCoordinates(validCoordinates);
-    setSelectedSiteId(null);
-    setFocusLocation(null);
-    setMessage("");
+    map.zoomOut();
   }
 
-  function selectSite(site: ExplorationSite): void {
-    const siteCoordinates = normalizeCoordinates({
-      latitude: site.latitude,
-      longitude: site.longitude,
-    });
-
-    if (!siteCoordinates) {
-      setMessage("This site's coordinates are invalid.");
-      return;
-    }
-
-    setSelectedSiteId(site.id);
-    setCoordinates(siteCoordinates);
-    setFocusLocation(siteCoordinates);
-    setQuery("");
-    setSearchOpen(false);
-  }
-
-  function resetView(): void {
-    setFocusLocation(null);
+  function handleResetView() {
     setResetCounter((current) => current + 1);
-  }
-
-  function clearSelection(): void {
-    setCoordinates(null);
-    setSelectedSiteId(null);
-    setFocusLocation(null);
-  }
-
-  function saveLocation(): void {
-    if (!coordinates) return;
-
-    const duplicate = savedLocations.some(
-      (location) =>
-        Math.abs(
-          location.latitude - coordinates.latitude
-        ) < 0.00001 &&
-        Math.abs(
-          location.longitude - coordinates.longitude
-        ) < 0.00001
-    );
-
-    if (duplicate) {
-      setMessage("This location has already been saved.");
-      return;
-    }
-
-    const name =
-      locationName.trim() ||
-      `Location ${savedLocations.length + 1}`;
-
-    const newLocation: SavedLocation = {
-      id: Date.now(),
-      name,
-      latitude: coordinates.latitude,
-      longitude: coordinates.longitude,
-    };
-
-    setSavedLocations((current) => [
-      ...current,
-      newLocation,
-    ]);
-
-    setLocationName("");
-    setMessage(`${name} saved.`);
-  }
-
-  function removeLocation(id: number): void {
-    setSavedLocations((current) =>
-      current.filter((location) => location.id !== id)
-    );
-
-    setMessage("Location removed.");
-  }
-
-  function goToSavedLocation(
-    location: SavedLocation
-  ): void {
-    const validCoordinates = normalizeCoordinates({
-      latitude: location.latitude,
-      longitude: location.longitude,
-    });
-
-    if (!validCoordinates) return;
-
-    setCoordinates(validCoordinates);
-    setSelectedSiteId(null);
-    setFocusLocation(validCoordinates);
-    setSavedOpen(false);
-  }
-
-  function setTemporalMode(
-    mode: "past" | "present" | "future"
-  ): void {
-    updateTemporal({ mode });
-  }
-
-  function setTemporalDate(date: string): void {
-    if (!date) return;
-
-    if (
-      date < EARLIEST_TEMPORAL_DATE ||
-      date > todayUTC
-    ) {
-      return;
-    }
-
-    updateTemporal({
-      selectedDate: date,
-      mode: "past",
-    });
-  }
-
-  function setFutureSolHorizon(value: string): void {
-    if (value.trim() === "") return;
-
-    const parsed = Number(value);
-
-    if (!Number.isFinite(parsed)) return;
-
-    updateTemporal({
-      futureSols: Math.max(
-        1,
-        Math.min(MAX_FUTURE_SOLS, Math.round(parsed))
-      ),
-      mode: "future",
-    });
-  }
-
-  const searchResults = useMemo(() => {
-    const term = query.trim().toLowerCase();
-
-    if (!term) {
-      return {
-        sites: EXPLORATION_SITES,
-        saved: savedLocations,
-      };
-    }
-
-    return {
-      sites: EXPLORATION_SITES.filter((site) =>
-        `${site.name} ${site.regionLabel}`
-          .toLowerCase()
-          .includes(term)
-      ),
-
-      saved: savedLocations.filter((location) =>
-        location.name.toLowerCase().includes(term)
-      ),
-    };
-  }, [query, savedLocations]);
-
-  const selectedName =
-    selectedSite?.name ||
-    locationName.trim() ||
-    "Custom location";
-
-  const isRegion =
-    !!coordinates &&
-    !!mission.region &&
-    Math.abs(
-      mission.region.coordinates.latitude -
-        coordinates.latitude
-    ) < 0.00001 &&
-    Math.abs(
-      mission.region.coordinates.longitude -
-        coordinates.longitude
-    ) < 0.00001;
-
-  const isTarget =
-    !!coordinates &&
-    hasTargetAt(
-      mission.scientificTargets,
-      coordinates
-    );
-
-  function setAsRegion(): void {
-    if (!coordinates) return;
-
-    setRegion(
-      buildRegion(
-        selectedSite?.id ??
-          `point-${coordinates.latitude.toFixed(5)}-${coordinates.longitude.toFixed(5)}`,
-        selectedName,
-        coordinates,
-        selectedSite?.description ??
-          "Location selected on the 2D map."
-      )
-    );
-
-    setMessage(
-      `${selectedName} set as expedition region.`
-    );
-  }
-
-  function addAsTarget(): void {
-    if (!coordinates || isTarget) return;
-
-    updateMission({
-      scientificTargets: [
-        ...toMutable(mission.scientificTargets),
-        buildTarget(
-          selectedName,
-          coordinates,
-          selectedSite?.description ??
-            "Target selected on the 2D map."
-        ),
-      ],
-    });
-
-    setMessage(
-      `${selectedName} added to scientific targets.`
-    );
   }
 
   return (
     <section className="mx-map relative h-full min-h-0 w-full">
       <div
         className="relative h-full min-h-0 w-full"
-        style={{ background: "#171717" }}
+        style={{ background: "#141215" }}
       >
         <MapContainer
-          center={layer.center}
-          zoom={layer.zoom}
+          center={[focusCoordinates.latitude, focusCoordinates.longitude]}
+          zoom={Math.max(mapZoom, 3)}
           minZoom={1}
           maxZoom={12}
           zoomControl={false}
@@ -820,9 +397,9 @@ export default function MarsMap({
             [-90, -180],
             [90, 180],
           ]}
-          maxBoundsViscosity={0.8}
+          maxBoundsViscosity={0.85}
           worldCopyJump={false}
-          zoomAnimation={false}
+          zoomAnimation={true}
           style={{
             height: "100%",
             width: "100%",
@@ -833,22 +410,33 @@ export default function MarsMap({
           <MapReference onMapReady={setMap} />
 
           <MapController
-            layerId={selectedLayer}
-            focusLocation={focusLocation}
+            layerId={selectedLayerId}
+            focusCoordinates={focusCoordinates}
+            focusRequestVersion={focusRequestVersion}
             resetCounter={resetCounter}
           />
 
-          <MapClickHandler onSelect={selectCoordinates} />
+          <MapViewportSync
+            onMoveFocus={updateCameraFocus}
+            onZoomChange={setMapZoom}
+            onZoomOutToGlobe={triggerZoomOutToGlobe}
+          />
+
+          <MapClickHandler
+            onSelect={(coords) =>
+              selectCustomCoordinates(coords, { focus: false })
+            }
+          />
 
           {tileConfig?.matrixLevels?.length ? (
             <WmtsTileLayer
-              key={selectedLayer}
+              key={selectedLayerId}
               config={tileConfig}
               opacity={opacity}
             />
           ) : tileConfig ? (
             <TileLayer
-              key={selectedLayer}
+              key={selectedLayerId}
               url={tileConfig.tileUrlTemplate}
               attribution={tileConfig.attribution}
               zoomOffset={tileConfig.zoomOffset}
@@ -858,26 +446,25 @@ export default function MarsMap({
           ) : null}
 
           {EXPLORATION_SITES.map((site) => {
-            const active = site.id === selectedSiteId;
+            const active =
+              selectedLocation?.kind === "site" &&
+              selectedLocation.site?.id === site.id;
 
             return (
               <CircleMarker
-                key={site.id}
-                center={[
-                  site.latitude,
-                  site.longitude,
-                ]}
-                radius={active ? 0 : 5.5}
+                key={`site-${site.id}-${active ? "active" : "idle"}`}
+                center={[site.latitude, site.longitude]}
+                radius={active ? 7.5 : 5.5}
                 bubblingMouseEvents={false}
                 pathOptions={{
-                  opacity: active ? 0 : 1,
-                  fillOpacity: active ? 0 : 1,
-                  color: "#f3efea",
-                  weight: 2,
-                  fillColor: "#141215",
+                  opacity: 1,
+                  fillOpacity: active ? 0.92 : 1,
+                  color: active ? "#f47738" : "#f3efea",
+                  weight: active ? 2.5 : 2,
+                  fillColor: active ? "#f47738" : "#141215",
                 }}
                 eventHandlers={{
-                  click: () => selectSite(site),
+                  click: () => selectSite(site, { focus: true }),
                 }}
               >
                 <Tooltip
@@ -892,685 +479,164 @@ export default function MarsMap({
             );
           })}
 
-          {coordinates && !selectedSite && (
+          {savedLocations.map((location) => {
+            const active =
+              selectedLocation?.kind === "saved" &&
+              selectedLocation.savedId === location.id;
+
+            return (
+              <CircleMarker
+                key={`saved-${location.id}-${active ? "active" : "idle"}`}
+                center={[location.latitude, location.longitude]}
+                radius={active ? 7.5 : 6}
+                bubblingMouseEvents={false}
+                pathOptions={{
+                  opacity: 1,
+                  fillOpacity: active ? 0.92 : 0.95,
+                  color: active ? "#f47738" : "#d8b48f",
+                  weight: active ? 2.5 : 2,
+                  fillColor: active ? "#f47738" : "#141215",
+                }}
+                eventHandlers={{
+                  click: () => goToSavedLocation(location, { focus: true }),
+                }}
+              >
+                <Tooltip
+                  permanent={active}
+                  direction="top"
+                  offset={[0, -10]}
+                  className={`mx-site-label ${active ? "is-active" : ""}`}
+                >
+                  {location.name}
+                </Tooltip>
+              </CircleMarker>
+            );
+          })}
+
+          {selectedLocation?.kind === "custom" && (
             <CircleMarker
+              key={selectedLocation.key}
               center={[
-                coordinates.latitude,
-                coordinates.longitude,
+                selectedLocation.latitude,
+                selectedLocation.longitude,
               ]}
-              radius={6}
+              radius={7}
               interactive={false}
               pathOptions={{
                 color: "#f47738",
-                weight: 2,
+                weight: 2.5,
                 fillColor: "#f47738",
-                fillOpacity: 0.35,
+                fillOpacity: 0.85,
               }}
             />
           )}
-
-          {savedLocations.map((location) => (
-            <CircleMarker
-              key={location.id}
-              center={[
-                location.latitude,
-                location.longitude,
-              ]}
-              radius={7}
-              pathOptions={{
-                color: "#d8b48f",
-                fillColor: "#d8b48f",
-                fillOpacity: 0.9,
-              }}
-            >
-              <Popup>
-                <strong>{location.name}</strong>
-                <br />
-                Latitude: {location.latitude.toFixed(5)}°
-                <br />
-                Longitude: {location.longitude.toFixed(5)}°
-              </Popup>
-            </CircleMarker>
-          ))}
         </MapContainer>
 
-        {/* Search, map controls, and layer panels */}
-        <div className="mx-map-overlay left-4 top-4 flex flex-col gap-3 sm:left-6 sm:top-5 max-lg:top-[76px]">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <div className="relative min-w-0 w-[min(280px,calc(100vw-32px))]">
-              <label
-                htmlFor="mars-map-search"
-                className="sr-only"
-              >
-                Search locations
-              </label>
-
-              <Search
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mx-muted"
-                aria-hidden="true"
-              />
-
-              <input
-                id="mars-map-search"
-                type="search"
-                className="mx-input min-w-0 !bg-mx-bg/95 pl-9"
-                placeholder="Search sites or saved locations"
-                value={query}
-                autoComplete="off"
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setSearchOpen(true);
-                }}
-                onFocus={() => setSearchOpen(true)}
-                onBlur={() => {
-                  window.setTimeout(
-                    () => setSearchOpen(false),
-                    150
-                  );
-                }}
-              />
-
-              {searchOpen && (
-                <div className="mx-panel mx-panel--floating mx-scroll absolute left-0 right-0 top-[calc(100%+6px)] max-h-72 overflow-auto p-1.5">
-                  {searchResults.sites.length === 0 &&
-                    searchResults.saved.length === 0 && (
-                      <p className="m-0 px-3 py-2.5 text-[13px] text-mx-dim">
-                        No matching locations.
-                      </p>
-                    )}
-
-                  {searchResults.sites.map((site) => (
-                    <button
-                      key={site.id}
-                      type="button"
-                      className="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left hover:bg-mx-panel-2"
-                      onMouseDown={(event) =>
-                        event.preventDefault()
-                      }
-                      onClick={() => selectSite(site)}
-                    >
-                      <span className="text-[13px] text-mx-text">
-                        {site.name}
-                      </span>
-
-                      <span className="mx-mono text-[11px] text-mx-dim">
-                        {site.terrainType}
-                      </span>
-                    </button>
-                  ))}
-
-                  {searchResults.saved.map((location) => (
-                    <button
-                      key={location.id}
-                      type="button"
-                      className="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left hover:bg-mx-panel-2"
-                      onMouseDown={(event) =>
-                        event.preventDefault()
-                      }
-                      onClick={() => {
-                        goToSavedLocation(location);
-                        setSearchOpen(false);
-                      }}
-                    >
-                      <span className="text-[13px] text-mx-text">
-                        {location.name}
-                      </span>
-
-                      <span className="mx-mono text-[11px] text-mx-dim">
-                        Saved
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <span
-              className="mx-chip hidden h-10 shrink-0 sm:inline-flex"
-              title={layer.name}
-            >
-              {layer.name}
-            </span>
-          </div>
-
-          <div className="flex items-start gap-3">
-            <div
-              className="flex flex-col gap-2"
-              role="toolbar"
-              aria-label="Map tools"
-              aria-orientation="vertical"
-            >
-              <button
-                type="button"
-                className="mx-icon-btn"
-                aria-label="Zoom in"
-                onClick={() => map?.zoomIn()}
-              >
-                <Plus size={17} />
-              </button>
-
-              <button
-                type="button"
-                className="mx-icon-btn"
-                aria-label="Zoom out"
-                onClick={() => map?.zoomOut()}
-              >
-                <Minus size={17} />
-              </button>
-
-              <button
-                type="button"
-                className="mx-icon-btn"
-                aria-label="Reset view"
-                title="Reset View"
-                onClick={resetView}
-              >
-                <Crosshair size={17} />
-              </button>
-
-              <button
-                type="button"
-                className="mx-icon-btn"
-                aria-label="Imagery layers"
-                aria-pressed={layersOpen}
-                onClick={() => {
-                  setLayersOpen((open) => !open);
-                  setSavedOpen(false);
-                }}
-              >
-                <Layers size={17} />
-              </button>
-
-              <button
-                type="button"
-                className="mx-icon-btn relative"
-                aria-label={`Saved locations (${savedLocations.length})`}
-                aria-pressed={savedOpen}
-                onClick={() => {
-                  setSavedOpen((open) => !open);
-                  setLayersOpen(false);
-                }}
-              >
-                <Bookmark size={16} />
-
-                {savedLocations.length > 0 && (
-                  <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-mx-accent px-1 text-[10px] font-semibold text-[#1a0f08]">
-                    {savedLocations.length}
-                  </span>
-                )}
-              </button>
-            </div>
-
-            {layersOpen && (
-              <div className="mx-panel mx-panel--floating w-[min(300px,calc(100vw-80px))] p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="mx-eyebrow mx-eyebrow--accent">
-                    Dataset layer
-                  </span>
-
-                  <button
-                    type="button"
-                    className="text-mx-muted hover:text-mx-text"
-                    aria-label="Close layers"
-                    onClick={() => setLayersOpen(false)}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-
-                <label
-                  htmlFor="mars-map-layer"
-                  className="mx-label"
-                >
-                  Imagery layer
-                </label>
-
-                <select
-                  id="mars-map-layer"
-                  className="mx-input"
-                  value={selectedLayer}
-                  onChange={(event) => {
-                    setSelectedLayer(
-                      event.target.value as MapLayerId
-                    );
-                    setFocusLocation(null);
-                  }}
-                >
-                  {Object.values(MAP_LAYERS).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-
-                <p className="mx-body m-0 mt-3 text-[13px]">
-                  {layer.description}
-                </p>
-
-                {tileConfig && (
-                  <div className="mt-4">
-                    <label
-                      htmlFor="layer-opacity"
-                      className="mx-label flex justify-between"
-                    >
-                      <span>Layer opacity</span>
-
-                      <span className="mx-mono text-mx-muted">
-                        {Math.round(opacity * 100)}%
-                      </span>
-                    </label>
-
-                    <input
-                      id="layer-opacity"
-                      className="mx-range"
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={opacity}
-                      onChange={(event) =>
-                        setOpacity(
-                          Number(event.target.value)
-                        )
-                      }
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {savedOpen && (
-              <div className="mx-panel mx-panel--floating w-[min(300px,calc(100vw-80px))]">
-                <div className="mx-panel__header !py-3">
-                  <span className="mx-eyebrow mx-eyebrow--accent">
-                    Saved Locations ({savedLocations.length})
-                  </span>
-
-                  <button
-                    type="button"
-                    className="text-mx-muted hover:text-mx-text"
-                    aria-label="Close saved locations"
-                    onClick={() => setSavedOpen(false)}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-
-                <div className="mx-scroll max-h-80 overflow-auto p-2">
-                  {savedLocations.length === 0 ? (
-                    <p className="m-0 px-2 py-3 text-[13px] text-mx-dim">
-                      No saved locations yet. Select a point
-                      on the map and save it.
-                    </p>
-                  ) : (
-                    savedLocations.map((location) => (
-                      <div
-                        key={location.id}
-                        className="flex items-center justify-between gap-2 rounded px-2 py-2.5 hover:bg-mx-panel-2"
-                      >
-                        <div className="min-w-0">
-                          <strong className="block truncate text-[13px] font-medium text-mx-text">
-                            {location.name}
-                          </strong>
-
-                          <span className="mx-mono text-[11px] text-mx-dim">
-                            {location.latitude.toFixed(5)}°,{" "}
-                            {location.longitude.toFixed(5)}°
-                          </span>
-                        </div>
-
-                        <div className="flex shrink-0 gap-1">
-                          <button
-                            type="button"
-                            className="mx-btn mx-btn--secondary mx-btn--sm"
-                            onClick={() =>
-                              goToSavedLocation(location)
-                            }
-                          >
-                            Go to
-                          </button>
-
-                          <button
-                            type="button"
-                            className="mx-icon-btn !h-8 !w-8"
-                            aria-label={`Remove ${location.name}`}
-                            onClick={() =>
-                              removeLocation(location.id)
-                            }
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Selected location information */}
-        {coordinates && (
-          <aside
-            className="mx-map-overlay mx-panel mx-panel--floating mx-scroll bottom-4 right-4 flex max-h-[calc(100%-32px)] w-[min(340px,calc(100%-32px))] flex-col overflow-auto p-5 sm:right-6 sm:top-5 sm:bottom-auto max-lg:sm:top-[76px] max-sm:left-4 max-sm:!bottom-[174px] max-sm:max-h-[calc(100%-190px)]"
-            aria-label="Selected location"
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <span className="mx-eyebrow mx-eyebrow--accent">
-                {selectedSite
-                  ? "Selected location"
-                  : "Selected point"}
-              </span>
-
-              <button
-                type="button"
-                className="text-mx-muted hover:text-mx-text"
-                aria-label="Clear selection"
-                onClick={clearSelection}
-              >
-                <X size={17} />
-              </button>
-            </div>
-
-            {selectedSite &&
-              (selectedSite.images[0] ? (
-                <img
-                  src={selectedSite.images[0].src}
-                  alt={selectedSite.images[0].caption}
-                  className="mb-4 aspect-[16/9] w-full rounded-md object-cover"
-                />
-              ) : (
-                <ImagePending
-                  className="mb-4 aspect-[16/9]"
-                  detail="Site imagery to be supplied by the team."
-                />
-              ))}
-
-            <div className="flex items-start justify-between gap-3">
-              <h3 className="mx-heading m-0 text-2xl">
-                {selectedName}
-              </h3>
-
-              {selectedSite && (
-                <span className="mx-badge mt-1.5">
-                  {selectedSite.terrainType}
-                </span>
-              )}
-            </div>
-
-            <p className="mx-mono m-0 mt-2 text-mx-text">
-              {formatCoordinates(
-                coordinates.latitude,
-                coordinates.longitude
-              )}
-            </p>
-
-            <div className="mt-4">
-              {elevationLoading && (
-                <DataField
-                  label="Elevation"
-                  value={
-                    <span className="text-mx-muted">
-                      Retrieving elevation from HiRISE DEM...
-                    </span>
-                  }
-                />
-              )}
-
-              {elevationError && (
-                <DataField
-                  label="Elevation"
-                  fallback={`Unavailable — ${elevationError}`}
-                />
-              )}
-
-              {elevation && (
-                <div>
-                  <DataField
-                    label="HiRISE Elevation"
-                    value={`${elevation.elevation.toFixed(2)} ${elevation.unit}`}
-                  />
-
-                  <p className="mx-mono m-0 mt-2 text-[11px] text-mx-dim">
-                    DEM product: {elevation.product_id}
-                    <br />
-                    Raster pixel: row {elevation.row},
-                    column {elevation.column}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {selectedSite && (
-              <p className="mx-body m-0 mt-4">
-                {selectedSite.description}
-              </p>
-            )}
-
-            <div className="mt-5 flex gap-2">
-              <label
-                htmlFor="mars-location-name"
-                className="sr-only"
-              >
-                Location name
-              </label>
-
-              <input
-                id="mars-location-name"
-                type="text"
-                className="mx-input !min-h-9 !py-1.5 text-[13px]"
-                value={locationName}
-                onChange={(event) =>
-                  setLocationName(event.target.value)
-                }
-                placeholder="Location name (optional)"
-                maxLength={50}
-              />
-
-              <button
-                type="button"
-                className="mx-btn mx-btn--secondary mx-btn--sm"
-                onClick={saveLocation}
-              >
-                Save
-              </button>
-            </div>
-
-            <div className="mt-3 flex flex-col gap-2">
-              <button
-                type="button"
-                className="mx-btn mx-btn--secondary mx-btn--block"
-                disabled={isRegion}
-                onClick={setAsRegion}
-              >
-                {isRegion
-                  ? "Expedition region selected"
-                  : "Set as expedition region"}
-              </button>
-
-              <button
-                type="button"
-                className="mx-btn mx-btn--secondary mx-btn--block"
-                disabled={isTarget}
-                onClick={addAsTarget}
-              >
-                {isTarget
-                  ? "Already a scientific target"
-                  : "Add as scientific target"}
-              </button>
-            </div>
-          </aside>
-        )}
-
-        {/* Temporal exploration toolbar */}
-        <div
-          className="mx-temporal-toolbar"
-          role="region"
-          aria-label="Temporal exploration controls"
-        >
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="mx-eyebrow mx-eyebrow--accent">
-              Temporal exploration
-            </span>
-
-            <span className="mx-mono text-[10px] text-mx-dim">
-              MARS TIME CONTROLS
-            </span>
-          </div>
-
+        {/* 2D Map Navigation Toolbar */}
+        <div className="mx-map-overlay left-4 top-[176px] flex flex-col gap-2 sm:left-6">
           <div
-            className="mx-temporal-mode-list"
-            role="group"
-            aria-label="Select temporal mode"
+            className="flex flex-col gap-2"
+            role="toolbar"
+            aria-label="2D map navigation tools"
+            aria-orientation="vertical"
           >
             <button
               type="button"
-              className={`mx-temporal-mode-button ${
-                temporal.mode === "past" ? "is-active" : ""
-              }`}
-              aria-pressed={temporal.mode === "past"}
-              onClick={() => setTemporalMode("past")}
+              className="mx-icon-btn"
+              aria-label="Zoom in"
+              title="Zoom in"
+              onClick={() => map?.zoomIn()}
             >
-              <span className="inline-flex items-center justify-center gap-2">
-                <CalendarDays size={13} />
-                Past
-              </span>
+              <Plus size={17} />
             </button>
 
             <button
               type="button"
-              className={`mx-temporal-mode-button ${
-                temporal.mode === "present" ? "is-active" : ""
-              }`}
-              aria-pressed={temporal.mode === "present"}
-              onClick={() => setTemporalMode("present")}
+              className="mx-icon-btn"
+              aria-label="Zoom out"
+              title={
+                mapZoom <= MAP_ZOOM_OUT_TO_GLOBE_THRESHOLD
+                  ? "Zoom out to 3D Globe"
+                  : "Zoom out"
+              }
+              onClick={handleZoomOutButton}
             >
-              <span className="inline-flex items-center justify-center gap-2">
-                <Clock3 size={13} />
-                Present
-              </span>
+              <Minus size={17} />
             </button>
 
             <button
               type="button"
-              className={`mx-temporal-mode-button ${
-                temporal.mode === "future" ? "is-active" : ""
-              }`}
-              aria-pressed={temporal.mode === "future"}
-              onClick={() => setTemporalMode("future")}
+              className="mx-icon-btn"
+              aria-label="Reset map view"
+              title="Reset regional view"
+              onClick={handleResetView}
             >
-              <span className="inline-flex items-center justify-center gap-2">
-                <Telescope size={13} />
-                Future
-              </span>
+              <Crosshair size={17} />
+            </button>
+
+            <button
+              type="button"
+              className="mx-icon-btn"
+              aria-label="Switch to 3D Mars Globe"
+              title="Switch to 3D Mars Globe"
+              onClick={() => triggerZoomOutToGlobe(focusCoordinates)}
+            >
+              <Globe size={16} />
             </button>
           </div>
-
-          {temporal.mode === "past" && (
-            <div className="mx-temporal-content">
-              <p className="mx-temporal-description m-0">
-                Choose an Earth date to define the historical
-                period you want to investigate.
-              </p>
-
-              <div className="mx-temporal-control">
-                <label htmlFor="mars-past-date">
-                  Date
-                </label>
-
-                <input
-                  id="mars-past-date"
-                  type="date"
-                  min={EARLIEST_TEMPORAL_DATE}
-                  max={todayUTC}
-                  value={temporal.selectedDate}
-                  onChange={(event) =>
-                    setTemporalDate(event.target.value)
-                  }
-                />
-              </div>
-            </div>
-          )}
-
-          {temporal.mode === "present" && (
-            <div className="mx-temporal-content">
-              <div className="mx-temporal-status">
-                <span className="mx-temporal-status-dot" />
-
-                <span>
-                  Latest available observations
-                </span>
-              </div>
-
-              <p className="mx-temporal-description m-0">
-                Uses the currently configured datasets. This
-                is not a live Mars feed.
-              </p>
-            </div>
-          )}
-
-          {temporal.mode === "future" && (
-            <div className="mx-temporal-content">
-              <p className="mx-temporal-description m-0">
-                Set a planning horizon. This does not yet
-                generate a scientific forecast.
-              </p>
-
-              <div className="mx-temporal-control">
-                <label htmlFor="mars-future-sols">
-                  Horizon (sols)
-                </label>
-
-                <input
-                  id="mars-future-sols"
-                  type="number"
-                  min={1}
-                  max={MAX_FUTURE_SOLS}
-                  step={1}
-                  value={temporal.futureSols}
-                  onChange={(event) =>
-                    setFutureSolHorizon(event.target.value)
-                  }
-                  onBlur={() => {
-                    updateTemporal({
-                      futureSols: Math.max(
-                        1,
-                        Math.min(
-                          MAX_FUTURE_SOLS,
-                          Math.round(temporal.futureSols)
-                        )
-                      ),
-                    });
-                  }}
-                />
-              </div>
-            </div>
-          )}
         </div>
+
+        {/* Bottom-left coordinate readout */}
+        <div className="pointer-events-none absolute bottom-4 left-4 z-[1040] hidden items-center gap-3 rounded-md border border-mx-border bg-mx-bg/90 px-3 py-1.5 backdrop-blur sm:left-6 md:flex">
+          <span className="mx-mono text-[11px] text-mx-text">
+            {formatCoordinates(
+              selectedLocation?.latitude ?? focusCoordinates.latitude,
+              selectedLocation?.longitude ?? focusCoordinates.longitude
+            )}
+          </span>
+          <span className="mx-mono text-[10px] text-mx-dim">
+            ZOOM L{mapZoom} · {layer.id.replace("mars_", "").toUpperCase()}
+          </span>
+        </div>
+
+        {/* Unified Selected Location Panel (2D Map mode) */}
+        <MarsExplorerLocationPanel mode="map" />
 
         {/* Non-interactive map status messages */}
         <div className="mx-map-status">
-          {loading && (
-            <p className="mx-chip">
-              Loading map layer...
-            </p>
-          )}
-
-          {error && (
+          {layerLoading && <p className="mx-chip">Loading map layer...</p>}
+          {layerError && (
             <p className="mx-chip" role="alert">
-              {error}
+              {layerError}
             </p>
           )}
-
-          {message && (
+          {statusMessage && (
             <p className="mx-chip" role="status">
-              {message}
+              {statusMessage}
             </p>
           )}
         </div>
       </div>
     </section>
   );
+}
+
+export default function MarsMap({ focusSiteId }: { focusSiteId?: string }) {
+  const explorer = useOptionalMarsExplorer();
+
+  if (!explorer) {
+    return (
+      <MarsExplorerProvider
+        initialViewMode="map"
+        initialSiteId={focusSiteId ?? null}
+      >
+        <div className="relative h-full w-full overflow-hidden">
+          <MarsExplorerControls />
+          <MarsMapInner focusSiteId={focusSiteId} />
+        </div>
+      </MarsExplorerProvider>
+    );
+  }
+
+  return <MarsMapInner focusSiteId={focusSiteId} />;
 }
