@@ -45,11 +45,11 @@ MEDA_SENSORS = [
 
 app = FastAPI(title="Marswalk API")
 
-app.include_router(terrain_dem_router)
-
+# Allow the deployed Cloudflare Pages frontend and local development.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://nasa-martian-map.pages.dev",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ],
@@ -57,6 +57,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register the terrain DEM endpoints.
+app.include_router(terrain_dem_router)
 
 
 # =========================================================
@@ -464,7 +467,7 @@ def get_meda_products():
             continue
 
         report_paths = sorted(
-            sensor_dir.glob("sol_*/ *_REPORT.json".replace(" ", ""))
+            sensor_dir.glob("sol_*/*_REPORT.json")
         )
 
         for report_path in report_paths:
