@@ -1,3 +1,4 @@
+// frontend/src/services/providers/nasaTrek.ts
 
 import type {
   TileLayerConfig,
@@ -16,6 +17,8 @@ interface NasaLayerDefinition {
 }
 
 const NASA_LAYERS: Record<MapLayerId, NasaLayerDefinition> = {
+  // BASEMAPS
+
   mars_global_mola: {
     id: "Mars_MGS_MOLA_ClrShade_merge_global_463m",
     static: true,
@@ -24,16 +27,66 @@ const NASA_LAYERS: Record<MapLayerId, NasaLayerDefinition> = {
     zoomOffset: -1,
   },
 
+  mars_viking_global: {
+    id: "Mars_Viking_MDIM21_ClrMosaic_global_232m",
+  },
+
+  mars_moc_atlas: {
+    id: "msss_atlas_simp_clon",
+  },
+
+  mars_mola_hrsc_color: {
+    id: "Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp_lzw",
+  },
+
+  mars_mola_hrsc_hillshade: {
+    id: "Mars_MOLA_blend200ppx_HRSC_Shade_clon0dd_200mpp_lzw",
+  },
+
+  // ELEVATION AND TERRAIN
+
   mars_mola_roughness: {
     id: "mola_roughness",
   },
+
+  // TES SCIENTIFIC LAYERS
 
   mars_tes_dust: {
     id: "TES_Dust",
   },
 
+  mars_tes_dust_index: {
+    id: "tes_ruffdust",
+  },
+
   mars_tes_thermal: {
     id: "TES_Thermal_Inertia",
+  },
+
+  mars_tes_pyroxene: {
+    id: "TES_Clinopyroxene",
+  },
+
+  mars_tes_plagioclase: {
+    id: "TES_Plagioclase",
+  },
+
+  mars_tes_silicates: {
+    id: "TES_Glass_Clay",
+  },
+
+  mars_tes_albedo: {
+    id: "Mars_MGS_TES_Albedo_mosaic_global_7410m",
+  },
+
+  // THEMIS INFRARED IMAGERY
+
+  mars_themis_day: {
+    id: "THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018",
+  },
+
+  mars_themis_night: {
+    id: "THEMIS_NightIR_ControlledMosaics_100m_v2_oct2018",
   },
 };
 
