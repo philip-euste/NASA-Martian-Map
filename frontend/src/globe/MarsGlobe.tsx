@@ -1,10 +1,17 @@
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars } from "@react-three/drei";
 import * as THREE from "three";
 
-const TILE_BASE =
-  "https://trek.nasa.gov/tiles/Mars/EQ/Mars_MGS_MOLA_ClrShade_merge_global_463m/1.0.0/default/default028mm";
+import {
+  MAP_LAYERS,
+  type MapLayer,
+  type MapLayerCategory,
+  type MapLayerId,
+} from "../data/mapLayers";
+
+import { getDataProvider } from "../services/dataProviders";
 
 type Location = {
   name: string;
@@ -40,13 +47,35 @@ const LOCATIONS: Location[] = [
   },
 ];
 
-// Scratch objects for the camera animation (avoids per-frame allocation).
+const LAYER_OPTIONS = Object.entries(MAP_LAYERS) as [
+  MapLayerId,
+  MapLayer,
+][];
+
+const LAYER_CATEGORIES: MapLayerCategory[] = [
+  "basemap",
+  "elevation",
+  "geology",
+  "composition",
+  "atmosphere",
+  "thermal",
+];
+
+const CATEGORY_LABELS: Record<MapLayerCategory, string> = {
+  basemap: "Basemaps",
+  elevation: "Elevation and Terrain",
+  geology: "Geology",
+  composition: "Composition",
+  atmosphere: "Atmosphere",
+  thermal: "Thermal and Infrared",
+};
+
+// Scratch objects for camera animation.
 const _dir = new THREE.Vector3();
 const _full = new THREE.Quaternion();
 const _step = new THREE.Quaternion();
 
-// Matches THREE.SphereGeometry with an equirectangular texture whose
-// center (u = 0.5) is lon 0: lon 0 -> +x, lon +90 -> -z, lon 180 -> -x.
+// Matches the equirectangular texture orientation.
 function coordinatesToVector(
   latitude: number,
   longitude: number,
@@ -65,17 +94,67 @@ function coordinatesToVector(
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
+
     image.crossOrigin = "anonymous";
+
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(`Failed to load tile: ${url}`));
+
+    image.onerror = () => {
+      reject(new Error(`Failed to load NASA tile: ${url}`));
+    };
+
     image.src = url;
   });
 }
 
-async function loadMarsTexture(): Promise<THREE.CanvasTexture> {
+function buildTileUrl(
+  template: string,
+  matrixId: string,
+  x: number,
+): string {
+  return template
+    .replaceAll("{z}", matrixId)
+    .replaceAll("{y}", "0")
+    .replaceAll("{x}", String(x));
+}
+
+async function loadLayerTexture(
+  layerId: MapLayerId,
+): Promise<THREE.CanvasTexture> {
+  const provider = getDataProvider("nasaTrek");
+
+  // Retrieve the actual URL template from the existing NASA provider.
+  const config = await provider.getLayerConfig(layerId);
+
+  if (!config.tileUrlTemplate) {
+    throw new Error(`No tile URL available for ${layerId}`);
+  }
+
+  // Use the first advertised WMTS matrix level.
+  const matrixId = config.matrixIds?.[0] ?? "0";
+
+  // Global equirectangular Mars tiles at the first matrix level.
+  const leftUrl = buildTileUrl(
+    config.tileUrlTemplate,
+    matrixId,
+    0,
+  );
+
+  const rightUrl = buildTileUrl(
+    config.tileUrlTemplate,
+    matrixId,
+    1,
+  );
+
+  console.log(`Loading NASA layer: ${layerId}`, {
+    matrixId,
+    leftUrl,
+    rightUrl,
+  });
+
   const [leftTile, rightTile] = await Promise.all([
-    loadImage(`${TILE_BASE}/0/0/0.jpg`),
-    loadImage(`${TILE_BASE}/0/0/1.jpg`),
+    loadImage(leftUrl),
+    loadImage(rightUrl),
   ]);
 
   const canvas = document.createElement("canvas");
@@ -106,8 +185,12 @@ async function loadMarsTexture(): Promise<THREE.CanvasTexture> {
 }
 
 function MarsSurface({
+  layerId,
+  layerName,
   onTextureLoaded,
 }: {
+  layerId: MapLayerId;
+  layerName: string;
   onTextureLoaded: (message: string) => void;
 }) {
   const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null);
@@ -116,7 +199,10 @@ function MarsSurface({
     let active = true;
     let loadedTexture: THREE.CanvasTexture | null = null;
 
-    loadMarsTexture()
+    setTexture(null);
+    onTextureLoaded(`Loading ${layerName}...`);
+
+    loadLayerTexture(layerId)
       .then((result) => {
         if (!active) {
           result.dispose();
@@ -125,34 +211,34 @@ function MarsSurface({
 
         loadedTexture = result;
         setTexture(result);
-        onTextureLoaded("NASA MOLA imagery loaded");
 
-        console.log("Sphere geometry and texture:", {
-          textureWidth: result.image.width,
-          textureHeight: result.image.height,
-          mapping: result.mapping,
-          flipY: result.flipY,
+        onTextureLoaded(`${layerName} loaded`);
+
+        console.log("NASA globe texture loaded:", {
+          layerId,
+          width: result.image.width,
+          height: result.image.height,
           colorSpace: result.colorSpace,
         });
       })
       .catch((error: unknown) => {
-        console.error("Mars texture loading failed:", error);
-        onTextureLoaded("NASA texture loading failed");
+        if (!active) return;
+
+        console.error(`Failed to load NASA layer ${layerId}:`, error);
+
+        onTextureLoaded(`Failed to load ${layerName}`);
       });
 
     return () => {
       active = false;
       loadedTexture?.dispose();
     };
-  }, [onTextureLoaded]);
+  }, [layerId, layerName, onTextureLoaded]);
 
   return (
-    // The sphere has a handler so R3F raycasts against it; stopPropagation
-    // keeps markers on the far side from receiving clicks through the planet.
     <mesh onClick={(event) => event.stopPropagation()}>
       <sphereGeometry args={[1, 128, 128]} />
-      {/* key forces a new material when `map` goes null -> texture.
-          Assigning map later doesn't recompile the shader (no USE_MAP). */}
+
       <meshBasicMaterial
         key={texture ? "textured" : "flat"}
         map={texture}
@@ -172,7 +258,10 @@ function LocationMarker({
   selected: boolean;
   onSelect: (location: Location) => void;
 }) {
-  const position = coordinatesToVector(location.latitude, location.longitude);
+  const position = coordinatesToVector(
+    location.latitude,
+    location.longitude,
+  );
 
   return (
     <group position={position}>
@@ -183,7 +272,10 @@ function LocationMarker({
         }}
       >
         <sphereGeometry args={[selected ? 0.025 : 0.016, 16, 16]} />
-        <meshBasicMaterial color={selected ? "#ffffff" : "#ff9c52"} />
+
+        <meshBasicMaterial
+          color={selected ? "#ffffff" : "#ff9c52"}
+        />
       </mesh>
     </group>
   );
@@ -195,7 +287,9 @@ function RendererDiagnostics() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       console.log("WebGL diagnostics:", {
-        renderer: gl.getContext().getParameter(gl.getContext().RENDERER),
+        renderer: gl.getContext().getParameter(
+          gl.getContext().RENDERER,
+        ),
         maxTextureSize: gl.capabilities.maxTextureSize,
         webglError: gl.getContext().getError(),
       });
@@ -209,14 +303,19 @@ function RendererDiagnostics() {
 
 function GlobeScene({
   selectedLocation,
+  selectedLayerId,
+  selectedLayerName,
   onSelectLocation,
   onTextureLoaded,
 }: {
   selectedLocation: Location | null;
+  selectedLayerId: MapLayerId;
+  selectedLayerName: string;
   onSelectLocation: (location: Location) => void;
   onTextureLoaded: (message: string) => void;
 }) {
   const { camera } = useThree();
+
   const flyTo = useRef<THREE.Vector3 | null>(null);
 
   useEffect(() => {
@@ -229,10 +328,9 @@ function GlobeScene({
       : null;
   }, [selectedLocation]);
 
-  // Rotate the camera around the origin toward the goal direction.
-  // Rotation preserves distance, so the user's zoom level is kept.
   useFrame((_, delta) => {
     const goal = flyTo.current;
+
     if (!goal) return;
 
     _dir.copy(camera.position).normalize();
@@ -243,6 +341,7 @@ function GlobeScene({
     }
 
     const t = 1 - Math.exp(-delta * 6);
+
     _full.setFromUnitVectors(_dir, goal);
     _step.identity().slerp(_full, t);
 
@@ -252,7 +351,11 @@ function GlobeScene({
 
   return (
     <>
-      <MarsSurface onTextureLoaded={onTextureLoaded} />
+      <MarsSurface
+        layerId={selectedLayerId}
+        layerName={selectedLayerName}
+        onTextureLoaded={onTextureLoaded}
+      />
 
       {LOCATIONS.map((location) => (
         <LocationMarker
@@ -263,7 +366,13 @@ function GlobeScene({
         />
       ))}
 
-      <Stars radius={80} depth={50} count={2500} factor={4} fade />
+      <Stars
+        radius={80}
+        depth={50}
+        count={2500}
+        factor={4}
+        fade
+      />
 
       <OrbitControls
         enablePan={false}
@@ -273,7 +382,6 @@ function GlobeScene({
         rotateSpeed={0.5}
         zoomSpeed={0.7}
         onStart={() => {
-          // User grabbed the globe: cancel any in-flight animation.
           flyTo.current = null;
         }}
       />
@@ -287,7 +395,13 @@ export default function MarsGlobe() {
   const [selectedLocation, setSelectedLocation] =
     useState<Location | null>(null);
 
-  const [textureStatus, setTextureStatus] = useState("Loading NASA imagery...");
+  const [selectedLayerId, setSelectedLayerId] =
+    useState<MapLayerId>("mars_global_mola");
+
+  const [textureStatus, setTextureStatus] =
+    useState("Loading NASA imagery...");
+
+  const selectedLayer = MAP_LAYERS[selectedLayerId];
 
   const handleTextureLoaded = useCallback((message: string) => {
     setTextureStatus(message);
@@ -305,7 +419,65 @@ export default function MarsGlobe() {
           <p>Interactive 3D planetary view</p>
         </div>
 
-        <span className="mars-globe-status">{textureStatus}</span>
+        <div className="mars-globe-layer-control">
+          <label htmlFor="mars-globe-layer">
+            Surface layer
+          </label>
+
+          <select
+            id="mars-globe-layer"
+            value={selectedLayerId}
+            onChange={(event) => {
+              setSelectedLayerId(event.target.value as MapLayerId);
+            }}
+            style={{
+              display: "block",
+              minWidth: "230px",
+              padding: "9px 12px",
+              marginTop: "5px",
+              color: "#ffffff",
+              background: "#171c29",
+              border: "1px solid #424b5e",
+              borderRadius: "6px",
+            }}
+          >
+            {LAYER_CATEGORIES.map((category) => {
+              const categoryLayers = LAYER_OPTIONS.filter(
+                ([, layer]) => layer.category === category,
+              );
+
+              if (categoryLayers.length === 0) return null;
+
+              return (
+                <optgroup
+                  key={category}
+                  label={CATEGORY_LABELS[category]}
+                >
+                  {categoryLayers.map(([id, layer]) => (
+                    <option key={id} value={id}>
+                      {layer.name}
+                    </option>
+                  ))}
+                </optgroup>
+              );
+            })}
+          </select>
+        </div>
+
+        <span className="mars-globe-status">
+          {textureStatus}
+        </span>
+      </div>
+
+      <div
+        className="mars-globe-layer-description"
+        style={{
+          margin: "8px 0 12px",
+          color: "#aeb8c9",
+          fontSize: "13px",
+        }}
+      >
+        {selectedLayer.description}
       </div>
 
       <div
@@ -327,7 +499,10 @@ export default function MarsGlobe() {
             far: 200,
           }}
           dpr={[1, 2]}
-          gl={{ antialias: true, alpha: false }}
+          gl={{
+            antialias: true,
+            alpha: false,
+          }}
           onCreated={({ gl }) => {
             console.log("Three.js renderer:", {
               renderer: gl.getContext().getParameter(
@@ -341,6 +516,8 @@ export default function MarsGlobe() {
 
           <GlobeScene
             selectedLocation={selectedLocation}
+            selectedLayerId={selectedLayerId}
+            selectedLayerName={selectedLayer.name}
             onSelectLocation={handleSelectLocation}
             onTextureLoaded={handleTextureLoaded}
           />
@@ -353,7 +530,9 @@ export default function MarsGlobe() {
               type="button"
               onClick={() => handleSelectLocation(location)}
               className={
-                selectedLocation?.name === location.name ? "active" : ""
+                selectedLocation?.name === location.name
+                  ? "active"
+                  : ""
               }
             >
               {location.name}
@@ -373,6 +552,7 @@ export default function MarsGlobe() {
 
             <h3>{selectedLocation.name}</h3>
             <p>{selectedLocation.description}</p>
+
             <small>
               {selectedLocation.latitude.toFixed(2)}° latitude,{" "}
               {selectedLocation.longitude.toFixed(2)}° longitude
