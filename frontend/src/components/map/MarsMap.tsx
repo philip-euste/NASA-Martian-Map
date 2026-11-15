@@ -365,10 +365,6 @@ function MapController({
   const lastFocusVersionRef = useRef<number>(-1);
   const lastNavigationVersionRef = useRef<number>(0);
 
-  useEffect(() => () => {
-    map.stop();
-  }, [map]);
-
   useEffect(() => {
     if (
       navigationActionVersion !== lastNavigationVersionRef.current
@@ -900,20 +896,18 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
 
             if (!feature) return null;
 
-            const isSelected = region.id === selectedStudyRegionId;
-
             return (
               <GeoJSON
                 key={`region-boundary-${region.id}`}
                 data={feature}
                 style={{
-                  color: isSelected ? "#f4a261" : "#75b9c2",
-                  weight: isSelected ? 3.5 : 2,
-                  opacity: isSelected ? 1 : 0.85,
+                  color: "#38bdf8",
+                  weight: 3,
+                  opacity: 1,
                   fill: true,
                   fillColor: "#75b9c2",
                   fillOpacity: 0.16,
-                  dashArray: isSelected ? "7 5" : "4 6",
+                  dashArray: "7 5",
                 }}
               />
             );

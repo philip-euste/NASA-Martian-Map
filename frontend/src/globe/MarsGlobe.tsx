@@ -245,11 +245,9 @@ function buildFillGeometry(feature: RegionFeature): THREE.BufferGeometry | null 
 function RegionBoundary({
   region,
   feature,
-  selected,
 }: {
   region: StudyRegion;
   feature: RegionFeature;
-  selected: boolean;
 }) {
   const rings = useMemo(
     () => getBoundaryRings(feature).map(densifyRing),
@@ -288,13 +286,13 @@ function RegionBoundary({
           <Line
             key={`${region.id}-${index}`}
             points={points}
-            color={selected ? "#f4a261" : "#75b9c2"}
-            lineWidth={selected ? 2.5 : 1.5}
+            color="#38bdf8"
+            lineWidth={2.5}
             dashed
-            dashSize={selected ? 0.025 : 0.018}
-            gapSize={selected ? 0.015 : 0.018}
+            dashSize={0.025}
+            gapSize={0.015}
             transparent
-            opacity={selected ? 1 : 0.85}
+            opacity={1}
             depthWrite={false}
             renderOrder={2}
           />
@@ -799,7 +797,6 @@ function GlobeScene({
             <RegionBoundary
               region={region}
               feature={feature}
-              selected={selected}
             />
           </group>
         );
