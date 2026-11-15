@@ -75,9 +75,9 @@ NASAMartianMap
     |   │   │   |── MissionLayout.ts
     |   │   │   └── useMarsExplorer.tsx
     |   |   ├── mission
-    |   │   │   |── CrismSpectralPanel.tsx
+    |   │   │   |── CrismSpectralPanel.tsx - Visualizes CRISM spectra, interprets mineral signatures, and records spectral observations.
     |   │   │   |── EvidenceInspectorPage.tsx
-    |   │   │   |── ExpeditionReportPage.tsx
+    |   │   │   |── ExpeditionReportPage.tsx - Generates, archives, displays, and exports scientific expedition reports.
     |   │   │   |── ExperiditionReviewPage.tsx
     |   │   │   |── InvestigationPage.tsx
     |   │   │   |── KnowledgeGapsPage.tsx

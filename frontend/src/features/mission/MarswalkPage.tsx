@@ -23,7 +23,7 @@ import {
 import { ImagePending, formatCoordinates } from "../../components/ui";
 import type { SurfaceImageryCatalogItem } from "../../data/evidenceDatasets";
 import { perseveranceImageryProvider } from "../../services/providers/perseveranceImageryProvider";
-import { resolveSimulatorEnvironment } from "../../simulator/environments/catalog";
+import { resolveSimulatorEnvironment } from "../../simulator/jezero_crater/catalog";
 import { isWithinBounds } from "../../simulator/shared/environment";
 import HelmetHud, {
   type CompassMarkerItem,
