@@ -27,6 +27,7 @@ import { useMission } from "../../state/mission/MissionContext";
 import { identifyGeologicUnitAt } from "../../utils/jezeroStratigraphy";
 import { formatCoordinates } from "../ui";
 import "./MarsMap.css";
+import { apiUrl } from "../../lib/api";
 
 interface RouteTarget {
   readonly id: string;
@@ -168,7 +169,7 @@ export default function RouteMap({
         SUPPORTED_STUDY_REGIONS.map(async (region) => {
           try {
             const response = await fetch(
-              `/api/regions/${encodeURIComponent(region.id)}/boundary`,
+              apiUrl(`/api/regions/${encodeURIComponent(region.id)}/boundary`),
               { signal: controller.signal }
             );
 

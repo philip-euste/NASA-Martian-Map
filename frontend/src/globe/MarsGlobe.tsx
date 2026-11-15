@@ -42,6 +42,7 @@ import type { Coordinates } from "../types";
 import type { TileLayerConfig } from "../services/dataProviders";
 import "./MarsGlobe.css";
 import type { Mesh } from "three";
+import { apiUrl } from "../lib/api";
 
 type StudyRegion = {
   readonly id: string;
@@ -509,7 +510,7 @@ function GlobeScene({
         SUPPORTED_STUDY_REGIONS.map(async (region) => {
           try {
             const response = await fetch(
-              `/api/regions/${encodeURIComponent(region.id)}/boundary`,
+              apiUrl(`/api/regions/${encodeURIComponent(region.id)}/boundary`),
               {
                 signal: controller.signal,
                 headers: {

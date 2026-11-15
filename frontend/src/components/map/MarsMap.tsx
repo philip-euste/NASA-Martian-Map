@@ -36,6 +36,7 @@ import { MarsExplorerLocationPanel } from "../../features/mars-explorer/MarsExpl
 import { formatCoordinates } from "../ui";
 
 import "./MarsMap.css";
+import { apiUrl } from "../../lib/api";
 
 type RegionFeature = Feature<Geometry, Record<string, unknown>>;
 
@@ -607,7 +608,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
         SUPPORTED_STUDY_REGIONS.map(async (region) => {
           try {
             const response = await fetch(
-              `/api/regions/${encodeURIComponent(region.id)}/boundary`,
+              apiUrl(`/api/regions/${encodeURIComponent(region.id)}/boundary`),
               { signal: controller.signal }
             );
 
@@ -713,7 +714,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
     async function loadGeology() {
       try {
         const response = await fetch(
-          `/api/regions/${encodeURIComponent(selectedStudyRegionId)}/geology`,
+          apiUrl(`/api/regions/${encodeURIComponent(selectedStudyRegionId)}/geology`),
           { signal: controller.signal }
         );
 
