@@ -430,6 +430,8 @@ function GlobeScene({
   selectedLayerId,
   selectedLayerName,
   sharedConfig,
+  overlayLayerId,
+  overlayOpacity,
   focusCoordinates,
   focusRequestVersion,
   navigationAction,
@@ -442,6 +444,7 @@ function GlobeScene({
   selectedSiteName,
   selectedSavedId,
   selectedStudyRegionId,
+  showStudyRegionBoundary,
   onSelectSite,
   onSelectSaved,
   onSelectSurfacePoint,
@@ -451,6 +454,8 @@ function GlobeScene({
   selectedLayerId: MapLayerId;
   selectedLayerName: string;
   sharedConfig?: TileLayerConfig | null;
+  overlayLayerId?: MapLayerId | null;
+  overlayOpacity: number;
   focusCoordinates: Coordinates;
   focusRequestVersion: number;
   navigationAction: ExplorerNavigationAction | null;
@@ -463,6 +468,7 @@ function GlobeScene({
   selectedSiteName: string | null;
   selectedSavedId: number | null;
   selectedStudyRegionId: string | null;
+  showStudyRegionBoundary: boolean;
   onSelectSite: (location: Location) => void;
   onSelectSaved: (location: SavedLocation) => void;
   onSelectSurfacePoint: (coordinates: Coordinates) => void;
@@ -773,12 +779,16 @@ function GlobeScene({
         layerId={selectedLayerId}
         layerName={selectedLayerName}
         sharedConfig={sharedConfig}
+        overlayLayerId={overlayLayerId}
+        overlayOpacity={overlayOpacity}
         onTextureLoaded={onTextureLoaded}
         onSelectSurfacePoint={onSelectSurfacePoint}
       />
 
       {SUPPORTED_STUDY_REGIONS.map((region) => {
-        const feature = boundaryFeatures[region.id];
+        const feature = showStudyRegionBoundary && region.id === selectedStudyRegionId
+          ? boundaryFeatures[region.id]
+          : null;
 
         if (!feature) return null;
 
@@ -1153,6 +1163,8 @@ export default function MarsGlobe({
             selectedLayerId={selectedLayerId}
             selectedLayerName={selectedLayer.name}
             sharedConfig={shared?.tileConfig}
+            overlayLayerId={shared?.overlayLayerId}
+            overlayOpacity={shared?.overlayOpacity ?? 0.65}
             focusCoordinates={focusCoordinates}
             focusRequestVersion={focusRequestVersion}
             navigationAction={shared?.navigationAction ?? null}
@@ -1169,6 +1181,7 @@ export default function MarsGlobe({
             selectedStudyRegionId={
               shared?.selectedStudyRegionId ?? "jezero"
             }
+            showStudyRegionBoundary={shared?.showStudyRegionBoundary ?? false}
             onSelectSite={handleSelectSite}
             onSelectSaved={handleSelectSaved}
             onSelectSurfacePoint={

@@ -98,7 +98,7 @@ export const MISSION_PAGES: MissionPage[] = [
     stage: "Stage 01 · Investigate",
     stageGroupId: "investigate",
     stageNumber: "01",
-    purpose: "Verify dataset provenance, sample HiRISE DEM elevations, and record interpretations.",
+    purpose: "Review dataset provenance, measurements, and scientific interpretations.",
   },
   {
     id: "gaps",
@@ -197,13 +197,13 @@ type DeepReadonlyMission = {
   readonly name: string;
   readonly objective: string;
   readonly question: string;
-  readonly region: unknown;
+  readonly region: { readonly id?: string } | null;
   readonly configuration: unknown;
-  readonly selectedDatasets: readonly unknown[];
   readonly selectedObservations: readonly unknown[];
+  readonly selectedDatasets: readonly { readonly id?: string }[];
   readonly scientificTargets: readonly unknown[];
   readonly knowledgeGaps: readonly unknown[];
-  readonly derivedAnalyses: readonly unknown[];
+  readonly derivedAnalyses: readonly { readonly method?: string }[];
   readonly interpretations: readonly unknown[];
   readonly candidateRoutes: readonly unknown[];
   readonly selectedRouteId: string | null;
@@ -228,7 +228,8 @@ export function isPageCompleted(pageId: string, mission: DeepReadonlyMission): b
     case "evidence":
       return (
         mission.selectedObservations.length > 0 &&
-        (mission.derivedAnalyses.length > 0 || mission.interpretations.length > 0)
+        (mission.derivedAnalyses.length > 0 || mission.interpretations.length > 0) &&
+        (mission.region?.id !== "jezero-crater" || mission.derivedAnalyses.some((analysis) => analysis.method?.includes("raster query")))
       );
     case "gaps":
       return mission.knowledgeGaps.length > 0;
@@ -327,6 +328,13 @@ export function getNextRecommendedAction(
       label: "Log First Observation",
       path: "/mission/investigate",
       reason: "Record at least one orbital observation to anchor your evidence record.",
+    };
+  }
+  if (mission.region?.id === "jezero-crater" && !mission.derivedAnalyses.some((analysis) => analysis.method?.includes("raster query"))) {
+    return {
+      label: "Sample Jezero DEM Elevation",
+      path: "/mission/evidence",
+      reason: "Sample at least one Jezero observation using the HiRISE or local CTX DEM before continuing.",
     };
   }
   if (mission.derivedAnalyses.length === 0 && mission.interpretations.length === 0) {

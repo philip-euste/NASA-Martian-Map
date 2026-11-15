@@ -85,6 +85,8 @@ export interface MarsExplorerContextValue {
 
   selectedStudyRegionId: StudyRegionId;
   setSelectedStudyRegionId: (regionId: StudyRegionId) => void;
+  showStudyRegionBoundary: boolean;
+  setShowStudyRegionBoundary: (show: boolean) => void;
 
   selectedLayerId: MapLayerId;
   setSelectedLayerId: (layerId: MapLayerId) => void;

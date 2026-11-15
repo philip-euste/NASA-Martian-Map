@@ -365,6 +365,10 @@ function MapController({
   const lastFocusVersionRef = useRef<number>(-1);
   const lastNavigationVersionRef = useRef<number>(0);
 
+  useEffect(() => () => {
+    map.stop();
+  }, [map]);
+
   useEffect(() => {
     if (
       navigationActionVersion !== lastNavigationVersionRef.current
@@ -528,6 +532,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
     showGeologyOverlay,
     geologyOpacity,
     selectedStudyRegionId,
+    showStudyRegionBoundary,
     focusCoordinates,
     focusRequestVersion,
     updateCameraFocus,
@@ -889,7 +894,9 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
 
           {/* All supported study-region boundaries */}
           {SUPPORTED_STUDY_REGIONS.map((region) => {
-            const feature = boundaryFeatures[region.id];
+            const feature = showStudyRegionBoundary && region.id === selectedStudyRegionId
+              ? boundaryFeatures[region.id]
+              : null;
 
             if (!feature) return null;
 

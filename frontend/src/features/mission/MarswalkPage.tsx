@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { ImagePending, formatCoordinates } from "../../components/ui";
+import { MAP_LAYERS, type MapLayerId } from "../../data/mapLayers";
 import type { SurfaceImageryCatalogItem } from "../../data/evidenceDatasets";
 import { perseveranceImageryProvider } from "../../services/providers/perseveranceImageryProvider";
 import { getMarsRegionById } from "../../data/regions";
@@ -178,6 +179,9 @@ export default function MarswalkPage() {
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const [surfaceOverlayLayer, setSurfaceOverlayLayer] = useState<MapLayerId | "">("");
+  const [surfaceOverlayOpacity, setSurfaceOverlayOpacity] = useState(0.55);
+  const [surfaceOverlayStatus, setSurfaceOverlayStatus] = useState("");
   const [simulatorError, setSimulatorError] = useState<string | null>(null);
   const [liveSlopeDeg, setLiveSlopeDeg] = useState<number>(1.8);
   const [liveElevationM, setLiveElevationM] = useState<number>(-2546);
@@ -408,6 +412,8 @@ export default function MarswalkPage() {
             isActive: true,
           });
         }
+      } else if (msg.type === "marswalk:overlay-status") {
+        setSurfaceOverlayStatus(typeof msg.message === "string" ? msg.message : "");
       } else if (msg.type === "marswalk:visit-target") {
         if (typeof msg.targetId === "string" && msg.targetId) {
           const nextVisited = mission.simulation.visitedTargetIds.includes(
@@ -427,6 +433,9 @@ export default function MarswalkPage() {
         setShowFieldworkDrawer(true);
       } else if (msg.type === "marswalk:close-modal") {
         setShowFieldworkDrawer(false);
+      } else if (msg.type === "marswalk:open-notepad") {
+        setActiveFieldworkTab("observation");
+        setShowFieldworkDrawer(true);
       } else if (
         msg.type === "marswalk:return-to-base" ||
         msg.type === "marswalk:returned-to-base"
@@ -451,6 +460,15 @@ export default function MarswalkPage() {
     showSuitCheckModal ||
     showContingencyDrawer ||
     showReturnModal;
+
+  useEffect(() => {
+    if (initializing) return;
+    iframeRef.current?.contentWindow?.postMessage({
+      type: "mars-explorer:set-overlay",
+      overlayLayer: surfaceOverlayLayer || null,
+      opacity: surfaceOverlayOpacity,
+    }, "*");
+  }, [initializing, surfaceOverlayLayer, surfaceOverlayOpacity]);
 
   useEffect(() => {
     const win = iframeRef.current?.contentWindow;
@@ -1302,9 +1320,20 @@ export default function MarswalkPage() {
               allow="fullscreen; pointer-lock"
             />
 
+            <div className="absolute right-3 top-16 z-[30] w-64 rounded-lg border border-mx-border bg-mx-bg/95 p-3 shadow-xl backdrop-blur">
+              <label htmlFor="marswalk-surface-overlay" className="mx-label">Comparative surface overlay</label>
+              <select id="marswalk-surface-overlay" className="mx-input mt-1 text-xs" value={surfaceOverlayLayer} onChange={(event) => setSurfaceOverlayLayer(event.target.value as MapLayerId | "")}>
+                <option value="">None</option>
+                {Object.values(MAP_LAYERS).map((layer) => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
+              </select>
+              {surfaceOverlayLayer && <label className="mt-2 block text-[11px] text-mx-muted" htmlFor="marswalk-overlay-opacity">Blend opacity · {Math.round(surfaceOverlayOpacity * 100)}%</label>}
+              {surfaceOverlayLayer && <input id="marswalk-overlay-opacity" className="mx-range mt-1" type="range" min="0.1" max="0.9" step="0.05" value={surfaceOverlayOpacity} onChange={(event) => setSurfaceOverlayOpacity(Number(event.target.value))} />}
+              {surfaceOverlayStatus && <p className="m-0 mt-1 text-[10px] text-mx-muted" role="status">{surfaceOverlayStatus}</p>}
+            </div>
+
             {/* Subtle Astronaut Helmet Visor Frame Vignette */}
             <div
-              className="pointer-events-none absolute inset-0 z-[10] shadow-[inset_0_0_90px_rgba(8,6,7,0.68)]"
+              className="pointer-events-none absolute inset-0 z-[10] shadow-[inset_0_0_90px_rgba(8,6,7,0.22)]"
               aria-hidden="true"
             />
 
@@ -1401,7 +1430,7 @@ export default function MarswalkPage() {
         )}
 
         {/* ================================================================
-            CENTERED MODAL: IN-SITU FIELDWORK STATION [E]
+            CENTERED MODAL: IN-SITU FIELDWORK STATION [E] · NOTEPAD [N]
             (Contained inside the Marswalk visor viewport below the mission header)
             ================================================================ */}
         {showFieldworkDrawer && (

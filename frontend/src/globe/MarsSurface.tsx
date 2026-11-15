@@ -663,12 +663,16 @@ export default function MarsSurface({
   layerId,
   layerName,
   sharedConfig,
+  overlayLayerId,
+  overlayOpacity = 0.65,
   onTextureLoaded,
   onSelectSurfacePoint,
 }: {
   layerId: MapLayerId;
   layerName: string;
   sharedConfig?: TileLayerConfig | null;
+  overlayLayerId?: MapLayerId | null;
+  overlayOpacity?: number;
   onTextureLoaded: (message: string) => void;
   onSelectSurfacePoint?: (coordinates: Coordinates) => void;
 }) {
@@ -677,6 +681,7 @@ export default function MarsSurface({
   const [previewTexture, setPreviewTexture] =
     useState<THREE.CanvasTexture | null>(null);
   const [offlineTexture, setOfflineTexture] = useState<THREE.Texture | null>(null);
+  const [overlayTexture, setOverlayTexture] = useState<THREE.CanvasTexture | null>(null);
 
   const [detailTiles, setDetailTiles] =
     useState<LoadedDetailTile[]>([]);
@@ -717,6 +722,33 @@ export default function MarsSurface({
     });
     return () => { active = false; loadedTexture?.dispose(); };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    let texture: THREE.CanvasTexture | null = null;
+    setOverlayTexture(null);
+    if (!overlayLayerId || overlayLayerId === layerId) return;
+    const controller = new AbortController();
+    void getDataProvider("nasaTrek").getLayerConfig(overlayLayerId)
+      .then(async (config) => {
+        const level = config.matrixLevels?.[0];
+        if (!level) throw new Error("Overlay has no global tile level.");
+        const canvas = await stitchGlobalLevelToCanvas(config, level, null, controller.signal);
+        if (!active) return;
+        texture = createCanvasTexture(canvas);
+        setOverlayTexture(texture);
+      })
+      .catch((error: unknown) => {
+        if (active && !(error instanceof DOMException && error.name === "AbortError")) {
+          console.error(`Failed to load 3D comparative overlay ${overlayLayerId}:`, error);
+        }
+      });
+    return () => {
+      active = false;
+      controller.abort();
+      texture?.dispose();
+    };
+  }, [overlayLayerId, layerId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1057,6 +1089,13 @@ export default function MarsSurface({
           toneMapped={false}
         />
       </mesh>
+
+      {overlayTexture && (
+        <mesh renderOrder={2}>
+          <sphereGeometry args={[BASE_RADIUS + 0.0015, 64, 64]} />
+          <meshBasicMaterial map={overlayTexture} transparent opacity={overlayOpacity} depthWrite={false} side={THREE.FrontSide} toneMapped={false} />
+        </mesh>
+      )}
 
       {detailTiles.map((tile) => (
         <DetailTileMesh

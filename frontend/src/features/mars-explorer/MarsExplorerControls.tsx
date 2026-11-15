@@ -28,6 +28,8 @@ export default function MarsExplorerControls() {
     selectedLayerId,
     viewMode,
     selectedStudyRegionId,
+    showStudyRegionBoundary,
+    setShowStudyRegionBoundary,
     setSelectedLayerId,
     opacity,
     setOpacity,
@@ -353,9 +355,18 @@ export default function MarsExplorerControls() {
               </>
             )}
             {overlayLayerId && viewMode === "globe" && (
-              <p className="m-0 text-[10px] text-amber-300">Comparative overlays are currently rendered in the 2D map only; the selected layer and opacity are saved.</p>
+              <p className="m-0 text-[10px] text-mx-muted">The globe shows the selected overlay at its global overview resolution.</p>
+            )}
+            {overlayLayerId && viewMode === "jezero" && (
+              <p className="m-0 text-[10px] text-amber-300">Comparative overlays are available on the globe and 2D map, not in the Jezero surface simulator.</p>
             )}
           </div>
+
+          {/* USGS Geologic Units Vector Layer */}
+          <label className="mt-3.5 flex items-center gap-2 border-t border-mx-border pt-3 text-xs">
+            <input type="checkbox" checked={showStudyRegionBoundary} onChange={(event) => setShowStudyRegionBoundary(event.target.checked)} />
+            Show {selectedStudyRegionId} coverage outline
+          </label>
 
           {/* USGS Geologic Units Vector Layer */}
           <div className="mt-3.5 space-y-2">
@@ -523,8 +534,7 @@ export default function MarsExplorerControls() {
         {temporal.mode === "future" && (
           <div className="mx-temporal-content">
             <p className="mx-temporal-description m-0">
-              Set a planning horizon. This does not yet generate a
-              scientific forecast.
+              Set a planning horizon. This does not generate scientific forecasts; current map layers remain static reference mosaics.
             </p>
             <div className="mx-temporal-control">
               <label htmlFor="mars-future-sols">Horizon (sols)</label>

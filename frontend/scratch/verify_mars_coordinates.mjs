@@ -16,4 +16,27 @@ assert.equal(isWithinBounds(melasBounds, { latitude: -13.9, longitude: -59.2 }),
 assert.equal(isWithinBounds(melasBounds, { latitude: Number.NaN, longitude: 283.6 }), false);
 assert.equal(isWithinBounds(melasBounds, { latitude: -9.8, longitude: Number.POSITIVE_INFINITY }), false);
 
-console.log("Mars coordinate self-check passed (6 assertions).");
+const temporalSource = await readFile(new URL("../src/utils/temporalFilters.ts", import.meta.url), "utf8");
+const temporalCode = await transform(temporalSource, { loader: "ts", format: "esm" });
+const { filterProductsThroughDate } = await import(
+  `data:text/javascript;base64,${Buffer.from(temporalCode.code).toString("base64")}`
+);
+const medaProducts = [
+  { start_time: "2021-02-19T21:00:00Z", stop_time: "2021-02-19T22:00:00Z", id: "sol-1" },
+  { start_time: "2021-03-01T23:55:00Z", stop_time: "2021-03-02T00:05:00Z", id: "crosses-cutoff" },
+  { start_time: "2021-03-26T21:00:00Z", stop_time: "2021-03-26T22:00:00Z", id: "sol-36" },
+  { start_time: "not-a-date", stop_time: "not-a-date", id: "invalid" },
+];
+assert.deepEqual(filterProductsThroughDate(medaProducts, "2021-03-01").map((p) => p.id), ["sol-1"]);
+assert.deepEqual(filterProductsThroughDate(medaProducts, "not-a-date"), []);
+
+for (const file of ["jezero", "gale", "valles-marineris", "olympus-mons"]) {
+  const geojson = JSON.parse(await readFile(new URL(`../public/data/boundaries/${file}.geojson`, import.meta.url), "utf8"));
+  assert.equal(geojson.type, "Feature");
+  assert.equal(geojson.geometry.type, "Polygon");
+  const ring = geojson.geometry.coordinates[0];
+  assert.deepEqual(ring[0], ring.at(-1));
+  assert.match(geojson.properties.boundary_accuracy, /not a geological boundary/);
+}
+
+console.log("Mars audit self-check passed (24 assertions across coordinates, MEDA date filtering, and fallback GeoJSON).");

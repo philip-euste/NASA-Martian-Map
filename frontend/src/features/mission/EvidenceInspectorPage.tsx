@@ -58,6 +58,7 @@ export default function EvidenceInspectorPage() {
   // Derived measurement form state
   const [analysisName, setAnalysisName] = useState("");
   const [analysisMethod, setAnalysisMethod] = useState("");
+  const [analysisInstrument, setAnalysisInstrument] = useState("");
   const [analysisValue, setAnalysisValue] = useState("");
   const [analysisUnit, setAnalysisUnit] = useState("m");
   const [analysisLimitation, setAnalysisLimitation] = useState("");
@@ -157,7 +158,7 @@ export default function EvidenceInspectorPage() {
       name: analysisName.trim(),
       description: `Derived from observation "${activeObservation.name}".`,
       inputObservationIds: [activeObservation.id],
-      method: analysisMethod.trim() || "Manual scientific measurement",
+      method: [analysisMethod, analysisInstrument].filter(Boolean).join(" · ") || "Method/instrument unspecified",
       value: Number.isFinite(parsedVal) ? parsedVal : undefined,
       unit: analysisUnit.trim() || undefined,
       limitations: analysisLimitation.trim()
@@ -171,6 +172,7 @@ export default function EvidenceInspectorPage() {
 
     setAnalysisName("");
     setAnalysisMethod("");
+    setAnalysisInstrument("");
     setAnalysisValue("");
     setAnalysisLimitation("");
     setShowAnalysisForm(false);
@@ -781,14 +783,25 @@ export default function EvidenceInspectorPage() {
                         <label htmlFor="analysis-method" className="mx-label">
                           Method / instrument
                         </label>
-                        <input
+                        <select
                           id="analysis-method"
-                          type="text"
                           className="mx-input"
-                          placeholder="e.g., MOLA / HiRISE profile"
                           value={analysisMethod}
                           onChange={(e) => setAnalysisMethod(e.target.value)}
-                        />
+                        >
+                          <option value="">Select method</option>
+                          <option>Elevation difference</option>
+                          <option>Slope calculation</option>
+                          <option>Profile measurement</option>
+                          <option>Spectral index review</option>
+                          <option>Manual measurement</option>
+                        </select>
+                        <label htmlFor="analysis-instrument" className="mx-label mt-2">Instrument / product</label>
+                        <select id="analysis-instrument" className="mx-input" value={analysisInstrument} onChange={(e) => setAnalysisInstrument(e.target.value)}>
+                          <option value="">Unspecified</option>
+                          <option>MOLA</option><option>HiRISE</option><option>CTX</option>
+                          <option>CRISM</option><option>MEDA</option><option>THEMIS</option>
+                        </select>
                       </div>
                     </div>
 
@@ -811,14 +824,19 @@ export default function EvidenceInspectorPage() {
                         <label htmlFor="analysis-unit" className="mx-label">
                           Unit
                         </label>
-                        <input
+                        <select
                           id="analysis-unit"
-                          type="text"
                           className="mx-input"
-                          placeholder="m, deg, TIU"
                           value={analysisUnit}
                           onChange={(e) => setAnalysisUnit(e.target.value)}
-                        />
+                        >
+                          <option value="">Not specified</option>
+                          <option value="m">m</option><option value="km">km</option>
+                          <option value="deg">deg</option><option value="Pa">Pa</option>
+                          <option value="K">K</option><option value="m/s">m/s</option>
+                          <option value="W/m²">W/m²</option><option value="%">%</option>
+                          <option value="TIU">TIU</option><option value="µm">µm</option>
+                        </select>
                       </div>
                     </div>
 

@@ -92,14 +92,6 @@ export default function KnowledgeGapsPage() {
   const [selectedDatasetIds, setSelectedDatasetIds] = useState<string[]>([]);
   const [selectedObsIds, setSelectedObsIds] = useState<string[]>([]);
 
-  function toggleSelection(
-    list: string[],
-    setter: (next: string[]) => void,
-    id: string
-  ): void {
-    setter(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
-  }
-
   function handleAddGap(event: FormEvent): void {
     event.preventDefault();
     if (!gapDescription.trim() || !gapReason.trim()) return;
@@ -443,59 +435,21 @@ export default function KnowledgeGapsPage() {
 
                 {mission.selectedDatasets.length > 0 && (
                   <div>
-                    <span className="mx-label">Related datasets</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {mission.selectedDatasets.map((ds) => {
-                        const active = selectedDatasetIds.includes(ds.id);
-                        return (
-                          <button
-                            key={ds.id}
-                            type="button"
-                            onClick={() =>
-                              toggleSelection(
-                                selectedDatasetIds,
-                                setSelectedDatasetIds,
-                                ds.id
-                              )
-                            }
-                            className={`mx-chip ${
-                              active ? "mx-chip--active" : ""
-                            }`}
-                          >
-                            {ds.name}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <label htmlFor="gap-datasets" className="mx-label">Related datasets</label>
+                    <select id="gap-datasets" multiple size={Math.min(6, mission.selectedDatasets.length)} className="mx-input min-h-24" value={selectedDatasetIds} onChange={(event) => setSelectedDatasetIds(Array.from(event.currentTarget.selectedOptions, (option) => option.value))}>
+                      {mission.selectedDatasets.map((ds) => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
+                    </select>
+                    <p className="mx-hint">Use Ctrl (Windows) or Command (Mac) to select multiple items.</p>
                   </div>
                 )}
 
                 {mission.selectedObservations.length > 0 && (
                   <div>
-                    <span className="mx-label">Related observations</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {mission.selectedObservations.map((obs) => {
-                        const active = selectedObsIds.includes(obs.id);
-                        return (
-                          <button
-                            key={obs.id}
-                            type="button"
-                            onClick={() =>
-                              toggleSelection(
-                                selectedObsIds,
-                                setSelectedObsIds,
-                                obs.id
-                              )
-                            }
-                            className={`mx-chip ${
-                              active ? "mx-chip--active" : ""
-                            }`}
-                          >
-                            {obs.name}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <label htmlFor="gap-observations" className="mx-label">Related observations</label>
+                    <select id="gap-observations" multiple size={Math.min(6, mission.selectedObservations.length)} className="mx-input min-h-24" value={selectedObsIds} onChange={(event) => setSelectedObsIds(Array.from(event.currentTarget.selectedOptions, (option) => option.value))}>
+                      {mission.selectedObservations.map((obs) => <option key={obs.id} value={obs.id}>{obs.name}</option>)}
+                    </select>
+                    <p className="mx-hint">Use Ctrl (Windows) or Command (Mac) to select multiple items.</p>
                   </div>
                 )}
 

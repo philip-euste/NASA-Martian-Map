@@ -18,6 +18,8 @@ import {
   Wind,
 } from "lucide-react";
 import { DataField, EmptyState, SectionHeading } from "../../components/ui";
+import { useMission } from "../../state/mission/MissionContext";
+import { filterProductsThroughDate } from "../../utils/temporalFilters";
 import {
   MEDA_SENSOR_METADATA,
   medaProvider,
@@ -60,6 +62,7 @@ export default function MedaEnvironmentalPanel({
   onLogObservation,
   onLogDerivedMeasurement,
 }: MedaEnvironmentalPanelProps) {
+  const { mission } = useMission();
   const [catalog, setCatalog] = useState<MedaCatalogResponse | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -94,26 +97,32 @@ export default function MedaEnvironmentalPanel({
     void loadCatalog(false);
   }, []);
 
-  const activeProductSummary = useMemo(() => {
+  const temporalProducts = useMemo(() => {
     if (!catalog) return null;
-    return (
-      catalog.products.find((p) => p.sensor === selectedSensor) ??
-      catalog.products[0] ??
-      null
-    );
-  }, [catalog, selectedSensor]);
+    if (mission.temporal.mode === "future") return [];
+    return mission.temporal.mode === "past"
+      ? filterProductsThroughDate(catalog.products, mission.temporal.selectedDate)
+      : catalog.products;
+  }, [catalog, mission.temporal.mode, mission.temporal.selectedDate]);
+
+  const activeProductSummary = temporalProducts?.find((p) => p.sensor === selectedSensor) ?? null;
 
   // Keep selectedColumn synchronized with the active sensor's primary columns
   useEffect(() => {
     const sensorMeta = MEDA_SENSOR_METADATA[selectedSensor];
-    if (sensorMeta && sensorMeta.primaryColumns.length > 0) {
+    if (sensorMeta && sensorMeta.primaryColumns.length > 0 && !sensorMeta.primaryColumns.some((column) => column.column === selectedColumn)) {
       setSelectedColumn(sensorMeta.primaryColumns[0].column);
     }
     setActionFeedback(null);
   }, [selectedSensor]);
 
   useEffect(() => {
-    if (!activeProductSummary) return;
+    if (!activeProductSummary) {
+      setObsData(null);
+      setObsError(null);
+      setObsLoading(false);
+      return;
+    }
     let cancelled = false;
 
     async function fetchSensorRows(): Promise<void> {
@@ -294,6 +303,14 @@ export default function MedaEnvironmentalPanel({
         }
       />
 
+      {mission.temporal.mode !== "present" && (
+        <p className="mb-4 rounded border border-amber-500/30 bg-amber-950/15 p-3 text-xs text-amber-200" role="status">
+          {mission.temporal.mode === "future"
+            ? "Future MEDA telemetry is unavailable; no forecast is generated."
+            : `Showing validated MEDA products acquired on or before ${mission.temporal.selectedDate}. These are modern Jezero rover measurements, not a reconstruction of ancient Mars.`}
+        </p>
+      )}
+
       {/* Scientific Boundary Callout (Requirement Part 2.E) */}
       <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-950/15 p-3.5 text-xs">
         <div className="flex items-start gap-2">
@@ -355,7 +372,7 @@ export default function MedaEnvironmentalPanel({
           {/* Sensor Selector Tabs */}
           <div>
             <span className="mx-label">
-              1. Select MEDA Subsystem Sensor ({catalog.products.length} Validated
+              1. Select MEDA Subsystem Sensor ({temporalProducts?.length ?? 0} Validated
               PDS4 Products)
             </span>
             <div
@@ -364,7 +381,7 @@ export default function MedaEnvironmentalPanel({
               aria-label="Select MEDA environmental sensor"
             >
               {SENSOR_ORDER.map((sensorCode) => {
-                const prod = catalog.products.find(
+                const prod = temporalProducts?.find(
                   (p) => p.sensor === sensorCode
                 );
                 if (!prod) return null;
@@ -388,7 +405,20 @@ export default function MedaEnvironmentalPanel({
                 );
               })}
             </div>
+            <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Solar geometry measurements">
+              {[["LS", "Solar Longitude (Ls)"], ["SOLAR_ZENITH_ANGLE", "Solar Zenith Angle"], ["SOLAR_AZIMUTH_ANGLE", "Solar Azimuth Angle"]].map(([column, label]) => (
+                <button key={column} type="button" className={`mx-chip !py-1 !px-2.5 text-xs ${selectedSensor === "ANC" && selectedColumn === column ? "mx-chip--active" : ""}`} disabled={!temporalProducts?.some((product) => product.sensor === "ANC")} onClick={() => { setSelectedSensor("ANC"); setSelectedColumn(column); }}>{label}</button>
+              ))}
+            </div>
           </div>
+
+          {!activeProductSummary && (
+            <EmptyState compact title="No MEDA product for this temporal selection">
+              {mission.temporal.mode === "past"
+                ? "No measurement from this sensor was acquired on or before the selected date."
+                : "No future MEDA measurements are available."}
+            </EmptyState>
+          )}
 
           {/* Active Sensor Metadata & PDS4 Provenance */}
           {activeProductSummary && (

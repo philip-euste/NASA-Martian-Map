@@ -99,11 +99,11 @@ export const CRISM_REFERENCE_DATASET_ID = "crism_jezero_vnir";
 export const CRISM_MTRDR_BUNDLE_ID = "urn:nasa:pds:mro_crism_mtrdr";
 export const CRISM_MTRDR_ARCHIVE_URL =
   "https://pds.nasa.gov/ds-view/pds/viewBundle.jsp?identifier=urn%3Anasa%3Apds%3Amro_crism_mtrdr";
-export const CRISM_REFERENCE_SOURCE = "Bundled CRISM reference profile (unverified extraction)";
+export const CRISM_REFERENCE_SOURCE = "Illustrative CRISM reference profile (synthetic values; archive reference only)";
 export const CRISM_REFERENCE_LIMITATION =
-  "NASA PDS provides the full CRISM MTRDR products. This app displays three bundled reference spectral profiles with unverified extraction provenance.";
+  "The plotted curves are illustrative synthetic examples, not reflectance arrays extracted from CRISM PDS cubes. Archive IDs and annotated bands are references only; do not treat these curves as measured spectra.";
 export const CRISM_REFERENCE_METHOD =
-  "Plots bundled wavelength–reflectance pairs and displays preset band parameters.";
+  "Plots bundled illustrative wavelength–reflectance pairs and preset band parameters; no CRISM spectral cube is parsed by this view.";
 
 export interface EvidenceDatasetEntry {
   /** Stable dataset identifier used in Mission state and Observation records. */

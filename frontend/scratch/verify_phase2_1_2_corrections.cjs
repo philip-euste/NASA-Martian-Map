@@ -110,8 +110,8 @@ var MARS_REGIONS = {
       },
       {
         datasetId: "crism_jezero_vnir",
-        suitability: "Direct Quantitative Analysis",
-        role: "direct_quantitative"
+        suitability: "Reference Only (Unverified Provenance)",
+        role: "regional_context"
       },
       {
         datasetId: "m2020_meda_env",
@@ -155,7 +155,7 @@ var MARS_REGIONS = {
       southLatDeg: -5.85,
       northLatDeg: -4.85
     },
-    simulatorAvailability: "PLANNED",
+    simulatorAvailability: "AVAILABLE",
     simulatorEnvironmentId: "gale-crater",
     elevationDatasets: [
       {
@@ -168,7 +168,8 @@ var MARS_REGIONS = {
         coordinateReferenceSystem: "IAU 2000 Mars planetocentric",
         verticalDatum: "MOLA areoid",
         source: "PDS Geosciences Node",
-        accessMode: "pds_raster"
+        accessMode: "tiled_3d_mesh",
+        isPrimaryForSimulator: true
       },
       {
         id: "hrsc_gale_dtm",
@@ -195,17 +196,7 @@ var MARS_REGIONS = {
         accessMode: "stac_cog"
       }
     ],
-    geologicalDatasets: [
-      {
-        id: "usgs_sim_3482_gale",
-        name: "USGS SIM 3482 Gale Crater Geologic Map",
-        citation: "Anderson, R.B. & Bell, J.F. (2010). Geologic mapping and characterization of Gale Crater. Mars 5, 76-128.",
-        publisher: "USGS / NASA",
-        format: "geojson",
-        coverageScope: "regional",
-        status: "planned"
-      }
-    ],
+    geologicalDatasets: [],
     mapLayers: [
       {
         layerId: "mars_global_mola",
@@ -261,6 +252,8 @@ var MARS_REGIONS = {
       "Curiosity surface photography and REMS telemetry integration scheduled for Phase 3."
     ],
     scientificReferences: [
+      "Anderson, R.B. & Bell, J.F., III (2010). Geologic mapping and characterization of Gale Crater and implications for its potential as a Mars Science Laboratory landing site. Mars 5, 76-128. doi:10.1555/mars.2010.0004.",
+      "Scott, D.H. & West, M.N. (1978). Geologic Map of the Aeolis Quadrangle of Mars. USGS Miscellaneous Investigations Series Map I-1111, scale 1:5,000,000. doi:10.3133/i1111.",
       "Grotzinger, J.P. et al. (2014). A habitable fluvio-lacustrine environment at Yellowknife Bay, Gale crater, Mars. Science, 343(6169), 1242777.",
       "Vasavada, A.R. et al. (2014). Overview of the Mars Science Laboratory mission: Bradbury Landing to Yellowknife Bay and beyond. JGR Planets, 119(6), 1134-1161."
     ]
@@ -280,7 +273,7 @@ var MARS_REGIONS = {
       southLatDeg: -11.5,
       northLatDeg: -8
     },
-    simulatorAvailability: "PLANNED",
+    simulatorAvailability: "AVAILABLE",
     simulatorEnvironmentId: "valles-marineris",
     elevationDatasets: [
       {
@@ -293,7 +286,8 @@ var MARS_REGIONS = {
         coordinateReferenceSystem: "IAU 2000 Mars planetocentric",
         verticalDatum: "MOLA areoid",
         source: "PDS Geosciences Node",
-        accessMode: "pds_raster"
+        accessMode: "tiled_3d_mesh",
+        isPrimaryForSimulator: true
       },
       {
         id: "hrsc_melas_dtm",
@@ -308,17 +302,7 @@ var MARS_REGIONS = {
         accessMode: "pds_raster"
       }
     ],
-    geologicalDatasets: [
-      {
-        id: "usgs_i2614_valles",
-        name: "USGS I-2614 Geologic Map of Valles Marineris",
-        citation: "Witbeck, N.E. et al. (1991). Geologic Map of the Valles Marineris Region, Mars. USGS Miscellaneous Investigations Series Map I-2614.",
-        publisher: "USGS",
-        format: "geojson",
-        coverageScope: "regional",
-        status: "planned"
-      }
-    ],
+    geologicalDatasets: [],
     mapLayers: [
       {
         layerId: "mars_global_mola",
@@ -358,7 +342,7 @@ var MARS_REGIONS = {
       "3D simulation domain will focus on a designated 60 km \xD7 60 km sub-box across Melas Chasma floor deposits."
     ],
     scientificReferences: [
-      "Witbeck, N.E. et al. (1991). Geologic Map of the Valles Marineris Region, Mars. USGS I-2614.",
+      "Witbeck, N.E., Tanaka, K.L., & Scott, D.H. (1991). Geologic Map of the Valles Marineris Region, Mars. USGS Miscellaneous Investigations Series Map I-2010, scale 1:2,000,000. doi:10.3133/i2010.",
       "Quantin, C. et al. (2004). Fluvial and lacustrine activity on Valles Marineris: Evidence from landslides. Icarus, 172(2), 555-572."
     ]
   },
@@ -377,7 +361,7 @@ var MARS_REGIONS = {
       southLatDeg: 17,
       northLatDeg: 20.2
     },
-    simulatorAvailability: "PLANNED",
+    simulatorAvailability: "AVAILABLE",
     simulatorEnvironmentId: "olympus-mons",
     elevationDatasets: [
       {
@@ -390,7 +374,8 @@ var MARS_REGIONS = {
         coordinateReferenceSystem: "IAU 2000 Mars planetocentric",
         verticalDatum: "MOLA areoid",
         source: "PDS Geosciences Node",
-        accessMode: "pds_raster"
+        accessMode: "tiled_3d_mesh",
+        isPrimaryForSimulator: true
       },
       {
         id: "hrsc_olympus_caldera_dtm",
@@ -405,17 +390,7 @@ var MARS_REGIONS = {
         accessMode: "pds_raster"
       }
     ],
-    geologicalDatasets: [
-      {
-        id: "usgs_i2502_olympus",
-        name: "USGS I-2502 Geologic Map of Olympus Mons Caldera",
-        citation: "Mouginis-Mark, P.J. (1996). Geologic Map of the Olympus Mons Caldera, Mars. USGS Miscellaneous Investigations Series Map I-2502.",
-        publisher: "USGS",
-        format: "geojson",
-        coverageScope: "regional",
-        status: "planned"
-      }
-    ],
+    geologicalDatasets: [],
     mapLayers: [
       {
         layerId: "mars_global_mola",
@@ -445,7 +420,8 @@ var MARS_REGIONS = {
       "No in-situ rover observations exist."
     ],
     scientificReferences: [
-      "Mouginis-Mark, P.J. (1996). Geologic Map of the Olympus Mons Caldera, Mars. USGS I-2502.",
+      "Mouginis-Mark, P.J. (2021). Geologic Map of Olympus Mons Caldera, Mars. USGS Scientific Investigations Map 3470, scale 1:200,000. doi:10.3133/sim3470.",
+      "Morris, E.C. & Tanaka, K.L. (1994). Geologic Maps of the Olympus Mons Region of Mars. USGS Miscellaneous Investigations Series Map I-2327, scale 1:2,016,000 / 1:1,000,000.",
       "Basilevsky, A.T. et al. (2006). The youngest caldera of Olympus Mons, Mars: Evidence for recent activity. Geophysical Research Letters, 33(13)."
     ]
   },
@@ -776,6 +752,10 @@ var INTEGRATION_STATUS_LABELS = {
   integrated_backend: "Verified & Integrated (Backend / Local Archive)",
   documented_not_integrated: "Verified Reference Only (Interactive Data Not Yet Integrated)"
 };
+var TES_MINERAL_DUST_LIMITATION = "Surface dust can weaken bedrock features in TES thermal-infrared spectra. Treat weak or missing mineral signatures in dusty areas as inconclusive (Bandfield, 2002; Ruff & Christensen, 2002; Rogers & Christensen, 2007).";
+var CRISM_REFERENCE_DATASET_ID = "crism_jezero_vnir";
+var CRISM_MTRDR_BUNDLE_ID = "urn:nasa:pds:mro_crism_mtrdr";
+var CRISM_REFERENCE_LIMITATION = "The plotted curves are illustrative synthetic examples, not reflectance arrays extracted from CRISM PDS cubes. Archive IDs and annotated bands are references only; do not treat these curves as measured spectra.";
 var SURFACE_IMAGERY_DATASET_ID = "m2020_perseverance_surface_imagery";
 var EVIDENCE_DATASETS = [
   // =========================================================
@@ -1071,7 +1051,7 @@ var EVIDENCE_DATASETS = [
     measurementProvided: "Modeled areal abundance fraction of high-silica / sheet-silicate spectral endmembers from 6\u201350 \xB5m thermal emissivity.",
     spatialResolutionLabel: "~3\u20138 km/pixel (8\u201320 pixels/degree)",
     resolutionMeters: 3e3,
-    geographicCoverage: "Global (60\xB0S\u201360\xB0N, low-dust surfaces)",
+    geographicCoverage: "Global map extent \xB7 app filters to 60\xB0S\u201360\xB0N \xB7 usable retrievals vary",
     coverageScope: "GLOBAL",
     latitudeLimits: { minLat: -60, maxLat: 60 },
     operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
@@ -1080,11 +1060,12 @@ var EVIDENCE_DATASETS = [
     suitability: "Regional Context Only (Coarse Resolution)",
     limitations: [
       "CRITICAL SCIENTIFIC LIMITATION: Thermal infrared deconvolution at ~3\u20138 km/px cannot uniquely distinguish hydrated phyllosilicate clays (e.g., Fe/Mg smectite) from primary high-silica volcanic glass or amorphous silica coatings.",
+      TES_MINERAL_DUST_LIMITATION,
       "A single ~3 km TES pixel spans nearly the entire western Jezero delta; this dataset CANNOT independently prove fine-grained lacustrine clay strata and must be supplemented by targeted VNIR spectroscopy (CRISM) or in-situ contact instruments.",
       "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'tes_glass_clay') and structured mission evidence citation source. Interactive numeric deconvolution point-sampling is not provided in this application."
     ],
     regionalCaveats: {
-      "olympus-mons": "INTERPRETIVE CAUTION (Tharsis / Olympus Mons): Thick airfall dust mantling across the Tharsis volcanic province exceeds the thermal infrared sensing depth (~tens of microns to millimeters), severely attenuating bedrock emissivity. Apparent low silicate/phase abundances over Olympus Mons reflect atmospheric dust obscuration rather than primary bedrock composition. Ground truth or high-resolution VNIR spectroscopy of wind-scoured exposures is required (Bandfield, 2002; Ruff & Christensen, 2002; Rogers & Christensen, 2007)."
+      "olympus-mons": TES_MINERAL_DUST_LIMITATION
     },
     sourceReference: "NASA PDS Geosciences Node / Mars Trek (Bandfield et al., 2000; Rogers & Christensen, 2007)",
     pdsProductId: "TES_Glass_Clay",
@@ -1104,7 +1085,7 @@ var EVIDENCE_DATASETS = [
     measurementProvided: "Modeled areal abundance fraction of clinopyroxene in dust-free mafic surfaces.",
     spatialResolutionLabel: "~3\u20138 km/pixel",
     resolutionMeters: 3e3,
-    geographicCoverage: "Global (60\xB0S\u201360\xB0N, low-dust surfaces)",
+    geographicCoverage: "Global map extent \xB7 app filters to 60\xB0S\u201360\xB0N \xB7 usable retrievals vary",
     coverageScope: "GLOBAL",
     latitudeLimits: { minLat: -60, maxLat: 60 },
     operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
@@ -1113,11 +1094,12 @@ var EVIDENCE_DATASETS = [
     suitability: "Regional Context Only (Coarse Resolution)",
     limitations: [
       "Coarse ~3\u20138 km spatial resolution cannot resolve individual crater-floor outcrops or thin sedimentary beds.",
-      "Spectral deconvolution is unreliable where the Surface Dust Cover Index (DCI) is high.",
+      TES_MINERAL_DUST_LIMITATION,
+      "Under the Dust Cover Index (DCI) convention of Ruff & Christensen (2002), lower values generally indicate dustier surfaces.",
       "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'tes_clinopyroxene') and structured mission evidence citation source. Interactive numeric mineral abundance point-sampling is not provided in this application."
     ],
     regionalCaveats: {
-      "olympus-mons": "INTERPRETIVE CAUTION (Tharsis / Olympus Mons): High atmospheric dust opacity and thick surface dust mantles in Tharsis suppress thermal-infrared spectral contrast of mafic silicates. Apparent low clinopyroxene signatures across Olympus Mons calderas and flanks are dominated by dust cover rather than indicating non-basaltic petrology (Bandfield, 2002; Ruff & Christensen, 2002; Rogers & Christensen, 2007)."
+      "olympus-mons": TES_MINERAL_DUST_LIMITATION
     },
     sourceReference: "NASA PDS Geosciences Node / Mars Trek (Bandfield, 2002; Christensen et al.)",
     pdsProductId: "TES_Clinopyroxene",
@@ -1137,7 +1119,7 @@ var EVIDENCE_DATASETS = [
     measurementProvided: "Modeled areal abundance fraction of plagioclase feldspar from thermal infrared emissivity spectra.",
     spatialResolutionLabel: "~3\u20138 km/pixel",
     resolutionMeters: 3e3,
-    geographicCoverage: "Global (60\xB0S\u201360\xB0N, low-dust surfaces)",
+    geographicCoverage: "Near-global map extent \xB7 app filters to 60\xB0S\u201360\xB0N \xB7 usable retrievals vary",
     coverageScope: "GLOBAL",
     latitudeLimits: { minLat: -60, maxLat: 60 },
     operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
@@ -1146,11 +1128,11 @@ var EVIDENCE_DATASETS = [
     suitability: "Regional Context Only (Coarse Resolution)",
     limitations: [
       "Coarse ~3\u20138 km spatial resolution cannot isolate outcrop-scale sedimentary strata or detrital mineral grains.",
-      "Masked in regions with moderate-to-thick ferric dust coatings.",
+      TES_MINERAL_DUST_LIMITATION,
       "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'tes_plagioclase') and structured mission evidence citation source. Interactive numeric mineral abundance point-sampling is not provided in this application."
     ],
     regionalCaveats: {
-      "olympus-mons": "INTERPRETIVE CAUTION (Tharsis / Olympus Mons): Dust mantling across the Tharsis volcanic construct attenuates plagioclase spectral features in thermal emission deconvolution. Bedrock feldspar content cannot be reliably constrained from orbital TIR without wind-scoured thermal windows (Bandfield, 2002; Ruff & Christensen, 2002; Rogers & Christensen, 2007)."
+      "olympus-mons": TES_MINERAL_DUST_LIMITATION
     },
     sourceReference: "NASA PDS Geosciences Node / Mars Trek (Bandfield, 2002; Rogers & Christensen, 2007)",
     pdsProductId: "TES_Plagioclase",
@@ -1159,35 +1141,32 @@ var EVIDENCE_DATASETS = [
     integrationStatusLabel: INTEGRATION_STATUS_LABELS.integrated_active
   },
   {
-    id: "crism_jezero_vnir",
-    name: "CRISM Targeted VNIR Spectral Observations (Jezero Delta)",
+    id: CRISM_REFERENCE_DATASET_ID,
+    name: "CRISM VNIR Reference Profiles (Jezero)",
     instrument: "CRISM (Compact Reconnaissance Imaging Spectrometer for Mars)",
     mission: "Mars Reconnaissance Orbiter (MRO)",
     category: "composition",
     mapCategory: "composition",
-    description: "Targeted visible and near-infrared (0.36\u20133.92 \xB5m) imaging spectroscopy resolving diagnostic vibrational absorption bands of hydrated phyllosilicates (smectite) and carbonates in Jezero Crater.",
-    measurementProvided: "VNIR spectral reflectance (I/F) across 544 channels detecting 1.4 \xB5m OH, 1.9 \xB5m H\u2082O, 2.296 \xB5m Fe/Mg-OH (smectite clay), and 2.30 / 2.51 \xB5m Mg-carbonate overtones.",
-    spatialResolutionLabel: "18\u201336 m/pixel (Targeted Full/Half Resolution)",
-    resolutionMeters: 18,
-    geographicCoverage: "Targeted Footprints \xB7 Jezero Western Delta & Margin (FRT00005C5E, HRL000040FF, FRT0000B204)",
+    description: CRISM_REFERENCE_LIMITATION,
+    measurementProvided: "Preset wavelength\u2013reflectance pairs and band parameters for reference.",
+    spatialResolutionLabel: "Bundled profiles \xB7 extraction footprint unverified",
+    geographicCoverage: "Jezero reference locations \xB7 extraction footprints unverified",
     coverageScope: "LOCAL_INSITU",
     supportedRegionIds: ["jezero-crater"],
     geographicBounds: { minLat: 18.35, maxLat: 18.55, minLon: 77.3, maxLon: 77.55 },
-    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
-    temporalCoverage: "2006\u20132023 (MRO CRISM Science Operations)",
-    scientificPurpose: "Support mineralogical investigation of Fe/Mg-smectite phyllosilicates in bottomset/foreset delta beds vs. Mg-carbonate and olivine margin units.",
-    suitability: "Direct Quantitative Analysis",
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "INTEGRATED"],
+    temporalCoverage: "2006\u20132012 (NASA PDS MTRDR archive)",
+    scientificPurpose: "Illustrate spectral features discussed in Jezero mineralogy studies and provide a reference to the NASA PDS archive.",
+    suitability: "Reference Only (Unverified Provenance)",
     limitations: [
-      "INTEGRATION STATUS: Active interactive spectral inspection integrated (MRO CRISM MTRDR cubes FRT00005C5E, HRL000040FF, FRT0000B204).",
-      "Even at 18 m/pixel, orbital VNIR spectroscopy cannot determine whether Jezero delta phyllosilicates formed authigenically in situ or were transported as detrital grains from the Nili Fossae watershed, nor can it resolve millimeter-scale laminations.",
-      "Definitive confirmation of sustained standing water vs. episodic flooding requires in-situ textural/isotopic contact analysis (Perseverance or EVA sampling).",
-      "Application data access: Interactive spectral curves are computed from bundled targeted MTRDR observations. Multi-gigabyte raw PDS TRDR/MTRDR cubes are accessed via PDS Geosciences archive rather than pre-downloaded in the client bundle."
+      CRISM_REFERENCE_LIMITATION,
+      "The plotted values and preset band parameters are for reference. Quantitative interpretation requires traceable measurements from the archive."
     ],
-    sourceReference: "NASA PDS Geosciences Node (urn:nasa:pds:crism_mtrdr; Ehlmann et al., 2008; Goudge et al., 2015; Horgan et al., 2020)",
-    pdsProductId: "urn:nasa:pds:crism_mtrdr",
+    sourceReference: "NASA PDS Geosciences Node (archive); Ehlmann et al. (2008), Goudge et al. (2015), Horgan et al. (2020) (Jezero scientific context)",
+    pdsProductId: CRISM_MTRDR_BUNDLE_ID,
     available: true,
     integrationStatus: "integrated_active",
-    integrationStatusLabel: INTEGRATION_STATUS_LABELS.integrated_active
+    integrationStatusLabel: "Bundled Reference Profiles \xB7 Unverified Extraction"
   },
   {
     id: "omega_vnir_regional",
@@ -1308,6 +1287,36 @@ var EVIDENCE_DATASETS = [
     available: true,
     integrationStatus: "integrated_active",
     integrationStatusLabel: INTEGRATION_STATUS_LABELS.integrated_active
+  },
+  {
+    id: "msl_rems_env",
+    name: "Curiosity REMS Surface Environmental Telemetry (PDS Sol 10 & Sol 1600)",
+    instrument: "REMS (Rover Environmental Monitoring Station)",
+    mission: "Mars Science Laboratory (MSL) Curiosity",
+    category: "atmosphere_environment",
+    mapCategory: "atmosphere",
+    description: "Validated in-situ meteorological measurements recorded on the floor of Gale Crater by the Curiosity rover across 6 sensor subsystems (Pressure, Air Temperature, Ground Temperature, Relative Humidity, Wind, and UV Radiation).",
+    measurementProvided: "Atmospheric surface pressure (Barocap, Pa), dual-boom air temperatures (PT1000 RTD, K & \xB0C), ground brightness temperature (thermopile, K & \xB0C), relative humidity (capacitive thin-film, %), wind speed & direction (derived CFD flow vector, m/s & deg), and UV flux (photodiodes, W/m\xB2).",
+    spatialResolutionLabel: "In-situ rover station (Bradbury Landing / Mount Sharp traverse \xB7 4.59\xB0S, 137.44\xB0E)",
+    resolutionMeters: 1,
+    geographicCoverage: "Local \xB7 Gale Crater Floor (Bradbury Landing to Aeolis Mons / Mount Sharp lower mound)",
+    coverageScope: "LOCAL_INSITU",
+    supportedRegionIds: ["gale-crater"],
+    geographicBounds: { minLat: -5.85, maxLat: -4, minLon: 137, maxLon: 138 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "DOWNLOADED", "VALIDATED", "INTEGRATED"],
+    temporalCoverage: "Sol 0010 (2012-08-15, pre-degradation baseline) & Sol 01600 (2017-02-04, post-wind degradation) \xB7 44,459 raw PDS source table records; 1,081 packaged sampled observations in application bundle",
+    scientificPurpose: "Characterize Gale Crater boundary-layer atmospheric pressure oscillations, ground/air thermal extremes, humidity cycles, and UV flux variations along the Mount Sharp exploration corridor.",
+    suitability: "Direct Quantitative Analysis",
+    limitations: [
+      "Hardware Degradation Timeline: Boom 1 wind sensor damaged on landing (Sol 0) by Sky Crane ejecta; Boom 2 operational Sols 0\u2013854; Boom 2 degraded Sols 854\u20131504; all wind sensor boards across both booms permanently failed on Sol 1504. Sol 1600 wind telemetry is inoperative.",
+      "Sampling Cadence: REMS operates on a commanded duty cycle of 5 minutes at the start of each hour (120 minutes/sol active recording). Telemetry is discrete hourly bursts across LMST, not continuous 24-hour recording.",
+      "Application data access: Verified local PDS processed bundle stored in /data/rems_processed_bundle.json (44,459 raw source records downsampled to 1,081 packaged observations across Sols 10 & 1600). Interactive queries execute locally against this pre-bundled archive."
+    ],
+    sourceReference: "NASA PDS Atmospheres Node (https://pds-atmospheres.nmsu.edu/PDS/data/mslrem_1001/ \xB7 G\xF3mez-Elvira et al., 2012; Newman et al., 2017)",
+    pdsProductId: "urn:nasa:pds:msl_rems:data_derived_envrdr",
+    available: true,
+    integrationStatus: "integrated_active",
+    integrationStatusLabel: INTEGRATION_STATUS_LABELS.integrated_active
   }
 ];
 var EVIDENCE_DATASETS_BY_ID = Object.fromEntries(EVIDENCE_DATASETS.map((entry) => [entry.id, entry]));
@@ -1365,8 +1374,10 @@ var GENUINE_LOCAL_DATASET_IDS = [
   // /jezero/manifest.json, /jezero/overview.u16, /jezero/height/*.u16
   "ctx_jezero_ortho_5m",
   // /jezero/overview.jpg, /jezero/tex/*.jpg
-  "m2020_meda_env"
+  "m2020_meda_env",
   // /public/data/meda_processed_bundle.json
+  "msl_rems_env"
+  // /public/data/rems_processed_bundle.json
 ];
 function validateDatasetLifecycle(entry) {
   const errors = [];
@@ -1551,7 +1562,7 @@ function assert(condition, message) {
   }
 }
 console.log("=== PHASE 2.1.2 AUTOMATED VERIFICATION SUITE ===\n");
-console.log("1. Full Geographic Bounds Validation against Latitude Limits:");
+console.log("1. Region Latitude Containment:");
 var tesSilicates = EVIDENCE_DATASETS_BY_ID["mars_tes_silicates"];
 assert(
   Boolean(tesSilicates && tesSilicates.latitudeLimits?.minLat === -60 && tesSilicates.latitudeLimits?.maxLat === 60),
@@ -1619,12 +1630,12 @@ var downloadedDatasets = EVIDENCE_DATASETS.filter(
 ).map((d) => d.id);
 console.log("  Actual datasets with DOWNLOADED status:", downloadedDatasets);
 assert(
-  downloadedDatasets.length === 3,
-  `Exactly 3 datasets have DOWNLOADED status (found ${downloadedDatasets.length})`
+  downloadedDatasets.length === 4,
+  `Exactly 4 datasets have DOWNLOADED status (found ${downloadedDatasets.length})`
 );
 assert(
-  downloadedDatasets.includes("ctx_jezero_dtm_20m") && downloadedDatasets.includes("ctx_jezero_ortho_5m") && downloadedDatasets.includes("m2020_meda_env"),
-  "DOWNLOADED status belongs strictly to ctx_jezero_dtm_20m, ctx_jezero_ortho_5m, and m2020_meda_env"
+  downloadedDatasets.includes("ctx_jezero_dtm_20m") && downloadedDatasets.includes("ctx_jezero_ortho_5m") && downloadedDatasets.includes("m2020_meda_env") && downloadedDatasets.includes("msl_rems_env"),
+  "DOWNLOADED status belongs strictly to ctx_jezero_dtm_20m, ctx_jezero_ortho_5m, m2020_meda_env, and msl_rems_env"
 );
 var remoteDatasets = [
   "hirise_jezero_dtm",
@@ -1653,7 +1664,7 @@ console.log("\n3. Dataset Lifecycle Invariant Validation:");
 var allResults = validateAllDatasetsLifecycle();
 assert(
   allResults.valid === true && allResults.totalErrors === 0,
-  `All 17 datasets pass lifecycle validation with zero errors (totalErrors: ${allResults.totalErrors})`
+  `All ${EVIDENCE_DATASETS.length} datasets pass lifecycle validation with zero errors (totalErrors: ${allResults.totalErrors})`
 );
 var fakePlannedIntegrated = {
   ...tesSilicates,
@@ -1712,16 +1723,16 @@ var galeDatasets = getDatasetsForRegion("gale-crater");
 var vallesDatasets = getDatasetsForRegion("valles-marineris");
 var olympusDatasets = getDatasetsForRegion("olympus-mons");
 console.log(`  Jezero Crater selectable count: ${jezeroDatasets.length} (Expected: 16)`);
-console.log(`  Gale Crater selectable count: ${galeDatasets.length} (Expected: 10)`);
+console.log(`  Gale Crater selectable count: ${galeDatasets.length} (Expected: 11)`);
 console.log(`  Valles Marineris selectable count: ${vallesDatasets.length} (Expected: 10)`);
 console.log(`  Olympus Mons selectable count: ${olympusDatasets.length} (Expected: 10)`);
 assert(jezeroDatasets.length === 16, "Jezero Crater has exactly 16 selectable datasets");
-assert(galeDatasets.length === 10, "Gale Crater has exactly 10 selectable datasets");
+assert(galeDatasets.length === 11, "Gale Crater has exactly 11 selectable datasets (10 global + 1 in-situ REMS)");
 assert(vallesDatasets.length === 10, "Valles Marineris has exactly 10 selectable datasets");
 assert(olympusDatasets.length === 10, "Olympus Mons has exactly 10 selectable datasets");
 assert(
-  galeDatasets.every((d) => d.coverageScope === "GLOBAL"),
-  "All Gale Crater selectable datasets have coverageScope GLOBAL"
+  galeDatasets.filter((d) => d.coverageScope === "GLOBAL").length === 10 && galeDatasets.some((d) => d.id === "msl_rems_env" && d.coverageScope === "LOCAL_INSITU"),
+  "Gale Crater selectable datasets comprise 10 GLOBAL and 1 LOCAL_INSITU (msl_rems_env)"
 );
 assert(
   vallesDatasets.every((d) => d.coverageScope === "GLOBAL"),

@@ -272,6 +272,12 @@ export default function CrismSpectralPanel({
         </div>
       </div>
 
+      {mission.temporal.mode !== "present" && <p className="mt-3 rounded border border-amber-500/30 bg-amber-950/15 p-3 text-xs text-amber-200" role="status">
+        {mission.temporal.mode === "past"
+          ? `No date-matched CRISM spectrum is available for ${mission.temporal.selectedDate}. Illustrative curves are hidden because measured cube arrays and acquisition timestamps are not loaded.`
+          : "Future CRISM spectra are unavailable; no forecast is generated and no illustrative curve is shown."}
+      </p>}
+
       {/* Target Profile Metadata Banner */}
       <div className="mt-4 grid gap-3 sm:grid-cols-2 md:grid-cols-4 rounded border border-mx-border bg-mx-bg p-3.5 text-xs">
         <div>
@@ -303,7 +309,7 @@ export default function CrismSpectralPanel({
       </div>
 
       {/* Interactive SVG Spectral Plot */}
-      <div className="mt-4 rounded border border-mx-border bg-[#0d0c0e] p-3">
+      {mission.temporal.mode === "present" ? <div className="mt-4 rounded border border-mx-border bg-[#0d0c0e] p-3">
         <div className="mb-2 flex items-center justify-between text-[11px]">
           <span className="text-mx-muted font-mono">
             VNIR Relative Reflectance (I/F) vs. Wavelength (µm)
@@ -534,10 +540,10 @@ export default function CrismSpectralPanel({
             />
           ))}
         </svg>
-      </div>
+      </div> : <div className="mt-4 rounded border border-dashed border-mx-border p-8 text-center text-sm text-mx-muted" role="status">No measured CRISM spectrum is loaded for this temporal selection.</div>}
 
       {/* Band Parameters & Action Grid */}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+      {mission.temporal.mode === "present" ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <div className="rounded border border-mx-border bg-mx-bg px-2.5 py-1">
             <span className="text-mx-dim font-mono text-[10px]">D2300 (Clay Depth): </span>
@@ -576,7 +582,7 @@ export default function CrismSpectralPanel({
             </>
           )}
         </button>
-      </div>
+      </div> : <p className="mt-4 mb-0 text-xs text-mx-muted">Illustrative band indices and reference profiles are unavailable outside Present mode.</p>}
 
       {/* Accordion for Evidentiary Limitations */}
       <div className="mt-4 border-t border-mx-border pt-3">

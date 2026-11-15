@@ -33,6 +33,7 @@ interface Tile {
   tx: number;
   ty: number;
   mesh: THREE.Mesh | null;
+  overlayMesh: THREE.Mesh | null;
   lod: number;
   edgeKey: string;
   full: Uint16Array | null;
@@ -63,7 +64,8 @@ interface ExpeditionTargetMessage {
     | "mars-explorer:modal-state"
     | "mars-explorer:toggle-map"
     | "mars-explorer:toggle-flight"
-    | "mars-explorer:set-layer";
+    | "mars-explorer:set-layer"
+    | "mars-explorer:set-overlay";
   regionId?: string;
   name?: string;
   latitude?: number;
@@ -72,6 +74,8 @@ interface ExpeditionTargetMessage {
   withinDem?: boolean;
   open?: boolean;
   layer?: SurfaceLayer;
+  overlayLayer?: MapLayerId | null;
+  opacity?: number;
   targets?: { id: string; name: string; latitude: number; longitude: number; description?: string; visited?: boolean; kind?: string }[];
   contingency?: string | null;
 }
@@ -135,7 +139,23 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
   let externalModalOpen = false;
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, powerPreference: "high-performance" });
+  let renderer: THREE.WebGLRenderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, powerPreference: "high-performance" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    loadingEl.textContent = `3D rendering is unavailable: ${message}. Enable WebGL or use a browser that supports it, then reload.`;
+    statusEl.textContent = "3D renderer unavailable";
+    startBtn.disabled = true;
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({
+        type: "jezero-simulation-error",
+        environmentId: envConfig.id,
+        message: `WebGL renderer initialization failed: ${message}`,
+      }, "*");
+    }
+    return;
+  }
 
   const getViewportSize = () => ({
     width: Math.max(1, document.documentElement.clientWidth || window.innerWidth),
@@ -427,7 +447,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       if (closest.beacon.isBase) {
         proximityEl.innerHTML = `<strong>${closest.beacon.name}</strong> (${Math.round(closest.distMeters)} m) · Press <strong>[R]</strong> to Complete EVA Return`;
       } else {
-        proximityEl.innerHTML = `Approaching <strong>${closest.beacon.name}</strong> (${Math.round(closest.distMeters)} m) · Press <strong>[E]</strong> to Open Fieldwork &amp; Sampling`;
+        proximityEl.innerHTML = `Approaching <strong>${closest.beacon.name}</strong> (${Math.round(closest.distMeters)} m) · <strong>[E]</strong> Fieldwork · <strong>[N]</strong> Notepad`;
       }
     } else {
       proximityEl.classList.add("hidden");
@@ -448,6 +468,8 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   const isMapLayer = (l: SurfaceLayer): l is MapLayerId => l in MAP_LAYERS;
   const layerLabel = (l: SurfaceLayer) => isMapLayer(l) ? MAP_LAYERS[l].name : BUILTIN_LABEL[l];
   let surfaceLayer: SurfaceLayer = "imagery";
+  let surfaceOverlayLayer: MapLayerId | null = null;
+  let surfaceOverlayOpacity = 0.55;
 
   // WMTS layer materials: one shared material per layer, textured with a
   // region-wide canvas composited from NASA Trek tiles (see wmtsLayers.ts).
@@ -457,6 +479,8 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   const wmtsOrder: MapLayerId[] = [];
   const wmtsInfo = new Map<MapLayerId, string>();
   const sharedWmtsMats = new Set<THREE.Material>();
+  let surfaceOverlayMaterial: THREE.MeshBasicMaterial | null = null;
+  let overlayToken = 0;
 
   // THREE.Color(hex) converts to the linear working space, so lerping here is
   // correct for vertexColors.
@@ -737,6 +761,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       t.mesh.matrixAutoUpdate = false;
       scene.add(t.mesh);
     }
+    syncOverlayTile(t);
   }
 
   function applyLayerToTiles() {
@@ -788,7 +813,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
           wmtsOrder.push(id);
 
           while (wmtsOrder.length > MAX_CACHED_WMTS) {
-            const vi = wmtsOrder.findIndex((v) => v !== surfaceLayer && v !== id);
+            const vi = wmtsOrder.findIndex((v) => v !== surfaceLayer && v !== surfaceOverlayLayer && v !== id);
             if (vi < 0) break;
             disposeWmtsLayer(wmtsOrder.splice(vi, 1)[0]);
           }
@@ -798,6 +823,59 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       wmtsPending.set(id, p);
     }
     return p;
+  }
+
+  function syncOverlayTile(t: Tile) {
+    if (!t.mesh || !surfaceOverlayMaterial) {
+      if (t.overlayMesh) scene.remove(t.overlayMesh);
+      t.overlayMesh?.geometry.dispose();
+      t.overlayMesh = null;
+      return;
+    }
+    const geometry = t.mesh.geometry.clone();
+    geometry.setAttribute("uv", geometry.getAttribute("uvGeo"));
+    if (t.overlayMesh) {
+      t.overlayMesh.geometry.dispose();
+      t.overlayMesh.geometry = geometry;
+      t.overlayMesh.material = surfaceOverlayMaterial;
+    } else {
+      t.overlayMesh = new THREE.Mesh(geometry, surfaceOverlayMaterial);
+      t.overlayMesh.matrixAutoUpdate = false;
+      t.overlayMesh.renderOrder = 1;
+      scene.add(t.overlayMesh);
+    }
+  }
+
+  function setSurfaceOverlay(layer: MapLayerId | null, opacity = surfaceOverlayOpacity) {
+    surfaceOverlayLayer = layer;
+    surfaceOverlayOpacity = THREE.MathUtils.clamp(opacity, 0, 1);
+    const token = ++overlayToken;
+    surfaceOverlayMaterial?.dispose();
+    surfaceOverlayMaterial = null;
+    for (const tile of tiles) syncOverlayTile(tile);
+    if (!layer || !M) {
+      window.parent?.postMessage({ type: "marswalk:overlay-status", layer, state: "ready", message: layer ? "Overlay will load when terrain is ready." : "No comparative overlay" }, "*");
+      return;
+    }
+    window.parent?.postMessage({ type: "marswalk:overlay-status", layer, state: "loading", message: `Loading ${MAP_LAYERS[layer].name} overlay…` }, "*");
+    void ensureMapLayerMaterial(layer).then((base) => {
+      if (token !== overlayToken || !surfaceOverlayLayer) return;
+      const texture = (base as THREE.MeshLambertMaterial).map;
+      if (!texture) throw new Error("The selected overlay has no raster texture.");
+      surfaceOverlayMaterial = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        opacity: surfaceOverlayOpacity,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+      });
+      for (const tile of tiles) syncOverlayTile(tile);
+      window.parent?.postMessage({ type: "marswalk:overlay-status", layer, state: "ready", message: `${MAP_LAYERS[layer].name} overlay · ${wmtsInfo.get(layer) ?? "regional mosaic"}` }, "*");
+    }).catch((error: unknown) => {
+      if (token !== overlayToken) return;
+      window.parent?.postMessage({ type: "marswalk:overlay-status", layer, state: "error", message: error instanceof Error ? error.message : String(error) }, "*");
+    });
   }
 
   function setLayerStatus(layer: SurfaceLayer, state: "loading" | "ready" | "error", err?: string) {
@@ -1520,6 +1598,16 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
     if (e.code === "KeyL" && M && !e.repeat) cycleSurfaceLayer();
 
+    if (e.code === "KeyN" && M && !e.repeat && window.parent && window.parent !== window) {
+      externalModalOpen = true;
+      keys.clear();
+      overlay.classList.add("hidden");
+      closeMap();
+      controls.unlock();
+      window.parent.postMessage({ type: "marswalk:open-notepad" }, "*");
+      return;
+    }
+
     if (e.code === "Escape" && externalModalOpen) {
       externalModalOpen = false;
       window.parent.postMessage({ type: "marswalk:close-modal" }, "*");
@@ -1723,6 +1811,14 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       return;
     }
 
+    if (data.type === "mars-explorer:set-overlay") {
+      const overlay = data.overlayLayer && data.overlayLayer in MAP_LAYERS
+        ? data.overlayLayer
+        : null;
+      setSurfaceOverlay(overlay, data.opacity);
+      return;
+    }
+
     if (data.type === "mars-explorer:expedition") {
       applyExpeditionSpawn(
         typeof data.latitude === "number" ? data.latitude : null,
@@ -1831,7 +1927,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     for (let ty = 0; ty < M.tilesY; ty++) {
       for (let tx = 0; tx < M.tilesX; tx++) {
         const t: Tile = {
-          tx, ty, mesh: null, lod: -2, edgeKey: "", full: null, tex: null,
+          tx, ty, mesh: null, overlayMesh: null, lod: -2, edgeKey: "", full: null, tex: null,
           texKey: "", loading: false, texLoading: false,
         };
         tiles.push(t);
@@ -1839,6 +1935,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     }
 
     for (const t of tiles) setTileMesh(t, -1);
+    if (surfaceOverlayLayer) setSurfaceOverlay(surfaceOverlayLayer, surfaceOverlayOpacity);
 
     const params = new URLSearchParams(window.location.search);
     const paramLat = params.has("lat") ? Number(params.get("lat")) : null;

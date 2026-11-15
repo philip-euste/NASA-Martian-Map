@@ -573,7 +573,7 @@ select:focus-visible {
   border-radius: 8px;
   background:
     linear-gradient(0deg, rgba(18, 17, 16, 0.8), transparent 65%),
-    url("/images/mars-jezero-preview.jpg") center / cover,
+    url("./features/welcome/Welcomeassets/Landingpage-background.jpg") center / cover,
     linear-gradient(135deg, #673a27, #211713);
 }
 

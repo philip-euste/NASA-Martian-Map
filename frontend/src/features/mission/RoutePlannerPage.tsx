@@ -199,6 +199,7 @@ export default function RoutePlannerPage() {
       ? [...draftWaypoints, draftWaypoints[0]]
       : [...draftWaypoints];
 
+    // shortcut: waypoint-only sampling cannot certify hazards; upgrade when continuous regional DEM and validated hazard rasters are available.
     const isWpInBounds = (coords: Coordinates) => {
       if (isJezero) {
         return isWithinJezeroDemBounds(coords);
@@ -272,9 +273,14 @@ export default function RoutePlannerPage() {
       (insideRegionCount / draftWaypoints.length) * 100
     );
 
-    // Estimate walking duration at ~2.2 km/h nominal EVA traverse rate
+    // Straight-line planning estimate at nominal 2.2 km/h; not slope-adjusted.
+    const configuredSpeed = mission.configuration?.nominalTraverseSpeedKmh;
+    const nominalSpeedKmh = configuredSpeed && Number.isFinite(configuredSpeed) && configuredSpeed > 0
+      ? configuredSpeed
+      : 2.2;
+    const oxygenRate = mission.configuration?.oxygenConsumptionLitersPerHour;
     const estimatedDurationHours = Number(
-      (dist.totalMeters / 2200).toFixed(1)
+      (dist.totalMeters / (nominalSpeedKmh * 1000)).toFixed(1)
     );
 
     const newRoute: Route = {
@@ -287,6 +293,9 @@ export default function RoutePlannerPage() {
       returnRouteIncluded: includeReturnLeg,
       returnDistanceMeters: dist.returnLegMeters,
       estimatedDurationHours,
+      estimatedOxygenLiters: oxygenRate && Number.isFinite(oxygenRate) && oxygenRate > 0
+        ? Number((estimatedDurationHours * oxygenRate).toFixed(1))
+        : undefined,
       elevationGainMeters: elevGain,
       elevationLossMeters: elevLoss,
       measurementSource:
@@ -316,7 +325,7 @@ export default function RoutePlannerPage() {
                 `${activeRegion?.name ?? "Regional"} DEM elevation profile unavailable (API offline or outside local DTM footprint); vertical relief is unverified.`,
               ],
         assumptions: [
-          "Nominal EVA walking speed of ~2.2 km/h excluding contact science station stops.",
+          `User-configured nominal EVA walking speed of ${nominalSpeedKmh} km/h; this estimate excludes slope, obstacles, and contact-science stops.`,
         ],
       },
       reachedTargetIds,
@@ -566,7 +575,7 @@ export default function RoutePlannerPage() {
               Horizontal distances are calculated from planetocentric
               coordinates (R = 3,389.5 km). Elevation and slope values are
               shown only when sampled from the NASA HiRISE DEM API; routes are
-              planning models and are not certified astronaut-safe.
+              planning estimates that use straight-line distance and a nominal walking speed; duration excludes terrain resistance, hazards, and science stops. Oxygen is derived only from the optional user-entered consumption rate. Neither value is a validated terrain-aware prediction or a safety certification.
             </p>
 
             {mission.candidateRoutes.length === 0 ? (
@@ -930,6 +939,8 @@ export default function RoutePlannerPage() {
                     label="Total Distance (Geometry)"
                     value={formatDistance(selectedRoute.distanceMeters)}
                   />
+                  <DataField label="Estimated Nominal Traverse Time" value={selectedRoute.estimatedDurationHours !== undefined ? `${selectedRoute.estimatedDurationHours} h` : undefined} fallback="Unavailable" />
+                  <DataField label="Estimated O₂ (User Rate)" value={selectedRoute.estimatedOxygenLiters !== undefined ? `${selectedRoute.estimatedOxygenLiters} L` : undefined} fallback="Enter a personal O₂ rate in Mission Builder" />
                   <DataField
                     label="Return-to-Base Leg"
                     value={

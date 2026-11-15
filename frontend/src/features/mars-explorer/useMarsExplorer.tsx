@@ -127,6 +127,7 @@ export function MarsExplorerProvider({
   // and the active expedition mission region.
   const [selectedStudyRegionId, setSelectedStudyRegionIdState] =
     useState<StudyRegionId>("jezero");
+  const [showStudyRegionBoundary, setShowStudyRegionBoundary] = useState(false);
 
   const [focusCoordinates, setFocusCoordinates] =
     useState<Coordinates>(() => {
@@ -1102,6 +1103,8 @@ export function MarsExplorerProvider({
 
       selectedStudyRegionId,
       setSelectedStudyRegionId,
+      showStudyRegionBoundary,
+      setShowStudyRegionBoundary,
     }),
     [
       addSelectedAsTarget,
@@ -1142,8 +1145,10 @@ export function MarsExplorerProvider({
       selectedLayerId,
       selectedLocation,
       selectedStudyRegionId,
+      showStudyRegionBoundary,
       setSelectedLayerId,
       setSelectedStudyRegionId,
+      setShowStudyRegionBoundary,
       setFutureSolHorizon,
       setTemporalDate,
       setTemporalMode,

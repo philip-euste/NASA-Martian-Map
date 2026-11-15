@@ -1,26 +1,25 @@
 
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import WelcomePage from "../../features/welcome/WelcomePage";
-import ExplorerPage from "../../features/planetary-explorer/ExplorerPage";
-import LocationPage from "../../features/planetary-explorer/LocationPage";
-
-import InvestigationPage from "../../features/mission/InvestigationPage";
-import EvidenceInspectorPage from "../../features/mission/EvidenceInspectorPage";
-import KnowledgeGapsPage from "../../features/mission/KnowledgeGapsPage";
-import MissionBuilderPage from "../../features/mission/MissionBuilderPage";
-import RoutePlannerPage from "../../features/mission/RoutePlannerPage";
-import MarswalkPage from "../../features/mission/MarswalkPage";
-import ExpeditionReviewPage from "../../features/mission/ExpeditionReviewPage";
-import ExpeditionReportPage from "../../features/mission/ExpeditionReportPage";
-
-import GlobeTestPage from "../../globe/MarsGlobe";
-
-import LoginPage from "../../features/auth/LoginPage";
-import RegisterPage from "../../features/auth/RegisterPage";
+const WelcomePage = lazy(() => import("../../features/welcome/WelcomePage"));
+const ExplorerPage = lazy(() => import("../../features/planetary-explorer/ExplorerPage"));
+const LocationPage = lazy(() => import("../../features/planetary-explorer/LocationPage"));
+const InvestigationPage = lazy(() => import("../../features/mission/InvestigationPage"));
+const EvidenceInspectorPage = lazy(() => import("../../features/mission/EvidenceInspectorPage"));
+const KnowledgeGapsPage = lazy(() => import("../../features/mission/KnowledgeGapsPage"));
+const MissionBuilderPage = lazy(() => import("../../features/mission/MissionBuilderPage"));
+const RoutePlannerPage = lazy(() => import("../../features/mission/RoutePlannerPage"));
+const MarswalkPage = lazy(() => import("../../features/mission/MarswalkPage"));
+const ExpeditionReviewPage = lazy(() => import("../../features/mission/ExpeditionReviewPage"));
+const ExpeditionReportPage = lazy(() => import("../../features/mission/ExpeditionReportPage"));
+const GlobeTestPage = lazy(() => import("../../globe/MarsGlobe"));
+const LoginPage = lazy(() => import("../../features/auth/LoginPage"));
+const RegisterPage = lazy(() => import("../../features/auth/RegisterPage"));
 
 export default function AppRoutes() {
     return (
+        <Suspense fallback={<div className="mx-panel m-6 p-6" role="status">Loading Mars Explorer…</div>}>
         <Routes>
             {/* PUBLIC APPLICATION ROUTES */}
 
@@ -53,5 +52,6 @@ export default function AppRoutes() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
     );
 }

@@ -25,6 +25,8 @@ import {
 import { EXPLORATION_SITES } from "../../data/explorationSites";
 import { useMission } from "../../state/mission/MissionContext";
 import type { MissionConfiguration } from "../../types";
+import { isWithinBounds } from "../../simulator/shared/environment";
+import { resolveSimulatorEnvironment } from "../../simulator/environments/catalog";
 import MissionLayout from "./MissionLayout";
 import { buildRegion } from "./missionHelpers";
 
@@ -91,6 +93,10 @@ export default function MissionBuilderPage() {
   const [evaHours, setEvaHours] = useState(
     String(existing?.hypotheticalEVADurationHours ?? 6)
   );
+  const [traverseSpeedKmh, setTraverseSpeedKmh] = useState(String(existing?.nominalTraverseSpeedKmh ?? 2.2));
+  const [astronautWeightKg, setAstronautWeightKg] = useState(String(existing?.astronautWeightKg ?? ""));
+  const [astronautHeightCm, setAstronautHeightCm] = useState(String(existing?.astronautHeightCm ?? ""));
+  const [oxygenConsumptionRate, setOxygenConsumptionRate] = useState(String(existing?.oxygenConsumptionLitersPerHour ?? ""));
   const [requireReturnToBase, setRequireReturnToBase] = useState(
     existing?.requireReturnToBase ?? true
   );
@@ -132,6 +138,8 @@ export default function MissionBuilderPage() {
     existing?.missionConstraints?.join("\n") ?? DEFAULT_CONSTRAINTS.join("\n")
   );
   const [savedNotice, setSavedNotice] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const activeEnvironment = resolveSimulatorEnvironment(mission.region?.id).environment;
 
   function toggleTargetId(id: string): void {
     setSelectedTargetIds((current) =>
@@ -152,7 +160,20 @@ export default function MissionBuilderPage() {
   function applyConfiguration(): MissionConfiguration | null {
     const lat = Number(startLat);
     const lon = Number(startLon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 360) {
+      setValidationError("Enter finite latitude and longitude values within geographic limits.");
+      return null;
+    }
+    if (activeEnvironment && !isWithinBounds(activeEnvironment.bounds, { latitude: lat, longitude: lon })) {
+      setValidationError(`Starting coordinates are outside the ${activeEnvironment.displayName} DEM coverage.`);
+      return null;
+    }
+    const optionalValues = [astronautWeightKg, astronautHeightCm, oxygenConsumptionRate].filter((value) => value.trim()).map(Number);
+    if (!Number.isFinite(Number(traverseSpeedKmh)) || Number(traverseSpeedKmh) <= 0 || optionalValues.some((value) => !Number.isFinite(value) || value <= 0)) {
+      setValidationError("Traverse speed and any supplied astronaut planning values must be positive finite numbers.");
+      return null;
+    }
+    setValidationError(null);
 
     const parsedSlope = maxSlope.trim() !== "" ? Number(maxSlope) : undefined;
     const parsedRough =
@@ -163,6 +184,10 @@ export default function MissionBuilderPage() {
       scientificTargetIds: selectedTargetIds,
       missionDurationSols: Math.max(1, Number(durationSols) || 1),
       hypotheticalEVADurationHours: Math.max(1, Number(evaHours) || 1),
+      nominalTraverseSpeedKmh: Number(traverseSpeedKmh),
+      astronautWeightKg: optionalPositive(astronautWeightKg),
+      astronautHeightCm: optionalPositive(astronautHeightCm),
+      oxygenConsumptionLitersPerHour: optionalPositive(oxygenConsumptionRate),
       requireReturnToBase,
       terrainPreferences: {
         preferredSlopeDegrees: Number.isFinite(parsedSlope)
@@ -189,6 +214,12 @@ export default function MissionBuilderPage() {
     setSavedNotice(true);
     window.setTimeout(() => setSavedNotice(false), 2500);
     return config;
+  }
+
+  function optionalPositive(value: string): number | undefined {
+    if (!value.trim()) return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
   }
 
   function handleSubmitAndContinue(event: FormEvent): void {
@@ -306,6 +337,20 @@ export default function MissionBuilderPage() {
                   radius.
                 </p>
               </div>
+              <div>
+                <label htmlFor="traverse-speed" className="mx-label">Nominal walking speed (km/hour)</label>
+                <input id="traverse-speed" type="number" min="0.1" step="0.1" required className="mx-input" value={traverseSpeedKmh} onChange={(e) => setTraverseSpeedKmh(e.target.value)} />
+                <p className="mx-hint">Used for a straight-line planning estimate; slope, stops, and terrain resistance are not modeled.</p>
+              </div>
+            </div>
+            <div className="mt-4 rounded-lg border border-mx-border bg-mx-bg p-3">
+              <h3 className="mx-label">Optional astronaut planning inputs</h3>
+              <p className="mx-hint">User-entered values only; these do not model suit physiology. Oxygen reserve is estimated from the entered rate and nominal traverse time.</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="mx-label">Weight (kg)<input type="number" min="1" step="any" className="mx-input mt-1" value={astronautWeightKg} onChange={(e) => setAstronautWeightKg(e.target.value)} /></label>
+                <label className="mx-label">Height (cm)<input type="number" min="1" step="any" className="mx-input mt-1" value={astronautHeightCm} onChange={(e) => setAstronautHeightCm(e.target.value)} /></label>
+                <label className="mx-label">O₂ use (L/hour)<input type="number" min="0.1" step="any" className="mx-input mt-1" value={oxygenConsumptionRate} onChange={(e) => setOxygenConsumptionRate(e.target.value)} /></label>
+              </div>
             </div>
           </section>
 
@@ -379,7 +424,7 @@ export default function MissionBuilderPage() {
                   type="number"
                   step="any"
                   min="-180"
-                  max="180"
+                  max="360"
                   required
                   className="mx-input"
                   value={startLon}
@@ -387,6 +432,7 @@ export default function MissionBuilderPage() {
                 />
               </div>
             </div>
+            {validationError && <p className="mx-alert mx-alert--danger mt-3" role="alert">{validationError}</p>}
 
             <label className="mt-4 flex cursor-pointer items-center gap-2.5 rounded-lg border border-mx-border bg-mx-bg p-3 text-xs text-mx-text">
               <input
@@ -613,9 +659,9 @@ export default function MissionBuilderPage() {
                       checked={avoidObstacles}
                       onChange={(e) => setAvoidObstacles(e.target.checked)}
                     />
-                    Avoid known scarps, boulder fields, and steep dune
-                    slip-faces
+                    Flag scarps, boulder fields, and steep dune slip-faces for manual review
                   </label>
+                  <p className="mx-hint">Candidate routes still connect waypoints in straight lines; automated obstacle avoidance is not implemented.</p>
                 </div>
 
                 {/* Exploration Strategy & Priorities */}

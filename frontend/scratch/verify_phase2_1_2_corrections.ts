@@ -4,7 +4,9 @@
 // 2. Strict DOWNLOADED status restriction to genuine pre-bundled local assets.
 // 3. Scientific limitations and regional caveats (Olympus Mons dust obscuration on TES minerals).
 // 4. Dataset lifecycle invariant validation function.
-// 5. Selectable dataset counts preservation (Jezero: 16, Gale: 10, Valles: 10, Olympus: 10).
+// 5. Selectable dataset counts preservation (Jezero: 16, Gale: 11, Valles: 10, Olympus: 10).
+
+declare const process: { exit(code?: number): void };
 
 import {
   EVIDENCE_DATASETS,
@@ -124,15 +126,16 @@ const downloadedDatasets = EVIDENCE_DATASETS.filter((d) =>
 console.log("  Actual datasets with DOWNLOADED status:", downloadedDatasets);
 
 assert(
-  downloadedDatasets.length === 3,
-  `Exactly 3 datasets have DOWNLOADED status (found ${downloadedDatasets.length})`
+  downloadedDatasets.length === 4,
+  `Exactly 4 datasets have DOWNLOADED status (found ${downloadedDatasets.length})`
 );
 
 assert(
   downloadedDatasets.includes("ctx_jezero_dtm_20m") &&
   downloadedDatasets.includes("ctx_jezero_ortho_5m") &&
-  downloadedDatasets.includes("m2020_meda_env"),
-  "DOWNLOADED status belongs strictly to ctx_jezero_dtm_20m, ctx_jezero_ortho_5m, and m2020_meda_env"
+  downloadedDatasets.includes("m2020_meda_env") &&
+  downloadedDatasets.includes("msl_rems_env"),
+  "DOWNLOADED status belongs strictly to ctx_jezero_dtm_20m, ctx_jezero_ortho_5m, m2020_meda_env, and msl_rems_env"
 );
 
 // Verify remote WMTS streams and APIs do NOT have DOWNLOADED
@@ -169,7 +172,7 @@ console.log("\n3. Dataset Lifecycle Invariant Validation:");
 const allResults = validateAllDatasetsLifecycle();
 assert(
   allResults.valid === true && allResults.totalErrors === 0,
-  `All 17 datasets pass lifecycle validation with zero errors (totalErrors: ${allResults.totalErrors})`
+  `All ${EVIDENCE_DATASETS.length} datasets pass lifecycle validation with zero errors (totalErrors: ${allResults.totalErrors})`
 );
 
 // Test deliberate invariant failures to ensure validator is effective
@@ -245,19 +248,20 @@ const vallesDatasets = getDatasetsForRegion("valles-marineris");
 const olympusDatasets = getDatasetsForRegion("olympus-mons");
 
 console.log(`  Jezero Crater selectable count: ${jezeroDatasets.length} (Expected: 16)`);
-console.log(`  Gale Crater selectable count: ${galeDatasets.length} (Expected: 10)`);
+console.log(`  Gale Crater selectable count: ${galeDatasets.length} (Expected: 11)`);
 console.log(`  Valles Marineris selectable count: ${vallesDatasets.length} (Expected: 10)`);
 console.log(`  Olympus Mons selectable count: ${olympusDatasets.length} (Expected: 10)`);
 
 assert(jezeroDatasets.length === 16, "Jezero Crater has exactly 16 selectable datasets");
-assert(galeDatasets.length === 10, "Gale Crater has exactly 10 selectable datasets");
+assert(galeDatasets.length === 11, "Gale Crater has exactly 11 selectable datasets (10 global + 1 in-situ REMS)");
 assert(vallesDatasets.length === 10, "Valles Marineris has exactly 10 selectable datasets");
 assert(olympusDatasets.length === 10, "Olympus Mons has exactly 10 selectable datasets");
 
-// Verify that all 10 selectable in Gale/Valles/Olympus are coverageScope GLOBAL
+// Verify that all 10 selectable in Valles/Olympus are coverageScope GLOBAL, and Gale has 10 GLOBAL + 1 LOCAL_INSITU
 assert(
-  galeDatasets.every((d) => d.coverageScope === "GLOBAL"),
-  "All Gale Crater selectable datasets have coverageScope GLOBAL"
+  galeDatasets.filter((d) => d.coverageScope === "GLOBAL").length === 10 &&
+  galeDatasets.some((d) => d.id === "msl_rems_env" && d.coverageScope === "LOCAL_INSITU"),
+  "Gale Crater selectable datasets comprise 10 GLOBAL and 1 LOCAL_INSITU (msl_rems_env)"
 );
 assert(
   vallesDatasets.every((d) => d.coverageScope === "GLOBAL"),

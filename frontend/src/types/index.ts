@@ -170,6 +170,11 @@ export interface MissionConfiguration {
   scientificTargetIds: string[];
   missionDurationSols: number;
   hypotheticalEVADurationHours: number;
+  nominalTraverseSpeedKmh?: number;
+  /** Optional user-entered planning values; not measured physiology. */
+  astronautWeightKg?: number;
+  astronautHeightCm?: number;
+  oxygenConsumptionLitersPerHour?: number;
   terrainPreferences: TerrainPreferences;
   sciencePriorities: string[];
   explorationStrategy: string;
@@ -214,6 +219,7 @@ export interface Route {
   returnRouteIncluded?: boolean;
   returnDistanceMeters?: number;
   estimatedDurationHours?: number;
+  estimatedOxygenLiters?: number;
   measurementSource?: string;
 }
 
