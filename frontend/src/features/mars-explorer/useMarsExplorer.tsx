@@ -15,8 +15,14 @@ import {
   type ExplorationSite,
 } from "../../data/explorationSites";
 import { MAP_LAYERS, type MapLayerId } from "../../data/mapLayers";
-import { getDataProvider, type TileLayerConfig } from "../../services/dataProviders";
-import { marsDemProvider, type DemElevation } from "../../services/providers/marsDem";
+import {
+  getDataProvider,
+  type TileLayerConfig,
+} from "../../services/dataProviders";
+import {
+  marsDemProvider,
+  type DemElevation,
+} from "../../services/providers/marsDem";
 import { useMission } from "../../state/mission/MissionContext";
 import {
   buildRegion,
@@ -28,11 +34,13 @@ import type { Coordinates, TemporalMode } from "../../types";
 import {
   normalizeCoordinates,
   sameCoords,
+  STUDY_REGIONS,
   type ExplorerNavigationAction,
   type ExplorerViewMode,
   type MarsExplorerContextValue,
   type SavedLocation,
   type SelectedExplorerLocation,
+  type StudyRegionId,
   type TransitionState,
 } from "./marsExplorer.types";
 
@@ -42,14 +50,17 @@ const SAVED_LOCATIONS_STORAGE_KEY = "mars-explorer-saved-locations-v1";
 const TRANSITION_DURATION_MS = 420;
 const TRANSITION_COOLDOWN_MS = 700;
 
-const MarsExplorerContext = createContext<MarsExplorerContextValue | null>(null);
+const MarsExplorerContext =
+  createContext<MarsExplorerContextValue | null>(null);
 
 function loadInitialSavedLocations(): SavedLocation[] {
   try {
     const raw = window.localStorage.getItem(SAVED_LOCATIONS_STORAGE_KEY);
     if (!raw) return [];
+
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
+
     return parsed.filter(
       (item): item is SavedLocation =>
         typeof item === "object" &&
@@ -81,37 +92,61 @@ export function MarsExplorerProvider({
     updateTemporal,
   } = useMission();
 
-  const [viewMode, setViewModeState] = useState<ExplorerViewMode>(initialViewMode);
-  const [transitionState, setTransitionState] = useState<TransitionState>({
-    active: false,
-    direction: null,
-    progress: 0,
-  });
+  const [viewMode, setViewModeState] =
+    useState<ExplorerViewMode>(initialViewMode);
+
+  const [transitionState, setTransitionState] =
+    useState<TransitionState>({
+      active: false,
+      direction: null,
+      progress: 0,
+    });
 
   const transitionCooldownUntil = useRef(0);
   const transitionRafRef = useRef<number | null>(null);
 
-  const [selectedLayerId, setSelectedLayerIdState] = useState<MapLayerId>("mars_viking_global");
+  const [selectedLayerId, setSelectedLayerIdState] =
+    useState<MapLayerId>("mars_viking_global");
+
   const [opacity, setOpacity] = useState(1);
-  const [overlayLayerId, setOverlayLayerId] = useState<MapLayerId | null>(null);
+  const [overlayLayerId, setOverlayLayerId] =
+    useState<MapLayerId | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState(0.65);
+
   const [showGeologyOverlay, setShowGeologyOverlay] = useState(false);
   const [geologyOpacity, setGeologyOpacity] = useState(0.55);
-  const [tileConfig, setTileConfig] = useState<TileLayerConfig | null>(null);
+
+  const [tileConfig, setTileConfig] =
+    useState<TileLayerConfig | null>(null);
   const [layerLoading, setLayerLoading] = useState(false);
   const [layerError, setLayerError] = useState<string | null>(null);
-  const [textureStatus, setTextureStatus] = useState("Loading NASA imagery...");
+  const [textureStatus, setTextureStatus] =
+    useState("Loading NASA imagery...");
 
-  const [focusCoordinates, setFocusCoordinates] = useState<Coordinates>(() => {
-    const initialSite = initialSiteId ? getSiteById(initialSiteId) : undefined;
-    if (initialSite) {
-      return { latitude: initialSite.latitude, longitude: initialSite.longitude };
-    }
-    if (mission.region) {
-      return { ...mission.region.coordinates };
-    }
-    return { latitude: 18.4, longitude: 77.5 };
-  });
+  // Study-region selection is independent of clicked locations
+  // and the active expedition mission region.
+  const [selectedStudyRegionId, setSelectedStudyRegionIdState] =
+    useState<StudyRegionId>("jezero");
+
+  const [focusCoordinates, setFocusCoordinates] =
+    useState<Coordinates>(() => {
+      const initialSite = initialSiteId
+        ? getSiteById(initialSiteId)
+        : undefined;
+
+      if (initialSite) {
+        return {
+          latitude: initialSite.latitude,
+          longitude: initialSite.longitude,
+        };
+      }
+
+      if (mission.region) {
+        return { ...mission.region.coordinates };
+      }
+
+      return { latitude: 18.4, longitude: 77.5 };
+    });
 
   const [focusRequestVersion, setFocusRequestVersion] = useState(1);
   const [globeDistance, setGlobeDistance] = useState(3.2);
@@ -119,7 +154,8 @@ export function MarsExplorerProvider({
 
   const [navigationAction, setNavigationAction] =
     useState<ExplorerNavigationAction | null>(null);
-  const [navigationActionVersion, setNavigationActionVersion] = useState(0);
+  const [navigationActionVersion, setNavigationActionVersion] =
+    useState(0);
 
   const requestNavigationAction = useCallback(
     (action: ExplorerNavigationAction) => {
@@ -129,25 +165,31 @@ export function MarsExplorerProvider({
     []
   );
 
-  const [savedLocations, setSavedLocations] = useState<SavedLocation[]>(loadInitialSavedLocations);
+  const [savedLocations, setSavedLocations] =
+    useState<SavedLocation[]>(loadInitialSavedLocations);
   const [locationNameDraft, setLocationNameDraft] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
 
-  const [selectedLocation, setSelectedLocation] = useState<SelectedExplorerLocation | null>(() => {
-    const initialSite = initialSiteId ? getSiteById(initialSiteId) : undefined;
-    if (!initialSite) return null;
-    return {
-      kind: "site",
-      key: `site:${initialSite.id}`,
-      name: initialSite.name,
-      latitude: initialSite.latitude,
-      longitude: initialSite.longitude,
-      description: initialSite.description,
-      terrainType: initialSite.terrainType,
-      regionLabel: initialSite.regionLabel,
-      site: initialSite,
-    };
-  });
+  const [selectedLocation, setSelectedLocation] =
+    useState<SelectedExplorerLocation | null>(() => {
+      const initialSite = initialSiteId
+        ? getSiteById(initialSiteId)
+        : undefined;
+
+      if (!initialSite) return null;
+
+      return {
+        kind: "site",
+        key: `site:${initialSite.id}`,
+        name: initialSite.name,
+        latitude: initialSite.latitude,
+        longitude: initialSite.longitude,
+        description: initialSite.description,
+        terrainType: initialSite.terrainType,
+        regionLabel: initialSite.regionLabel,
+        site: initialSite,
+      };
+    });
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -158,30 +200,38 @@ export function MarsExplorerProvider({
   const [layerRetryCount, setLayerRetryCount] = useState(0);
   const [elevationRetryCount, setElevationRetryCount] = useState(0);
 
-  const todayUTC = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayUTC = useMemo(
+    () => new Date().toISOString().slice(0, 10),
+    []
+  );
+
   const temporal = mission.temporal;
 
   const retryLayer = useCallback(() => {
     const layer = MAP_LAYERS[selectedLayerId];
     const provider = getDataProvider(layer.provider);
+
     provider.clearLayerCache?.(selectedLayerId);
-    setLayerRetryCount((c) => c + 1);
+    setLayerRetryCount((count) => count + 1);
   }, [selectedLayerId]);
 
   const retryElevation = useCallback(() => {
     marsDemProvider.resetBackendCooldown();
-    setElevationRetryCount((c) => c + 1);
+    setElevationRetryCount((count) => count + 1);
   }, []);
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(SAVED_LOCATIONS_STORAGE_KEY, JSON.stringify(savedLocations));
+      window.localStorage.setItem(
+        SAVED_LOCATIONS_STORAGE_KEY,
+        JSON.stringify(savedLocations)
+      );
     } catch {
-      // Ignore storage quota errors
+      // Ignore storage quota errors.
     }
   }, [savedLocations]);
 
-  // Load WMTS layer configuration once per layer and share across 3D & 2D
+  // Load WMTS configuration once per selected base layer.
   useEffect(() => {
     let cancelled = false;
     const layer = MAP_LAYERS[selectedLayerId];
@@ -195,13 +245,16 @@ export function MarsExplorerProvider({
         const config = await provider.getLayerConfig(selectedLayerId, {
           forceRetry: layerRetryCount > 0,
         });
+
         if (!cancelled) {
           setTileConfig(config);
         }
       } catch (err: unknown) {
         if (!cancelled) {
           setLayerError(
-            err instanceof Error ? err.message : "Unable to load NASA layer configuration."
+            err instanceof Error
+              ? err.message
+              : "Unable to load NASA layer configuration."
           );
         }
       } finally {
@@ -212,12 +265,13 @@ export function MarsExplorerProvider({
     }
 
     loadLayer();
+
     return () => {
       cancelled = true;
     };
   }, [selectedLayerId, layerRetryCount]);
 
-  // Query real DEM elevation whenever selectedLocation changes
+  // Retrieve DEM elevation when the clicked location changes.
   useEffect(() => {
     if (!selectedLocation) {
       setElevation(null);
@@ -227,6 +281,7 @@ export function MarsExplorerProvider({
     }
 
     const validCoordinates = normalizeCoordinates(selectedLocation);
+
     if (!validCoordinates) {
       setElevation(null);
       setElevationError("Invalid latitude or longitude.");
@@ -242,16 +297,20 @@ export function MarsExplorerProvider({
       setElevationError(null);
 
       try {
-        const result = await marsDemProvider.getElevation(validCoordinates!, {
-          forceRetry: elevationRetryCount > 0,
-        });
+        const result = await marsDemProvider.getElevation(
+          validCoordinates!,
+          { forceRetry: elevationRetryCount > 0 }
+        );
+
         if (!cancelled) {
           setElevation(result);
         }
       } catch (err: unknown) {
         if (!cancelled) {
           const isNetworkError =
-            err instanceof TypeError && err.message.toLowerCase().includes("fetch");
+            err instanceof TypeError &&
+            err.message.toLowerCase().includes("fetch");
+
           setElevationError(
             isNetworkError
               ? "Cannot reach the DEM API. Check that the FastAPI backend is running."
@@ -268,10 +327,15 @@ export function MarsExplorerProvider({
     }
 
     loadElevation();
+
     return () => {
       cancelled = true;
     };
-  }, [selectedLocation?.latitude, selectedLocation?.longitude, elevationRetryCount]);
+  }, [
+    selectedLocation?.latitude,
+    selectedLocation?.longitude,
+    elevationRetryCount,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -281,15 +345,39 @@ export function MarsExplorerProvider({
     };
   }, []);
 
-  const updateCameraFocus = useCallback((coordinates: Coordinates) => {
-    const valid = normalizeCoordinates(coordinates);
-    if (!valid) return;
-    setFocusCoordinates((current) => (sameCoords(current, valid, 0.0005) ? current : valid));
-  }, []);
+  const updateCameraFocus = useCallback(
+    (coordinates: Coordinates) => {
+      const valid = normalizeCoordinates(coordinates);
+      if (!valid) return;
 
-  const setSelectedLayerId = useCallback((layerId: MapLayerId) => {
-    setSelectedLayerIdState(layerId);
-  }, []);
+      setFocusCoordinates((current) =>
+        sameCoords(current, valid, 0.0005) ? current : valid
+      );
+    },
+    []
+  );
+
+  const setSelectedLayerId = useCallback(
+    (layerId: MapLayerId) => {
+      setSelectedLayerIdState(layerId);
+    },
+    []
+  );
+
+  // Change the study region without changing selectedLocation
+  // or mission.region.
+  const setSelectedStudyRegionId = useCallback(
+    (regionId: StudyRegionId) => {
+      const region = STUDY_REGIONS[regionId];
+      if (!region) return;
+
+      setSelectedStudyRegionIdState(regionId);
+      setFocusCoordinates(region.center);
+      setMapZoom(4);
+      setFocusRequestVersion((version) => version + 1);
+    },
+    []
+  );
 
   const selectSite = useCallback(
     (site: ExplorationSite, options?: { focus?: boolean }) => {
@@ -297,6 +385,7 @@ export function MarsExplorerProvider({
         latitude: site.latitude,
         longitude: site.longitude,
       });
+
       if (!valid) return;
 
       setSelectedLocation({
@@ -310,14 +399,17 @@ export function MarsExplorerProvider({
         regionLabel: site.regionLabel,
         site,
       });
+
       setLocationNameDraft("");
       setStatusMessage("");
 
       if (options?.focus !== false) {
         setFocusCoordinates(valid);
         setMapZoom((current) => Math.max(current, 4));
-        setGlobeDistance((current) => Math.min(Math.max(current, 1.9), 2.5));
-        setFocusRequestVersion((v) => v + 1);
+        setGlobeDistance((current) =>
+          Math.min(Math.max(current, 1.9), 2.5)
+        );
+        setFocusRequestVersion((version) => version + 1);
       }
     },
     []
@@ -329,6 +421,7 @@ export function MarsExplorerProvider({
         latitude: location.latitude,
         longitude: location.longitude,
       });
+
       if (!valid) return;
 
       setSelectedLocation({
@@ -344,38 +437,49 @@ export function MarsExplorerProvider({
         regionLabel: "User Saved Coordinate",
         savedId: location.id,
       });
+
       setLocationNameDraft(location.name);
       setStatusMessage("");
 
       if (options?.focus !== false) {
         setFocusCoordinates(valid);
         setMapZoom((current) => Math.max(current, 4));
-        setGlobeDistance((current) => Math.min(Math.max(current, 1.9), 2.5));
-        setFocusRequestVersion((v) => v + 1);
+        setGlobeDistance((current) =>
+          Math.min(Math.max(current, 1.9), 2.5)
+        );
+        setFocusRequestVersion((version) => version + 1);
       }
     },
     []
   );
 
   const selectCustomCoordinates = useCallback(
-    (coordinates: Coordinates, options?: { focus?: boolean }) => {
+    (
+      coordinates: Coordinates,
+      options?: { focus?: boolean }
+    ) => {
       const valid = normalizeCoordinates(coordinates);
+
       if (!valid) {
-        setStatusMessage("Selected point is outside Mars' valid latitude range.");
+        setStatusMessage(
+          "Selected point is outside Mars' valid latitude range."
+        );
         return;
       }
 
       const matchingSite = EXPLORATION_SITES.find((site) =>
         sameCoords(site, valid, 0.05)
       );
+
       if (matchingSite) {
         selectSite(matchingSite, options);
         return;
       }
 
-      const matchingSaved = savedLocations.find((loc) =>
-        sameCoords(loc, valid, 0.01)
+      const matchingSaved = savedLocations.find((location) =>
+        sameCoords(location, valid, 0.01)
       );
+
       if (matchingSaved) {
         goToSavedLocation(matchingSaved, options);
         return;
@@ -392,13 +496,14 @@ export function MarsExplorerProvider({
         terrainType: "Custom point",
         regionLabel: "Martian Surface",
       });
+
       setLocationNameDraft("");
       setStatusMessage("");
 
       if (options?.focus) {
         setFocusCoordinates(valid);
         setMapZoom((current) => Math.max(current, 4));
-        setFocusRequestVersion((v) => v + 1);
+        setFocusRequestVersion((version) => version + 1);
       } else {
         setFocusCoordinates(valid);
       }
@@ -415,23 +520,32 @@ export function MarsExplorerProvider({
   const saveSelectedLocation = useCallback(() => {
     if (!selectedLocation) return;
 
-    const existing = savedLocations.find((loc) =>
-      sameCoords(loc, selectedLocation, 0.00001)
+    const existing = savedLocations.find((location) =>
+      sameCoords(location, selectedLocation, 0.00001)
     );
+
     const trimmedName = locationNameDraft.trim();
 
     if (existing) {
       if (trimmedName && trimmedName !== existing.name) {
-        const updated: SavedLocation = { ...existing, name: trimmedName };
+        const updated: SavedLocation = {
+          ...existing,
+          name: trimmedName,
+        };
+
         setSavedLocations((current) =>
-          current.map((item) => (item.id === existing.id ? updated : item))
+          current.map((item) =>
+            item.id === existing.id ? updated : item
+          )
         );
+
         goToSavedLocation(updated, { focus: true });
         setStatusMessage(`Updated "${trimmedName}".`);
       } else {
         goToSavedLocation(existing, { focus: true });
         setStatusMessage("Location is already saved.");
       }
+
       return;
     }
 
@@ -450,6 +564,7 @@ export function MarsExplorerProvider({
     };
 
     setSavedLocations((current) => [...current, newLocation]);
+
     setSelectedLocation({
       kind: "saved",
       key: `saved:${newLocation.id}`,
@@ -463,19 +578,34 @@ export function MarsExplorerProvider({
       regionLabel: "User Saved Coordinate",
       savedId: newLocation.id,
     });
+
     setFocusCoordinates({
       latitude: newLocation.latitude,
       longitude: newLocation.longitude,
     });
+
     setMapZoom((current) => Math.max(current, 4));
-    setGlobeDistance((current) => Math.min(Math.max(current, 1.9), 2.5));
-    setFocusRequestVersion((v) => v + 1);
+    setGlobeDistance((current) =>
+      Math.min(Math.max(current, 1.9), 2.5)
+    );
+    setFocusRequestVersion((version) => version + 1);
     setStatusMessage(`"${name}" saved and focused.`);
-  }, [goToSavedLocation, locationNameDraft, savedLocations, selectedLocation]);
+  }, [
+    goToSavedLocation,
+    locationNameDraft,
+    savedLocations,
+    selectedLocation,
+  ]);
 
   const removeLocation = useCallback((id: number) => {
-    setSavedLocations((current) => current.filter((item) => item.id !== id));
-    setSelectedLocation((current) => (current?.savedId === id ? null : current));
+    setSavedLocations((current) =>
+      current.filter((item) => item.id !== id)
+    );
+
+    setSelectedLocation((current) =>
+      current?.savedId === id ? null : current
+    );
+
     setStatusMessage("Saved location removed.");
   }, []);
 
@@ -486,16 +616,20 @@ export function MarsExplorerProvider({
       nextFocus?: Coordinates
     ) => {
       const now = performance.now();
-      if (now < transitionCooldownUntil.current) {
-        return;
-      }
-      transitionCooldownUntil.current = now + TRANSITION_COOLDOWN_MS;
+
+      if (now < transitionCooldownUntil.current) return;
+
+      transitionCooldownUntil.current =
+        now + TRANSITION_COOLDOWN_MS;
 
       if (transitionRafRef.current !== null) {
         cancelAnimationFrame(transitionRafRef.current);
       }
 
-      const validFocus = nextFocus ? normalizeCoordinates(nextFocus) : null;
+      const validFocus = nextFocus
+        ? normalizeCoordinates(nextFocus)
+        : null;
+
       if (validFocus) {
         setFocusCoordinates(validFocus);
       }
@@ -508,19 +642,29 @@ export function MarsExplorerProvider({
         setMapZoom(2);
       }
 
-      setFocusRequestVersion((v) => v + 1);
-      setTransitionState({ active: true, direction, progress: 0 });
+      setFocusRequestVersion((version) => version + 1);
+      setTransitionState({
+        active: true,
+        direction,
+        progress: 0,
+      });
       setViewModeState(targetMode);
 
       const start = performance.now();
+
       const step = (timestamp: number) => {
         const elapsed = timestamp - start;
-        const progress = Math.min(1, elapsed / TRANSITION_DURATION_MS);
+        const progress = Math.min(
+          1,
+          elapsed / TRANSITION_DURATION_MS
+        );
+
         setTransitionState({
           active: progress < 1,
           direction: progress < 1 ? direction : null,
           progress,
         });
+
         if (progress < 1) {
           transitionRafRef.current = requestAnimationFrame(step);
         } else {
@@ -536,33 +680,55 @@ export function MarsExplorerProvider({
   const triggerZoomInToMap = useCallback(
     (focus?: Coordinates) => {
       if (viewMode !== "globe") return;
+
       const targetFocus =
         focus ??
         (selectedLocation
-          ? { latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }
+          ? {
+              latitude: selectedLocation.latitude,
+              longitude: selectedLocation.longitude,
+            }
           : focusCoordinates);
+
       runViewTransition("globe-to-map", "map", targetFocus);
     },
-    [focusCoordinates, runViewTransition, selectedLocation, viewMode]
+    [
+      focusCoordinates,
+      runViewTransition,
+      selectedLocation,
+      viewMode,
+    ]
   );
 
   const triggerZoomOutToGlobe = useCallback(
     (focus?: Coordinates) => {
       if (viewMode !== "map") return;
+
       const targetFocus =
         focus ??
         (selectedLocation
-          ? { latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }
+          ? {
+              latitude: selectedLocation.latitude,
+              longitude: selectedLocation.longitude,
+            }
           : focusCoordinates);
+
       runViewTransition("map-to-globe", "globe", targetFocus);
     },
-    [focusCoordinates, runViewTransition, selectedLocation, viewMode]
+    [
+      focusCoordinates,
+      runViewTransition,
+      selectedLocation,
+      viewMode,
+    ]
   );
 
   const setViewMode = useCallback(
     (nextMode: ExplorerViewMode) => {
       if (nextMode === viewMode) return;
-      transitionCooldownUntil.current = performance.now() + 450;
+
+      transitionCooldownUntil.current =
+        performance.now() + 450;
 
       if (selectedLocation) {
         setFocusCoordinates({
@@ -572,14 +738,24 @@ export function MarsExplorerProvider({
       }
 
       if (nextMode === "map") {
-        setMapZoom((current) => (selectedLocation ? Math.max(current, 4) : Math.max(current, 2)));
-        setFocusRequestVersion((v) => v + 1);
+        setMapZoom((current) =>
+          selectedLocation
+            ? Math.max(current, 4)
+            : Math.max(current, 2)
+        );
+
+        setFocusRequestVersion((version) => version + 1);
       } else if (nextMode === "globe") {
         setGlobeDistance((current) => Math.max(current, 2.2));
-        setFocusRequestVersion((v) => v + 1);
+        setFocusRequestVersion((version) => version + 1);
       }
 
-      setTransitionState({ active: false, direction: null, progress: 0 });
+      setTransitionState({
+        active: false,
+        direction: null,
+        progress: 0,
+      });
+
       setViewModeState(nextMode);
     },
     [selectedLocation, viewMode]
@@ -591,9 +767,11 @@ export function MarsExplorerProvider({
         latitude: selectedLocation.latitude,
         longitude: selectedLocation.longitude,
       });
+
       setMapZoom((current) => Math.max(current, 4));
-      setFocusRequestVersion((v) => v + 1);
+      setFocusRequestVersion((version) => version + 1);
     }
+
     setViewMode("map");
   }, [selectedLocation, setViewMode]);
 
@@ -603,21 +781,25 @@ export function MarsExplorerProvider({
         latitude: selectedLocation.latitude,
         longitude: selectedLocation.longitude,
       });
+
       setGlobeDistance(2.2);
-      setFocusRequestVersion((v) => v + 1);
+      setFocusRequestVersion((version) => version + 1);
     }
+
     setViewMode("globe");
   }, [selectedLocation, setViewMode]);
 
   const resetExplorerView = useCallback(() => {
     const layer = MAP_LAYERS[selectedLayerId];
+
     setFocusCoordinates({
       latitude: layer.center[0],
       longitude: layer.center[1],
     });
+
     setMapZoom(2);
     setGlobeDistance(3.2);
-    setFocusRequestVersion((v) => v + 1);
+    setFocusRequestVersion((version) => version + 1);
     requestNavigationAction("reset");
   }, [requestNavigationAction, selectedLayerId]);
 
@@ -630,8 +812,18 @@ export function MarsExplorerProvider({
 
   const setTemporalDate = useCallback(
     (date: string) => {
-      if (!date || date < EARLIEST_TEMPORAL_DATE || date > todayUTC) return;
-      updateTemporal({ selectedDate: date, mode: "past" });
+      if (
+        !date ||
+        date < EARLIEST_TEMPORAL_DATE ||
+        date > todayUTC
+      ) {
+        return;
+      }
+
+      updateTemporal({
+        selectedDate: date,
+        mode: "past",
+      });
     },
     [todayUTC, updateTemporal]
   );
@@ -639,10 +831,15 @@ export function MarsExplorerProvider({
   const setFutureSolHorizon = useCallback(
     (value: string) => {
       if (value.trim() === "") return;
+
       const parsed = Number(value);
       if (!Number.isFinite(parsed)) return;
+
       updateTemporal({
-        futureSols: Math.max(1, Math.min(MAX_FUTURE_SOLS, Math.round(parsed))),
+        futureSols: Math.max(
+          1,
+          Math.min(MAX_FUTURE_SOLS, Math.round(parsed))
+        ),
         mode: "future",
       });
     },
@@ -660,6 +857,7 @@ export function MarsExplorerProvider({
 
   const searchResults = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
+
     if (!term) {
       return {
         sites: EXPLORATION_SITES,
@@ -681,31 +879,50 @@ export function MarsExplorerProvider({
 
   const isSelectedRegion = useMemo(() => {
     if (!selectedLocation || !mission.region) return false;
-    if (selectedLocation.site && mission.region.id === selectedLocation.site.id) {
+
+    if (
+      selectedLocation.site &&
+      mission.region.id === selectedLocation.site.id
+    ) {
       return true;
     }
-    return sameCoords(mission.region.coordinates, selectedLocation, 0.0001);
+
+    return sameCoords(
+      mission.region.coordinates,
+      selectedLocation,
+      0.0001
+    );
   }, [mission.region, selectedLocation]);
 
   const isSelectedTarget = useMemo(() => {
     if (!selectedLocation) return false;
-    return hasTargetAt(mission.scientificTargets, selectedLocation);
+
+    return hasTargetAt(
+      mission.scientificTargets,
+      selectedLocation
+    );
   }, [mission.scientificTargets, selectedLocation]);
 
   const startExpeditionAtSelectedLocation = useCallback(() => {
     if (!selectedLocation) {
-      setStatusMessage("Select a valid Martian location before starting an expedition.");
+      setStatusMessage(
+        "Select a valid Martian location before starting an expedition."
+      );
       return;
     }
 
     const validCoords = normalizeCoordinates(selectedLocation);
+
     if (!validCoords) {
       setStatusMessage("Invalid expedition coordinates.");
       return;
     }
 
     const regionName =
-      locationNameDraft.trim() || selectedLocation.name || "Custom Location";
+      locationNameDraft.trim() ||
+      selectedLocation.name ||
+      "Custom Location";
+
     const regionId =
       selectedLocation.site?.id ??
       (selectedLocation.savedId
@@ -727,8 +944,9 @@ export function MarsExplorerProvider({
         startingLocation: { ...validCoords },
         scientificTargetIds: mission.configuration
           ? [...mission.configuration.scientificTargetIds]
-          : mission.scientificTargets.map((t) => t.id),
-        missionDurationSols: mission.configuration?.missionDurationSols ?? 30,
+          : mission.scientificTargets.map((target) => target.id),
+        missionDurationSols:
+          mission.configuration?.missionDurationSols ?? 30,
         hypotheticalEVADurationHours:
           mission.configuration?.hypotheticalEVADurationHours ?? 6,
         terrainPreferences: mission.configuration?.terrainPreferences
@@ -754,7 +972,11 @@ export function MarsExplorerProvider({
 
     setFocusCoordinates(validCoords);
     setStatusMessage(`Expedition initialized at ${regionName}.`);
-    setTransitionState({ active: false, direction: null, progress: 0 });
+    setTransitionState({
+      active: false,
+      direction: null,
+      progress: 0,
+    });
     setViewModeState("jezero");
   }, [
     locationNameDraft,
@@ -768,18 +990,26 @@ export function MarsExplorerProvider({
 
   const addSelectedAsTarget = useCallback(() => {
     if (!selectedLocation || isSelectedTarget) return;
+
     const validCoords = normalizeCoordinates(selectedLocation);
     if (!validCoords) return;
 
     const targetName =
-      locationNameDraft.trim() || selectedLocation.name || "Custom Target";
+      locationNameDraft.trim() ||
+      selectedLocation.name ||
+      "Custom Target";
 
     updateMission({
       scientificTargets: [
         ...toMutable(mission.scientificTargets),
-        buildTarget(targetName, validCoords, selectedLocation.description),
+        buildTarget(
+          targetName,
+          validCoords,
+          selectedLocation.description
+        ),
       ],
     });
+
     setStatusMessage(`"${targetName}" added to scientific targets.`);
   }, [
     isSelectedTarget,
@@ -869,6 +1099,9 @@ export function MarsExplorerProvider({
       triggerZoomInToMap,
       triggerZoomOutToGlobe,
       resetExplorerView,
+
+      selectedStudyRegionId,
+      setSelectedStudyRegionId,
     }),
     [
       addSelectedAsTarget,
@@ -892,6 +1125,8 @@ export function MarsExplorerProvider({
       opacity,
       openSelectedInGlobe,
       openSelectedInMap,
+      overlayLayerId,
+      overlayOpacity,
       removeLocation,
       requestNavigationAction,
       resetExplorerView,
@@ -906,11 +1141,14 @@ export function MarsExplorerProvider({
       selectSite,
       selectedLayerId,
       selectedLocation,
-      setFutureSolHorizon,
+      selectedStudyRegionId,
       setSelectedLayerId,
+      setSelectedStudyRegionId,
+      setFutureSolHorizon,
       setTemporalDate,
       setTemporalMode,
       setViewMode,
+      showGeologyOverlay,
       startExpeditionAtSelectedLocation,
       statusMessage,
       temporal,
@@ -922,6 +1160,7 @@ export function MarsExplorerProvider({
       triggerZoomOutToGlobe,
       updateCameraFocus,
       viewMode,
+      geologyOpacity,
     ]
   );
 
@@ -934,12 +1173,18 @@ export function MarsExplorerProvider({
 
 export function useMarsExplorer(): MarsExplorerContextValue {
   const context = useContext(MarsExplorerContext);
+
   if (!context) {
-    throw new Error("useMarsExplorer must be used inside MarsExplorerProvider");
+    throw new Error(
+      "useMarsExplorer must be used inside MarsExplorerProvider"
+    );
   }
+
   return context;
 }
 
-export function useOptionalMarsExplorer(): MarsExplorerContextValue | null {
+export function useOptionalMarsExplorer():
+  | MarsExplorerContextValue
+  | null {
   return useContext(MarsExplorerContext);
 }

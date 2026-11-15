@@ -11,6 +11,7 @@ import {
   GeoJSON,
 } from "react-leaflet";
 import L from "leaflet";
+import type { Feature, FeatureCollection, Geometry } from "geojson";
 import "leaflet/dist/leaflet.css";
 
 import { MAP_LAYERS, type MapLayerId } from "../../data/mapLayers";
@@ -36,6 +37,13 @@ import { formatCoordinates } from "../ui";
 
 import "./MarsMap.css";
 
+type RegionFeature = Feature<Geometry, Record<string, unknown>>;
+
+type RegionFeatureCollection = FeatureCollection<
+  Geometry,
+  Record<string, unknown>
+>;
+
 interface MapControllerProps {
   layerId: MapLayerId;
   focusCoordinates: Coordinates;
@@ -60,9 +68,133 @@ interface WmtsTileLayerProps {
   opacity: number;
 }
 
+interface StudyRegion {
+  readonly id: string;
+  readonly name: string;
+}
+
+const SUPPORTED_STUDY_REGIONS: readonly StudyRegion[] = [
+  { id: "jezero", name: "Jezero Crater" },
+  { id: "gale", name: "Gale Crater" },
+  { id: "valles-marineris", name: "Valles Marineris" },
+  { id: "olympus-mons", name: "Olympus Mons" },
+];
+
 const TRANSPARENT_PIXEL =
   "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+
 const MAP_ZOOM_OUT_TO_GLOBE_THRESHOLD = 2;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isRegionFeature(value: unknown): value is RegionFeature {
+  if (!isRecord(value)) return false;
+
+  return value.type === "Feature" && "geometry" in value;
+}
+
+function getGeologyFeatureCollection(
+  value: unknown
+): RegionFeatureCollection | null {
+  if (!isRecord(value) || !Array.isArray(value.features)) {
+    return null;
+  }
+
+  const features = value.features.filter(isRegionFeature);
+
+  return {
+    type: "FeatureCollection",
+    features,
+  };
+}
+
+function getPropertyText(
+  properties: Record<string, unknown> | null | undefined,
+  key: string
+): string | null {
+  const value = properties?.[key];
+
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return String(value);
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+
+  return Math.abs(hash);
+}
+
+const GEOLOGY_COLORS = [
+  "#c08457",
+  "#d4a373",
+  "#8f9b76",
+  "#b77965",
+  "#a78bba",
+  "#7c9eae",
+  "#c18caa",
+  "#a6a16e",
+  "#c58b54",
+  "#8296a8",
+];
+
+function getGeologyColor(feature?: RegionFeature): string {
+  const properties = feature?.properties;
+  const identifier =
+    getPropertyText(properties, "Unit") ??
+    getPropertyText(properties, "OBJECTID") ??
+    "unknown";
+
+  return GEOLOGY_COLORS[
+    hashString(identifier) % GEOLOGY_COLORS.length
+  ];
+}
+
+function createGeologyTooltip(
+  properties: Record<string, unknown> | null | undefined
+): HTMLElement {
+  const container = document.createElement("div");
+  container.className = "mx-geology-tooltip";
+
+  const unit = getPropertyText(properties, "Unit");
+  const description = getPropertyText(properties, "UnitDesc");
+  const area = getPropertyText(properties, "SphArea_km");
+  const objectId = getPropertyText(properties, "OBJECTID");
+
+  if (unit) {
+    const heading = document.createElement("strong");
+    heading.textContent = unit;
+    container.appendChild(heading);
+  }
+
+  if (description) {
+    const descriptionElement = document.createElement("div");
+    descriptionElement.textContent = description;
+    container.appendChild(descriptionElement);
+  }
+
+  if (area) {
+    const areaElement = document.createElement("div");
+    areaElement.textContent = `Spherical area: ${area} km²`;
+    container.appendChild(areaElement);
+  }
+
+  if (objectId) {
+    const idElement = document.createElement("div");
+    idElement.textContent = `Feature ID: ${objectId}`;
+    container.appendChild(idElement);
+  }
+
+  return container;
+}
 
 function getMatrixForZoom(
   levels: TileMatrixLevel[],
@@ -97,6 +229,7 @@ class MarsWmtsGridLayer extends L.GridLayer {
     const smallestMatrixWidth = Math.min(
       ...levels.map((level) => level.matrixWidth)
     );
+
     const largestMatrixWidth = Math.max(
       ...levels.map((level) => level.matrixWidth)
     );
@@ -129,6 +262,7 @@ class MarsWmtsGridLayer extends L.GridLayer {
 
   createTile(coords: L.Coords, done: L.DoneCallback): HTMLElement {
     const tile = document.createElement("img");
+
     tile.alt = "";
     tile.setAttribute("role", "presentation");
     tile.decoding = "async";
@@ -136,6 +270,7 @@ class MarsWmtsGridLayer extends L.GridLayer {
     tile.height = 256;
 
     const matrix = getMatrixForZoom(this.levels, coords.z);
+
     const northWest = this.mapInstance.unproject(
       L.point(coords.x * 256, coords.y * 256),
       coords.z
@@ -147,6 +282,7 @@ class MarsWmtsGridLayer extends L.GridLayer {
     const column = Math.floor(
       (northWest.lng - matrix.topLeftX) / matrixTileWidth + 1e-9
     );
+
     const row = Math.floor(
       (matrix.topLeftY - northWest.lat) / matrixTileHeight + 1e-9
     );
@@ -175,10 +311,12 @@ class MarsWmtsGridLayer extends L.GridLayer {
       })
       .catch(() => {
         tile.onload = () => done(undefined, tile);
+
         tile.onerror = () => {
           tile.src = TRANSPARENT_PIXEL;
           done(undefined, tile);
         };
+
         tile.src = tileUrl;
       });
 
@@ -191,9 +329,16 @@ function WmtsTileLayer({ config, opacity }: WmtsTileLayerProps) {
 
   useEffect(() => {
     const levels = config.matrixLevels;
+
     if (!levels?.length) return;
 
-    const gridLayer = new MarsWmtsGridLayer(map, config, levels, opacity);
+    const gridLayer = new MarsWmtsGridLayer(
+      map,
+      config,
+      levels,
+      opacity
+    );
+
     gridLayer.addTo(map);
 
     return () => {
@@ -213,11 +358,14 @@ function MapController({
   onZoomOutToGlobe,
 }: MapControllerProps) {
   const map = useMap();
+
   const lastFocusVersionRef = useRef<number>(-1);
   const lastNavigationVersionRef = useRef<number>(0);
 
   useEffect(() => {
-    if (navigationActionVersion !== lastNavigationVersionRef.current) {
+    if (
+      navigationActionVersion !== lastNavigationVersionRef.current
+    ) {
       lastNavigationVersionRef.current = navigationActionVersion;
 
       switch (navigationAction) {
@@ -228,14 +376,13 @@ function MapController({
         case "zoom-out":
           if (map.getZoom() <= MAP_ZOOM_OUT_TO_GLOBE_THRESHOLD) {
             const center = map.getCenter();
+
             const normalized = normalizeCoordinates({
               latitude: center.lat,
               longitude: center.lng,
             });
 
-            onZoomOutToGlobe(
-              normalized ?? focusCoordinates
-            );
+            onZoomOutToGlobe(normalized ?? focusCoordinates);
           } else {
             map.zoomOut();
           }
@@ -243,12 +390,15 @@ function MapController({
 
         case "reset": {
           const layer = MAP_LAYERS[layerId];
+
           lastFocusVersionRef.current = focusRequestVersion;
+
           map.setView(
             layer.center,
             Math.max(layer.zoom, 3),
             { animate: true }
           );
+
           return;
         }
       }
@@ -261,9 +411,12 @@ function MapController({
 
       if (valid) {
         const nextZoom = Math.max(map.getZoom(), 4);
-        map.flyTo([valid.latitude, valid.longitude], nextZoom, {
-          duration: 0.55,
-        });
+
+        map.flyTo(
+          [valid.latitude, valid.longitude],
+          nextZoom,
+          { duration: 0.55 }
+        );
       }
     }
   }, [
@@ -287,6 +440,7 @@ function MapViewportSync({
   const map = useMapEvents({
     moveend() {
       const center = map.getCenter();
+
       const normalized = normalizeCoordinates({
         latitude: center.lat,
         longitude: center.lng,
@@ -317,6 +471,7 @@ function MapViewportSync({
           zoomOutWheelAccum = 0;
 
           const center = map.getCenter();
+
           const normalized = normalizeCoordinates({
             latitude: center.lat,
             longitude: center.lng,
@@ -369,6 +524,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
     overlayOpacity,
     showGeologyOverlay,
     geologyOpacity,
+    selectedStudyRegionId,
     focusCoordinates,
     focusRequestVersion,
     updateCameraFocus,
@@ -387,45 +543,221 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
 
   const layer = MAP_LAYERS[selectedLayerId];
 
-  const [overlayTileConfig, setOverlayTileConfig] = useState<TileLayerConfig | null>(null);
+  const [overlayTileConfig, setOverlayTileConfig] =
+    useState<TileLayerConfig | null>(null);
+
+  const [boundaryFeatures, setBoundaryFeatures] = useState<
+    Record<string, RegionFeature>
+  >({});
+
+  const [geologyGeoJson, setGeologyGeoJson] =
+    useState<RegionFeatureCollection | null>(null);
+
+  const [boundaryLoading, setBoundaryLoading] = useState(false);
+  const [geologyLoading, setGeologyLoading] = useState(false);
+
+  const [boundaryError, setBoundaryError] = useState<string | null>(null);
+  const [geologyError, setGeologyError] = useState<string | null>(null);
+
+  // Load the secondary raster layer.
   useEffect(() => {
     if (!overlayLayerId) {
       setOverlayTileConfig(null);
       return;
     }
+
     const targetLayer = MAP_LAYERS[overlayLayerId];
-    if (!targetLayer) return;
+
+    if (!targetLayer) {
+      setOverlayTileConfig(null);
+      return;
+    }
+
     let cancelled = false;
+
     getDataProvider(targetLayer.provider)
       .getLayerConfig(overlayLayerId)
-      .then((cfg) => {
-        if (!cancelled) setOverlayTileConfig(cfg);
+      .then((config) => {
+        if (!cancelled) {
+          setOverlayTileConfig(config);
+        }
       })
       .catch(() => {
-        if (!cancelled) setOverlayTileConfig(null);
+        if (!cancelled) {
+          setOverlayTileConfig(null);
+        }
       });
+
     return () => {
       cancelled = true;
     };
   }, [overlayLayerId]);
 
-  const [geologyGeoJson, setGeologyGeoJson] = useState<any>(null);
+  // Load all supported study-region boundaries independently.
+  // This does not depend on selectedStudyRegionId.
   useEffect(() => {
-    if (!showGeologyOverlay) return;
-    let cancelled = false;
-    fetch("/data/jezero_geology_sim3464.geojson")
-      .then((r) => r.json())
-      .then((data) => {
-        if (!cancelled) setGeologyGeoJson(data);
-      })
-      .catch(() => {
-        if (!cancelled) setGeologyGeoJson(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [showGeologyOverlay]);
+    const controller = new AbortController();
 
+    setBoundaryFeatures({});
+    setBoundaryError(null);
+    setBoundaryLoading(true);
+
+    async function loadBoundaries() {
+      const results = await Promise.all(
+        SUPPORTED_STUDY_REGIONS.map(async (region) => {
+          try {
+            const response = await fetch(
+              `/api/regions/${encodeURIComponent(region.id)}/boundary`,
+              { signal: controller.signal }
+            );
+
+            const responseText = await response.text();
+
+            if (!response.ok) {
+              throw new Error(
+                `HTTP ${response.status}: ${responseText.slice(0, 120)}`
+              );
+            }
+
+            let payload: unknown;
+
+            try {
+              payload = JSON.parse(responseText);
+            } catch {
+              throw new Error("API returned HTML or invalid JSON.");
+            }
+
+            if (
+              !isRecord(payload) ||
+              !isRegionFeature(payload.feature)
+            ) {
+              throw new Error(
+                "Response does not contain a valid GeoJSON feature."
+              );
+            }
+
+            return {
+              id: region.id,
+              feature: payload.feature,
+              error: null,
+            };
+          } catch (error: unknown) {
+            if (controller.signal.aborted) return null;
+
+            return {
+              id: region.id,
+              feature: null,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Unknown boundary loading error.",
+            };
+          }
+        })
+      );
+
+      if (controller.signal.aborted) return;
+
+      const loadedFeatures: Record<string, RegionFeature> = {};
+      const failedRegions: string[] = [];
+
+      for (const result of results) {
+        if (!result) continue;
+
+        if (result.feature) {
+          loadedFeatures[result.id] = result.feature;
+        } else if (result.error) {
+          const region = SUPPORTED_STUDY_REGIONS.find(
+            (item) => item.id === result.id
+          );
+
+          failedRegions.push(
+            `${region?.name ?? result.id}: ${result.error}`
+          );
+        }
+      }
+
+      setBoundaryFeatures(loadedFeatures);
+
+      setBoundaryError(
+        failedRegions.length > 0
+          ? `Some study-region boundaries could not be loaded:\n${failedRegions.join("\n")}`
+          : null
+      );
+
+      setBoundaryLoading(false);
+    }
+
+    void loadBoundaries();
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
+  // Load the selected region's geology only while the geology overlay is enabled.
+  useEffect(() => {
+    if (!showGeologyOverlay) {
+      setGeologyGeoJson(null);
+      setGeologyError(null);
+      setGeologyLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    setGeologyGeoJson(null);
+    setGeologyError(null);
+    setGeologyLoading(true);
+
+    async function loadGeology() {
+      try {
+        const response = await fetch(
+          `/api/regions/${encodeURIComponent(selectedStudyRegionId)}/geology`,
+          { signal: controller.signal }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Geology request failed: HTTP ${response.status}`
+          );
+        }
+
+        const payload: unknown = await response.json();
+        const featureCollection = getGeologyFeatureCollection(payload);
+
+        if (!featureCollection) {
+          throw new Error(
+            "Geology API returned an invalid response. Expected a GeoJSON features array."
+          );
+        }
+
+        setGeologyGeoJson(featureCollection);
+      } catch (error: unknown) {
+        if (controller.signal.aborted) return;
+
+        setGeologyGeoJson(null);
+
+        setGeologyError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load the study region geology."
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setGeologyLoading(false);
+        }
+      }
+    }
+
+    loadGeology();
+
+    return () => {
+      controller.abort();
+    };
+  }, [selectedStudyRegionId, showGeologyOverlay]);
+
+  // Focus a requested exploration site.
   useEffect(() => {
     if (!focusSiteId) return;
 
@@ -483,8 +815,8 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
           />
 
           <MapClickHandler
-            onSelect={(coords) =>
-              selectCustomCoordinates(coords, { focus: false })
+            onSelect={(coordinates) =>
+              selectCustomCoordinates(coordinates, { focus: false })
             }
           />
 
@@ -505,7 +837,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
             />
           ) : null}
 
-          {/* Secondary Overlay Layer (Multi-layer blending) */}
+          {/* Secondary raster overlay */}
           {overlayLayerId && overlayTileConfig?.matrixLevels?.length ? (
             <WmtsTileLayer
               key={`overlay-${overlayLayerId}`}
@@ -523,29 +855,63 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
             />
           ) : null}
 
-          {/* USGS Jezero Geologic Units Overlay */}
+          {/* All supported study-region boundaries */}
+          {SUPPORTED_STUDY_REGIONS.map((region) => {
+            const feature = boundaryFeatures[region.id];
+
+            if (!feature) return null;
+
+            const isSelected = region.id === selectedStudyRegionId;
+
+            return (
+              <GeoJSON
+                key={`region-boundary-${region.id}`}
+                data={feature}
+                style={{
+                  color: isSelected ? "#f4a261" : "#75b9c2",
+                  weight: isSelected ? 3.5 : 2,
+                  opacity: isSelected ? 1 : 0.85,
+                  fill: true,
+                  fillColor: "#75b9c2",
+                  fillOpacity: 0.16,
+                  dashArray: isSelected ? "7 5" : "4 6",
+                }}
+              />
+            );
+          })}
+
+          {/* Region-specific USGS geology polygons */}
           {showGeologyOverlay && geologyGeoJson && (
             <GeoJSON
-              key={`usgs-geology-${geologyOpacity}`}
+              key={`region-geology-${selectedStudyRegionId}-${geologyOpacity}`}
               data={geologyGeoJson}
-              style={(feature) => ({
-                color: feature?.properties?.stroke_color || "#3b82f6",
-                weight: 2,
-                fillColor: feature?.properties?.color || "#3b82f6",
-                fillOpacity: geologyOpacity,
-              })}
-              onEachFeature={(feature, layer) => {
-                if (feature.properties) {
-                  const p = feature.properties;
-                  layer.bindTooltip(
-                    `<strong>${p.unit_code}</strong>: ${p.unit_name}<br/><span style="font-size:11px;color:#cbd5e1">${p.lithology}</span>`,
-                    { sticky: true, className: "mx-site-label" }
-                  );
-                }
+              style={(feature) => {
+                const regionFeature = feature as RegionFeature;
+
+                return {
+                  color: "#f1e5d5",
+                  weight: 1,
+                  opacity: 0.85,
+                  fillColor: getGeologyColor(regionFeature),
+                  fillOpacity: geologyOpacity,
+                };
+              }}
+              onEachFeature={(feature, featureLayer) => {
+                const regionFeature = feature as RegionFeature;
+
+                const tooltip = createGeologyTooltip(
+                  regionFeature.properties
+                );
+
+                featureLayer.bindTooltip(tooltip, {
+                  sticky: true,
+                  className: "mx-site-label",
+                });
               }}
             />
           )}
 
+          {/* Exploration sites */}
           {EXPLORATION_SITES.map((site) => {
             const active =
               selectedLocation?.kind === "site" &&
@@ -580,6 +946,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
             );
           })}
 
+          {/* Saved locations */}
           {savedLocations.map((location) => {
             const active =
               selectedLocation?.kind === "saved" &&
@@ -614,6 +981,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
             );
           })}
 
+          {/* Custom selected coordinate */}
           {selectedLocation?.kind === "custom" && (
             <CircleMarker
               key={selectedLocation.key}
@@ -633,6 +1001,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
           )}
         </MapContainer>
 
+        {/* Map coordinate and zoom information */}
         <div className="pointer-events-none absolute bottom-4 left-4 z-[1040] hidden items-center gap-3 rounded-md border border-mx-border bg-mx-bg/90 px-3 py-1.5 backdrop-blur sm:left-6 md:flex">
           <span className="mx-mono text-[11px] text-mx-text">
             {formatCoordinates(
@@ -640,6 +1009,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
               selectedLocation?.longitude ?? focusCoordinates.longitude
             )}
           </span>
+
           <span className="mx-mono text-[10px] text-mx-dim">
             ZOOM L{mapZoom} · {layer.id.replace("mars_", "").toUpperCase()}
           </span>
@@ -647,9 +1017,34 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
 
         <MarsExplorerLocationPanel mode="map" />
 
+        {/* Map status messages */}
         <div className="mx-map-status">
           {layerLoading && (
             <p className="mx-chip">Loading map layer...</p>
+          )}
+
+          {boundaryLoading && (
+            <p className="mx-chip">
+              Loading all study-region boundaries...
+            </p>
+          )}
+
+          {geologyLoading && (
+            <p className="mx-chip">
+              Loading {selectedStudyRegionId} geology...
+            </p>
+          )}
+
+          {boundaryError && (
+            <p className="mx-chip whitespace-pre-line" role="alert">
+              {boundaryError}
+            </p>
+          )}
+
+          {geologyError && (
+            <p className="mx-chip" role="alert">
+              Geology: {geologyError}
+            </p>
           )}
 
           {layerError && (

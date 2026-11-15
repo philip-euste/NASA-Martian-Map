@@ -53,9 +53,9 @@ NASAMartianMap
     |   |   |   |── MarsMap.tsx
     |   |   |   └── RouteMap.tsx
     |   │   └── ui
-    |   |       └── index.tsx
+    |   |       └── index.tsx - Provides reusable UI components and formatting helpers across explorer and mission pages.
     |   ├── data
-    |   │   |── evidenceDatasets.ts 
+    |   │   |── evidenceDatasets.ts - Catalogs scientific datasets and surface imagery, with metadata, provenance, integration status, and legacy compatibility.
     |   │   |── mapLayers.ts 
     |   |   |── explorationSites.ts
     |   |   └── marsLocations.ts
@@ -95,41 +95,42 @@ NASAMartianMap
     |   │   │   └── ExplorerPage.tsx
     |   │   └── welcome
     |   |       |── Welcomeassets
-    |   │       |── WelcomePage.css
-    |   │       └── WelcomePage.tsx
+    |   │       |── WelcomePage.css - Styles the landing page hero, background imagery, typography, introductory text, and responsive layouts.
+    |   │       └── WelcomePage.tsx - Builds the landing page with exploration navigation, platform highlights, expedition workflow, and NASA dataset overview.
     |   ├── globe
-    |   │   ├── MarsGlobe.css
-    |   │   ├── MarsSurface.tsx
-    |   │   └── MarsGlobe.tsx
+    |   │   ├── MarsGlobe.css - Styles the Mars globe interface, including layer controls, location panels, navigation buttons, and responsive layouts.
+    |   │   |── MarsGlobe.tsx - Renders a textured 3D Mars globe with adaptive NASA tile streaming, caching, LOD, and coordinate selection.
+    |   │   └── MarsSurface.tsx - Renders a textured 3D Mars globe with adaptive NASA tile streaming, caching, LOD, and coordinate selection.
     |   ├── lib
-    |   │   └── supabase.ts
+    |   │   └── supabase.ts - Initializes Supabase authentication with environment-based configuration and an offline demo fallback.
     |   ├── mars_walking
-    |   │   ├── main.ts
-    |   │   └── style.css
+    |   │   ├── main.ts - Implements a Three.js Mars walking simulator with procedural terrain, chunk streaming, LOD, physics, and collision detection.
+    |   │   └── style.css - Defines global typography, colors, simulator layout, HUD elements, controls, and responsive styling.
     |   ├── services
     |   │   |── providers
-    |   │   |   ├── nasaTrek.ts 
-    |   │   |   ├── medaProvider.ts
-    |   │   |   ├── perserveranceImageryProvider.ts  
-    |   │   |   └── marsDem.ts
-    |   │   |── connectionStatus.ts 
-    |   │   └── dataProviders.ts 
+    |   │   |   ├── nasaTrek.ts - Retrieves and parses NASA WMTS layer metadata, configures tile URLs, and handles fallback caching.
+    |   │   |   ├── medaProvider.ts - Retrieves, validates, caches, and summarizes Perseverance MEDA environmental observations.
+    |   │   |   ├── perserveranceImageryProvider.ts  - Fetches, normalizes, filters, paginates, and caches Perseverance rover imagery from NASA APIs and local archives.
+    |   │   |   └── marsDem.ts - Retrieves Mars elevation data and terrain windows, with local Jezero CTX DEM fallback and caching.
+    |   │   |── connectionStatus.ts - Tracks network, backend, and NASA service connectivity with reactive status updates.
+    |   │   └── dataProviders.ts - Defines tile layer and data provider interfaces, registers NASA Trek, and exposes provider lookup functions.
     |   ├── simulator
     |   |       |── environments
-    |   │       |   ├── build-jezero.mjs
-    |   │       |   └── jezero-simulator.html
+    |   │       |   ├── catalog.ts - Registers simulator environments and resolves region-specific terrain configurations.
+    |   │       |   └── jezero.ts - Defines Jezero Crater’s coordinates, landmarks, terrain, atmosphere, hazards, and datasets.
     |   |       |── jezero_crater
     |   │       |   |── scripts
-    |   │       |   |   ├── build-jezero.mjs
-    |   │       |   |   └── jezero-simulator.html
+    |   │       |   |   ├── build-jezero.mjs - Downloads NASA/USGS Jezero terrain data and generates georeferenced 3D terrain tiles and textures.
+    |   │       |   |   └── jezero-simulator.html - 
     |   │       |   └── src
-    |   │       |       └── jezero_main.ts
+    |   │       |       └── jezero_main.ts - Initializes the Jezero Crater simulator using shared engine and environment configuration.
     |   |       └── shared
     |   │           ├── environment.ts
-    |   │           ├── HelmetHud.tsx
-    |   │           ├── navigation.ts
-    |   │           ├── projection.ts
-    |   │           └── surfaceEngine.ts
+    |   │           ├── HelmetHud.tsx - Renders the shared astronaut HUD with navigation, terrain, suit, and environmental telemetry.
+    |   │           ├── navigation.ts - Calculates camera field of view based on viewport aspect ratio.
+    |   │           ├── projection.ts - Calculates aspect-ratio-aware camera field of view for realistic first-person rendering.
+    |   │           ├── wmtsLayers.ts - Composites NASA WMTS tiles into a geographic canvas texture for 3D terrain layers.
+    |   │           └── surfaceEngine.ts - Manages 3D Mars terrain simulation, navigation, physics, beacons, and surface layers.
     |   ├── state\mission
     |   │   └── MissionContext.tsx - Manages mission state, session persistence, simulator events, telemetry, and scientific fieldwork records.
     |   ├── styles
