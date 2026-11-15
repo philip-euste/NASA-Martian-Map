@@ -15,9 +15,27 @@ export interface Region {
   description: string;
 }
 
+export * from "./region";
+import type { MarsRegion } from "./region";
+
 /* =========================================================
    SCIENTIFIC DATA AND EVIDENCE
    ========================================================= */
+
+export type GeographicCoverageScope =
+  | "GLOBAL"
+  | "REGIONAL"
+  | "LOCAL_INSITU"
+  | "UNKNOWN";
+
+export type DatasetOperationalStatus =
+  | "REGISTERED"
+  | "ACCESSIBLE"
+  | "DOWNLOADED"
+  | "VALIDATED"
+  | "INTEGRATED"
+  | "PLANNED"
+  | "UNAVAILABLE";
 
 export interface EvidenceProvenance {
   source: string;
@@ -42,6 +60,11 @@ export interface Dataset {
   measurementProvided?: string;
   spatialResolutionLabel?: string;
   geographicCoverage?: string;
+  coverageScope?: GeographicCoverageScope;
+  supportedRegionIds?: string[];
+  operationalStatus?: DatasetOperationalStatus[];
+  regionalCaveats?: Record<string, string>;
+  regionId?: string;
   temporalCoverage?: string;
   scientificPurpose?: string;
   suitability?: string;
@@ -80,6 +103,7 @@ export interface Observation {
   description?: string;
   provenance?: EvidenceProvenance;
   surfaceImage?: SurfaceImageAttachment;
+  regionId?: string;
 }
 
 export interface ScientificTarget {
@@ -88,6 +112,7 @@ export interface ScientificTarget {
   coordinates: Coordinates;
   description: string;
   observationIds: string[];
+  regionId?: string;
 }
 
 export interface KnowledgeGap {
@@ -189,10 +214,7 @@ export interface Route {
   returnRouteIncluded?: boolean;
   returnDistanceMeters?: number;
   estimatedDurationHours?: number;
-  measurementSource?:
-    | "HiRISE DEM + Spherical Geometry"
-    | "Jezero CTX DEM (Local) + Spherical Geometry"
-    | "Spherical Geometry (Orbital Estimate)";
+  measurementSource?: string;
 }
 
 /* =========================================================
@@ -278,7 +300,7 @@ export interface Mission {
   objective: string;
   question: string;
 
-  region: Region | null;
+  region: MarsRegion | Region | null;
   configuration: MissionConfiguration | null;
 
   selectedDatasets: Dataset[];

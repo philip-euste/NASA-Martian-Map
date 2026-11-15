@@ -7,13 +7,20 @@ import {
 } from "react";
 
 import {
+  CRISM_MTRDR_ARCHIVE_URL,
+  CRISM_REFERENCE_DATASET_ID,
+  CRISM_REFERENCE_LIMITATION,
+  CRISM_REFERENCE_METHOD,
+  CRISM_REFERENCE_SOURCE,
   EVIDENCE_DATASETS_BY_ID,
   resolveDatasetMetadata,
   toMissionDataset,
 } from "../../data/evidenceDatasets";
+import { getMarsRegionById } from "../../data/regions";
 import type {
   FieldNote,
   MarsEnvironmentConditions,
+  MarsRegion,
   Mission,
   Observation,
   Region,
@@ -41,7 +48,7 @@ interface MissionContextValue {
   updateMission: (updates: MissionUpdate) => void;
   updateSimulation: (updates: Partial<SimulationState>) => void;
   updateTemporal: (updates: Partial<TemporalState>) => void;
-  setRegion: (region: Region | null) => void;
+  setRegion: (region: MarsRegion | Region | null) => void;
   resetMission: () => void;
 }
 
@@ -146,6 +153,9 @@ function loadStoredMission(): Mission {
           const catalogEntry = ds?.id
             ? EVIDENCE_DATASETS_BY_ID[ds.id]
             : undefined;
+          if (catalogEntry?.id === CRISM_REFERENCE_DATASET_ID) {
+            return { ...toMissionDataset(catalogEntry), regionId: ds.regionId };
+          }
           return catalogEntry
             ? {
                 ...toMissionDataset(catalogEntry),
@@ -161,6 +171,25 @@ function loadStoredMission(): Mission {
     const migratedObservations = Array.isArray(parsed.selectedObservations)
       ? parsed.selectedObservations.map((obs) => {
           if (!obs || typeof obs !== "object") return obs;
+          if (
+            obs.datasetId === CRISM_REFERENCE_DATASET_ID &&
+            obs.source === "MRO CRISM Targeted Spectral Cube"
+          ) {
+            return {
+              ...obs,
+              source: CRISM_REFERENCE_SOURCE,
+              observationDate: obs.observationDate === "2021-04-15" ? undefined : obs.observationDate,
+              description: obs.description
+                ? `Unverified reference-profile notes — ${obs.description}`
+                : undefined,
+              provenance: {
+                source: CRISM_REFERENCE_SOURCE,
+                sourceUrl: CRISM_MTRDR_ARCHIVE_URL,
+                processingMethod: CRISM_REFERENCE_METHOD,
+                limitations: [CRISM_REFERENCE_LIMITATION],
+              },
+            };
+          }
           const dsMeta = resolveDatasetMetadata(obs.datasetId || "");
           return {
             ...obs,
@@ -175,9 +204,15 @@ function loadStoredMission(): Mission {
         })
       : fallback.selectedObservations;
 
+    const rawRegion = parsed.region as Region | undefined;
+    const migratedRegion = rawRegion?.id
+      ? (getMarsRegionById(rawRegion.id) ?? rawRegion)
+      : fallback.region;
+
     return {
       ...fallback,
       ...parsed,
+      region: migratedRegion,
       selectedDatasets: migratedDatasets,
       selectedObservations: migratedObservations,
       simulation: {
@@ -274,11 +309,16 @@ export function MissionProvider({
         const obsName = data.name.trim();
         if (!obsName) return;
         setMission((current) => {
+          const regionElevationDatasetId =
+            (current.region as any)?.elevationDatasets?.[0]?.id ??
+            (current.region?.id === "jezero-crater" ? "hirise_jezero_dtm" : "mola_global_128");
           const newObs: Observation = {
             id: `obs-${crypto.randomUUID()}`,
-            datasetId: "hirise_jezero_dtm",
+            datasetId: regionElevationDatasetId,
             name: obsName,
-            source: "Marswalk Surface EVA (Simulated In-Situ Observation)",
+            source: current.region
+              ? `Marswalk Surface EVA · ${current.region.name}`
+              : "Marswalk Surface EVA (Simulated In-Situ Observation)",
             coordinates: {
               latitude: Number(data.latitude) || current.region?.coordinates.latitude || 18.4447,
               longitude: Number(data.longitude) || current.region?.coordinates.longitude || 77.4508,
@@ -289,7 +329,7 @@ export function MissionProvider({
                 ? data.description.trim()
                 : "In-situ geological observation recorded during simulated Marswalk traverse.",
             provenance: {
-              source: "Simulated Astronaut EVA Fieldwork (CTX / HiRISE Reference DEM)",
+              source: `Simulated Astronaut EVA Fieldwork (${current.region?.name ?? "Surface"} Reference DEM)`,
               sourceId: "marswalk-eva",
               processingMethod: "Simulated visual and instrument inspection during surface traverse",
               limitations: [
@@ -417,8 +457,30 @@ export function MissionProvider({
     }));
   }
 
-  function setRegion(region: Region | null): void {
-    updateMission({ region });
+  function setRegion(region: MarsRegion | Region | null): void {
+    if (!region) {
+      updateMission({ region: null });
+      return;
+    }
+    const canonical = getMarsRegionById(region.id) ?? region;
+    setMission((current) => {
+      const isDifferentRegion = Boolean(
+        current.region && current.region.id !== canonical.id
+      );
+      return {
+        ...current,
+        region: canonical,
+        simulation: isDifferentRegion
+          ? {
+              ...current.simulation,
+              currentPosition: null,
+              distanceFromBaseMeters: 0,
+              totalTraverseMeters: 0,
+            }
+          : current.simulation,
+        updatedAt: new Date().toISOString(),
+      };
+    });
   }
 
   function resetMission(): void {

@@ -138,7 +138,7 @@ export const JEZERO_ENVIRONMENT: SimulatorEnvironmentConfig = {
     },
     {
       id: "mro_crism_jezero",
-      label: "MRO CRISM VNIR/SWIR Targeted Observations (FRT00005C5E / FRT0000B204)",
+      label: "MRO CRISM MTRDR Archive Reference (FRT00005C5E)",
       provenance: "empirical",
       source: "NASA PDS Geosciences Node",
     },

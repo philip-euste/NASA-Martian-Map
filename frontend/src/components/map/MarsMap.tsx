@@ -20,6 +20,7 @@ import {
   type TileMatrixLevel,
 } from "../../services/dataProviders";
 import { EXPLORATION_SITES, getSiteById } from "../../data/explorationSites";
+import { getMarsRegionById } from "../../data/regions";
 import type { Coordinates } from "../../types";
 import {
   loadCachedTileImage,
@@ -409,11 +410,27 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
     };
   }, [overlayLayerId]);
 
+  const currentRegion = getMarsRegionById(
+    selectedLocation?.site?.id ?? selectedLocation?.key
+  );
+  const activeGeologyDataPath =
+    currentRegion?.geologicalDatasets?.find(
+      (g) => g.status === "integrated_active" && g.format === "geojson"
+    )?.dataPath ??
+    (!selectedLocation ||
+    selectedLocation.site?.id === "jezero-crater" ||
+    currentRegion?.id === "jezero-crater"
+      ? "/data/jezero_geology_sim3464.geojson"
+      : null);
+
   const [geologyGeoJson, setGeologyGeoJson] = useState<any>(null);
   useEffect(() => {
-    if (!showGeologyOverlay) return;
+    if (!showGeologyOverlay || !activeGeologyDataPath) {
+      setGeologyGeoJson(null);
+      return;
+    }
     let cancelled = false;
-    fetch("/data/jezero_geology_sim3464.geojson")
+    fetch(activeGeologyDataPath)
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) setGeologyGeoJson(data);
@@ -424,7 +441,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
     return () => {
       cancelled = true;
     };
-  }, [showGeologyOverlay]);
+  }, [showGeologyOverlay, activeGeologyDataPath]);
 
   useEffect(() => {
     if (!focusSiteId) return;

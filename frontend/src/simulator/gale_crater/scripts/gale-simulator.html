@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#120b08" />
+    <title>Gale Crater (Mount Sharp) — Marswalk 3D Surface Simulation</title>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #120b08;
+        color: #f5e9df;
+        font-family: Inter, system-ui, -apple-system, sans-serif;
+      }
+
+      body > canvas {
+        position: fixed;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+      }
+
+      button {
+        border: 1px solid #45404a;
+        border-radius: 6px;
+        padding: 8px 14px;
+        background: #f47738;
+        color: #1a0f08;
+        font: inherit;
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 150ms ease, border-color 150ms ease;
+      }
+
+      button:hover:not(:disabled) {
+        background: #ff8b4f;
+      }
+
+      button.secondary {
+        background: rgba(28, 26, 30, 0.92);
+        color: #f3efea;
+        border-color: #45404a;
+      }
+
+      button.secondary:hover:not(:disabled) {
+        background: rgba(45, 41, 48, 0.96);
+        border-color: #a8a19a;
+      }
+
+      button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      #crosshair {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        width: 14px;
+        height: 14px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 4;
+        opacity: 0.65;
+      }
+
+      #crosshair::before,
+      #crosshair::after {
+        content: "";
+        position: absolute;
+        background: rgba(243, 239, 234, 0.85);
+      }
+
+      #crosshair::before {
+        left: 6px;
+        top: 2px;
+        width: 2px;
+        height: 10px;
+      }
+
+      #crosshair::after {
+        left: 2px;
+        top: 6px;
+        width: 10px;
+        height: 2px;
+      }
+
+      #overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 96px 24px 92px;
+        background: rgba(14, 12, 14, 0.56);
+        backdrop-filter: blur(6px);
+      }
+
+      .overlay-card {
+        width: min(440px, 100%);
+        max-height: 100%;
+        overflow-y: auto;
+        padding: 22px 24px;
+        border: 1px solid #45404a;
+        border-radius: 10px;
+        background: rgba(22, 20, 24, 0.95);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+      }
+
+      .eyebrow {
+        color: #f47738;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 8px 0;
+        font-size: 22px;
+        letter-spacing: -0.02em;
+      }
+
+      .description {
+        color: #b5aea6;
+        font-size: 12.5px;
+        line-height: 1.6;
+        margin: 0;
+      }
+
+      #loading {
+        margin: 14px 0;
+        color: #f47738;
+        font-size: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      #start {
+        width: 100%;
+        margin-top: 14px;
+        min-height: 40px;
+      }
+
+      .controls {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid #2e2a2f;
+        color: #a8a19a;
+        font-size: 11px;
+        line-height: 1.75;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 3px 12px;
+      }
+
+      #status {
+        position: fixed;
+        bottom: 46px;
+        left: 16px;
+        z-index: 5;
+        padding: 6px 10px;
+        border: 1px solid #2e2a2f;
+        border-radius: 6px;
+        background: rgba(20, 18, 21, 0.86);
+        color: #d8b48f;
+        font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+        pointer-events: none;
+      }
+
+      #hud {
+        position: fixed;
+        bottom: 12px;
+        left: 16px;
+        z-index: 5;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        max-width: calc(100% - 32px);
+        padding: 8px 12px;
+        border: 1px solid #2e2a2f;
+        border-radius: 6px;
+        background: rgba(20, 18, 21, 0.88);
+        color: #f3efea;
+        font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+        pointer-events: none;
+      }
+
+      #proximity-prompt {
+        position: fixed;
+        bottom: 112px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 6;
+        padding: 9px 16px;
+        border: 1px solid #f47738;
+        border-radius: 999px;
+        background: rgba(16, 14, 17, 0.92);
+        color: #f3efea;
+        font-size: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+        text-align: center;
+        backdrop-filter: blur(8px);
+      }
+
+      /* When hosted inside MarswalkPage.tsx, the parent Helmet HUD renders all telemetry & proximity cards */
+      body.hosted-visor #status,
+      body.hosted-visor #hud,
+      body.hosted-visor #open-map,
+      body.hosted-visor #credit,
+      body.hosted-visor #proximity-prompt {
+        display: none !important;
+      }
+
+      #open-map {
+        position: fixed;
+        bottom: 12px;
+        right: 16px;
+        z-index: 5;
+        padding: 7px 12px;
+        font-size: 11px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      #credit {
+        position: fixed;
+        right: 16px;
+        bottom: 50px;
+        z-index: 4;
+        max-width: 40%;
+        color: rgba(216, 180, 143, 0.7);
+        font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+        text-align: right;
+        pointer-events: none;
+      }
+
+      #map-panel {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: rgba(10, 9, 11, 0.78);
+        backdrop-filter: blur(8px);
+      }
+
+      .map-modal-card {
+        width: min(95vw, 1080px);
+        height: min(88vh, 780px);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 16px 18px;
+        border: 1px solid #45404a;
+        border-radius: 12px;
+        background: rgba(20, 18, 22, 0.97);
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+        overflow: hidden;
+      }
+
+      .map-heading {
+        flex-shrink: 0;
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .map-toolbar {
+        flex-shrink: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 10px;
+        border: 1px solid #2e2a2f;
+        border-radius: 8px;
+        background: rgba(14, 12, 15, 0.88);
+        font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .map-zoom-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .map-zoom-controls button {
+        padding: 5px 10px;
+        font-size: 11px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .map-legend {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        color: #c8c1b8;
+        font-size: 11px;
+      }
+
+      .legend-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 5px;
+      }
+
+      .map-canvas-wrap {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+        overflow: hidden;
+        border: 1px solid #45404a;
+        border-radius: 8px;
+        background: #16110e;
+      }
+
+      #map-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: crosshair;
+      }
+
+      .map-footer {
+        flex-shrink: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      #map-info {
+        color: #d8b48f;
+        font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .map-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      @media (max-width: 600px) {
+        #hud {
+          bottom: 10px;
+          left: 10px;
+          font-size: 9.5px;
+        }
+
+        #credit {
+          display: none;
+        }
+
+        .overlay-card {
+          padding: 18px;
+        }
+
+        .map-modal-card {
+          width: 96vw;
+          height: 90vh;
+          padding: 12px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="crosshair"></div>
+    <div id="status">Preparing Gale Crater (Mount Sharp) terrain...</div>
+
+    <div id="proximity-prompt" class="hidden"></div>
+
+    <div id="hud">
+      <span id="hud-pos">POSITION --</span>
+      <span id="hud-slope">SLOPE 0.0°</span>
+      <span id="hud-base">BASE 0 m</span>
+      <span id="hud-tiles">TILES --</span>
+      <span id="hud-mode">MARS 0.38G WALK</span>
+    </div>
+
+    <button id="open-map" class="secondary" type="button">Terrain Map [M]</button>
+
+    <div id="credit"></div>
+
+    <div id="overlay">
+      <div class="overlay-card">
+        <div class="eyebrow">MARS EXPLORER · MARSWALK 3D SURFACE EVA</div>
+        <h1>Gale Crater (Mount Sharp) Surface</h1>
+
+        <p class="description">
+          Walk the authentic NASA PDS MGS MOLA 128 ppd digital elevation model of Gale Crater under Martian partial gravity (0.38g · 3.71 m/s²). Explore Mount Sharp (Aeolis Mons), Yellowknife Bay, and Vera Rubin Ridge.
+        </p>
+
+        <div id="loading">Loading NASA DEM terrain tiles...</div>
+
+        <button id="start" type="button" disabled>
+          Engage Pointer Lock &amp; Walk Surface
+        </button>
+
+        <div class="controls">
+          <span><strong>WASD / Arrows</strong> — Walk</span>
+          <span><strong>Mouse</strong> — Look around</span>
+          <span><strong>Shift</strong> — EVA Stride</span>
+          <span><strong>Space</strong> — 0.38g Hop</span>
+          <span><strong>E</strong> — Fieldwork at Target</span>
+          <span><strong>R</strong> — Return to Habitat Base</span>
+          <span><strong>M</strong> — Terrain Map / Teleport</span>
+          <span><strong>F</strong> — Toggle Recon Flight</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="map-panel" class="hidden" role="dialog" aria-modal="true" aria-label="Gale Crater (Mount Sharp) — Marswalk 3D Surface Simulation Navigation and Target Map">
+      <div class="map-modal-card">
+        <div class="map-heading">
+          <div>
+            <div class="eyebrow">GALE CRATER DEM · INTERACTIVE TACTICAL MAP [M]</div>
+            <strong style="font-size: 15px;">Surface Navigation, Route &amp; Target Map</strong>
+          </div>
+
+          <div class="map-actions">
+            <button id="map-go" type="button" disabled>Deploy / Teleport to Selection</button>
+            <button id="map-close" class="secondary" type="button">Close Map [M]</button>
+          </div>
+        </div>
+
+        <div class="map-toolbar">
+          <div class="map-zoom-controls">
+            <button id="map-zoom-out" class="secondary" type="button" title="Zoom out">−</button>
+            <span id="map-zoom-label" style="min-width: 48px; text-align: center; color: #f3efea;">1.0×</span>
+            <button id="map-zoom-in" class="secondary" type="button" title="Zoom in">+</button>
+            <button id="map-zoom-reset" class="secondary" type="button" title="Reset zoom and pan">Reset 1:1</button>
+            <button id="map-center-player" class="secondary" type="button" title="Center map on astronaut">Center on Astronaut</button>
+          </div>
+
+          <div class="map-legend">
+            <span><i class="legend-dot" style="background: #ffd36b;"></i>Astronaut &amp; Heading</span>
+            <span><i class="legend-dot" style="background: #38bdf8;"></i>Habitat Base</span>
+            <span><i class="legend-dot" style="background: #f47738;"></i>Target / Waypoint</span>
+            <span><i class="legend-dot" style="background: #10b981;"></i>Visited</span>
+          </div>
+        </div>
+
+        <div class="map-canvas-wrap">
+          <canvas id="map-canvas"></canvas>
+        </div>
+
+        <div class="map-footer">
+          <div id="map-info">
+            Scroll wheel to zoom · Drag to pan · Click any location or target beacon to inspect &amp; teleport.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script
+      type="module"
+      src="/src/simulator/gale_crater/src/gale_main.ts"
+    ></script>
+  </body>
+</html>

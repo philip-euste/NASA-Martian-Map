@@ -16,12 +16,20 @@
 //    Organizes verified surface photographs captured by Mars surface missions
 //    (e.g., Perseverance Mastcam-Z, Navcam, SuperCam RMI).
 
-import type { Dataset } from "../types";
+import type {
+  Dataset,
+  DatasetOperationalStatus,
+  GeographicCoverageScope,
+  MarsRegion,
+} from "../types";
+import { MARS_REGIONS } from "./regions";
 import {
   MAP_LAYERS,
   type MapLayerCategory,
   type MapLayerId,
 } from "./mapLayers";
+
+export type { DatasetOperationalStatus, GeographicCoverageScope };
 
 export type CatalogRole =
   | "map_layer"
@@ -38,7 +46,8 @@ export type EvidenceDatasetCategory =
 export type EvidenceSuitability =
   | "Direct Quantitative Analysis"
   | "Contextual & Hazard Analysis"
-  | "Regional Context Only (Coarse Resolution)";
+  | "Regional Context Only (Coarse Resolution)"
+  | "Reference Only (Unverified Provenance)";
 
 export type DatasetIntegrationStatus =
   | "integrated_active"
@@ -66,6 +75,36 @@ export const INTEGRATION_STATUS_LABELS: Record<
     "Verified Reference Only (Interactive Data Not Yet Integrated)",
 };
 
+export const COVERAGE_SCOPE_LABELS: Record<GeographicCoverageScope, string> = {
+  GLOBAL: "Global Planetary Coverage",
+  REGIONAL: "Regional Coverage",
+  LOCAL_INSITU: "Local / In-Situ Footprint",
+  UNKNOWN: "Unknown Coverage Extent",
+};
+
+export const OPERATIONAL_STATUS_LABELS: Record<DatasetOperationalStatus, string> = {
+  REGISTERED: "Registered in Catalog",
+  ACCESSIBLE: "PDS / Archive Accessible",
+  DOWNLOADED: "Local Asset Cached",
+  VALIDATED: "Calibrated & Validated",
+  INTEGRATED: "Integrated in Application",
+  PLANNED: "Planned for Future Integration",
+  UNAVAILABLE: "Unavailable / Reference Only",
+};
+
+const TES_MINERAL_DUST_LIMITATION =
+  "Surface dust can weaken bedrock features in TES thermal-infrared spectra. Treat weak or missing mineral signatures in dusty areas as inconclusive (Bandfield, 2002; Ruff & Christensen, 2002; Rogers & Christensen, 2007).";
+
+export const CRISM_REFERENCE_DATASET_ID = "crism_jezero_vnir";
+export const CRISM_MTRDR_BUNDLE_ID = "urn:nasa:pds:mro_crism_mtrdr";
+export const CRISM_MTRDR_ARCHIVE_URL =
+  "https://pds.nasa.gov/ds-view/pds/viewBundle.jsp?identifier=urn%3Anasa%3Apds%3Amro_crism_mtrdr";
+export const CRISM_REFERENCE_SOURCE = "Bundled CRISM reference profile (unverified extraction)";
+export const CRISM_REFERENCE_LIMITATION =
+  "NASA PDS provides the full CRISM MTRDR products. This app displays three bundled reference spectral profiles with unverified extraction provenance.";
+export const CRISM_REFERENCE_METHOD =
+  "Plots bundled wavelength–reflectance pairs and displays preset band parameters.";
+
 export interface EvidenceDatasetEntry {
   /** Stable dataset identifier used in Mission state and Observation records. */
   id: string;
@@ -91,6 +130,24 @@ export interface EvidenceDatasetEntry {
   resolutionMeters?: number;
   /** Geographic coverage extent on Mars. */
   geographicCoverage: string;
+  /** Structured geographic coverage scope. */
+  coverageScope: GeographicCoverageScope;
+  /** Specific region IDs this dataset applies to (if regional/local). Omitted for global. */
+  supportedRegionIds?: readonly string[];
+  /** Geographic bounding box for local/regional products (planetocentric degrees). */
+  geographicBounds?: {
+    minLat: number;
+    maxLat: number;
+    minLon: number;
+    maxLon: number;
+  };
+  /** Latitude boundary constraints for global/latitudinal products (e.g. ±60° for TES). */
+  latitudeLimits?: {
+    minLat: number;
+    maxLat: number;
+  };
+  /** Explicit operational status tracking across lifecycle stages. */
+  operationalStatus: readonly DatasetOperationalStatus[];
   /** Mission acquisition / temporal coverage window. */
   temporalCoverage: string;
   /** Appropriate scientific and operational uses in an investigation. */
@@ -99,6 +156,8 @@ export interface EvidenceDatasetEntry {
   suitability: EvidenceSuitability;
   /** Known instrumental, spatial, or environmental limitations. */
   limitations: string[];
+  /** Region-specific operational or interpretive cautions (keyed by region ID). */
+  regionalCaveats?: Record<string, string>;
   /** Authoritative NASA PDS / USGS / ESA PSA / Mars Trek archive reference. */
   sourceReference: string;
   /** Verified product or logical identifier in NASA PDS / Mars Trek / USGS. */
@@ -200,6 +259,10 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     resolutionMeters: 1,
     geographicCoverage:
       "Regional · Jezero Crater Stereo Strip (17.95°N–18.90°N, 76.95°E–78.05°E)",
+    coverageScope: "REGIONAL",
+    supportedRegionIds: ["jezero-crater"],
+    geographicBounds: { minLat: 17.95, maxLat: 18.90, minLon: 76.95, maxLon: 78.05 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "2006–Present (MRO Primary & Extended Science Phases)",
     scientificPurpose:
       "Measure delta scarp relief, stratigraphic bed elevations, dip angles, and astronaut traverse slope hazards.",
@@ -207,6 +270,7 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     limitations: [
       "Provides terrain elevation and slope geometry only; cannot identify mineral composition or phyllosilicates.",
       "Spatial coverage is restricted to the controlled Jezero stereo pair footprint; sub-meter cobbles (<1 m) are below post spacing.",
+      "Application data access: Quantitative spot elevation query via remote backend HiRISE DEM service (/api/dem/elevation), with local fallback to the verified 20 m CTX DEM. Multi-gigabyte raw DTM raster is not stored on local client disk.",
     ],
     sourceReference:
       "USGS Astrogeology Science Center / NASA PDS Cartography and Imaging Sciences Node",
@@ -230,6 +294,10 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     resolutionMeters: 20,
     geographicCoverage:
       "Regional · Jezero Crater Basin & Western Delta (17.58°N–19.29°N, 76.99°E–78.49°E)",
+    coverageScope: "REGIONAL",
+    supportedRegionIds: ["jezero-crater"],
+    geographicBounds: { minLat: 17.58, maxLat: 19.29, minLon: 76.99, maxLon: 78.49 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "DOWNLOADED", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "2006–2021 (USGS / NASA-JPL Mars 2020 Science Investigation Maps)",
     scientificPurpose:
       "Provide continuous regional elevation profiles, crater-rim-to-floor relief, Marswalk 3D terrain mesh heights, and local fallback elevation sampling.",
@@ -237,6 +305,7 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     limitations: [
       "Measures regional topography at 20 m post spacing; does not measure mineralogical composition.",
       "Steep meter-scale scarps and individual boulders are smoothed across 20 m posts.",
+      "Application data access: Verified local DEM raster dataset stored in /jezero/manifest.json, /jezero/overview.u16, and /jezero/height/*.u16. Powers Marswalk 3D terrain mesh and local elevation sampling.",
     ],
     sourceReference:
       "USGS Astrogeology / NASA-JPL Mars 2020 Science Investigation CTX DEM (Calef, 2021; Mangold et al., 2021)",
@@ -260,13 +329,17 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     spatialResolutionLabel: "~30 km/pixel (0.5° global grid)",
     resolutionMeters: 30000,
     geographicCoverage: "Global (90°S–90°N, 180°W–180°E)",
+    coverageScope: "GLOBAL",
+    latitudeLimits: { minLat: -90, maxLat: 90 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "1997–2001 (MGS Mapping Mission)",
     scientificPurpose:
       "Broad regional characterization of physiographic provinces (smooth basin plains vs. heavily fractured highland terrain).",
     suitability: "Regional Context Only (Coarse Resolution)",
     limitations: [
-      "Coarse ~30 km grid resolution cannot resolve local crater rims, delta scarps, or meter-scale boulder hazards relevant to astronaut footing.",
-      "Should be used only for regional geomorphic context, never as proof of local traverse safety.",
+      "CRITICAL RESOLUTION LIMITATION: Kilometer-scale statistical surface roughness derived from 1064 nm laser pulse spreading; NOT a high-resolution elevation DEM. Cannot resolve local crater rims, delta scarps, or meter-scale boulder hazards relevant to astronaut footing.",
+      "Should be used only for broad regional geomorphic context, never as proof of local traverse safety or meter-scale surface texture.",
+      "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'mola_roughness') and structured mission evidence citation source. Does not provide interactive numeric roughness sampling in this application.",
     ],
     sourceReference:
       "NASA PDS Geosciences Node / NASA Mars Trek WMTS (Neumann et al., 2003)",
@@ -294,6 +367,10 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     resolutionMeters: 0.25,
     geographicCoverage:
       "Regional · Jezero Crater Landing Ellipse & Western Delta",
+    coverageScope: "REGIONAL",
+    supportedRegionIds: ["jezero-crater"],
+    geographicBounds: { minLat: 18.25, maxLat: 18.60, minLon: 77.25, maxLon: 77.65 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "2006–Present (MRO Orbital Archive)",
     scientificPurpose:
       "Identify fine-scale sedimentary stratification, truncated deltaic foreset/topset beds, polygonal fracturing, and boulder distributions.",
@@ -301,6 +378,7 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     limitations: [
       "Provides visible surface morphology and stratigraphic geometry only; does not directly measure mineralogical composition or hydration state.",
       "Surface dust veneers can mute visual contrast between distinct lithological units.",
+      "Application data access: High-resolution visual orthomosaic served via remote NASA Mars Trek WMTS tile service (JEZ_hirise_soc_006). High-resolution image tiles are streamed on demand and not pre-downloaded to local client disk.",
     ],
     sourceReference: "NASA Mars Trek / USGS Astrogeology / MRO HiRISE Team",
     pdsProductId: "JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd",
@@ -323,12 +401,17 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     resolutionMeters: 5,
     geographicCoverage:
       "Regional · Jezero Crater Basin & Inlet Channels (17.58°N–19.29°N, 76.99°E–78.49°E)",
+    coverageScope: "REGIONAL",
+    supportedRegionIds: ["jezero-crater"],
+    geographicBounds: { minLat: 17.58, maxLat: 19.29, minLon: 76.99, maxLon: 78.49 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "DOWNLOADED", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "2006–2021 (USGS / NASA-JPL Mars 2020 Science Investigation Maps)",
     scientificPurpose:
       "Support regional geological and geomorphological context, trace ancient fluvial feeder channels into the western delta, and map contact boundaries.",
     suitability: "Contextual & Hazard Analysis",
     limitations: [
       "Panchromatic visible imagery (5 m/pixel) supports regional geological and geomorphological context only; it cannot identify phyllosilicate mineralogy or sub-meter sedimentary laminations.",
+      "Application data access: Verified local texture tiles stored in /jezero/overview.jpg and /jezero/tex/*.jpg. Powers Marswalk 3D surface visual textures.",
     ],
     sourceReference:
       "USGS Astrogeology / NASA-JPL Mars 2020 Science Investigation CTX Orthomosaic (Calef, 2021; Mangold et al., 2021)",
@@ -356,6 +439,9 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     spatialResolutionLabel: "100 m/pixel",
     resolutionMeters: 100,
     geographicCoverage: "Global (90°S–90°N, 180°W–180°E)",
+    coverageScope: "GLOBAL",
+    latitudeLimits: { minLat: -90, maxLat: 90 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "2002–Present (2001 Mars Odyssey)",
     scientificPurpose:
       "Distinguish competent, high-thermal-inertia bedrock outcrops (warm at night) from unconsolidated sand traps and thick dust mantles (cool at night).",
@@ -363,6 +449,7 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     limitations: [
       "Describes thermal surface properties (physical induration, grain size, and rock abundance), NOT direct proof of phyllosilicates or specific mineral chemistry.",
       "At 100 m/pixel, sub-hectometer bedrock exposures are thermally averaged with surrounding regolith.",
+      "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'themis_night') and structured mission evidence citation source. Does not provide interactive numeric temperature/inertia point-sampling in this application.",
     ],
     sourceReference:
       "ASU Mars Space Flight Facility / NASA PDS / Mars Trek (Christensen et al.)",
@@ -386,6 +473,9 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     spatialResolutionLabel: "100 m/pixel",
     resolutionMeters: 100,
     geographicCoverage: "Global (90°S–90°N, 180°W–180°E)",
+    coverageScope: "GLOBAL",
+    latitudeLimits: { minLat: -90, maxLat: 90 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "2002–Present (2001 Mars Odyssey)",
     scientificPurpose:
       "Examine regional geomorphology, channel continuity, crater ejecta blankets, and paired day/night thermal anomalies.",
@@ -393,6 +483,7 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     limitations: [
       "Daytime infrared radiance is dominated by sun-facing topographic slope heating rather than intrinsic rock consolidation or mineral composition.",
       "Requires pairing with Nighttime IR or DTM slope data to separate topography from material properties.",
+      "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'themis_day') and structured mission evidence citation source. Does not provide interactive numeric radiance point-sampling in this application.",
     ],
     sourceReference:
       "ASU Mars Space Flight Facility / NASA PDS / Mars Trek (Christensen et al.)",
@@ -416,6 +507,9 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     spatialResolutionLabel: "~3 km/pixel (20 pixels/degree)",
     resolutionMeters: 3000,
     geographicCoverage: "Global (90°S–90°N, 180°W–180°E)",
+    coverageScope: "GLOBAL",
+    latitudeLimits: { minLat: -90, maxLat: 90 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "1999–2006 (MGS Mapping Mission)",
     scientificPurpose:
       "Assess regional sediment consolidation (fine dust vs. indurated duricrust vs. coarse sand/bedrock).",
@@ -423,6 +517,7 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     limitations: [
       "Measures physical heat capacity and particle consolidation, NOT mineralogical proof of phyllosilicates.",
       "Coarse ~3 km pixel footprint averages bedrock scarps, boulder fields, and aeolian dunes into a single bulk value.",
+      "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'tes_thermal') and structured mission evidence citation source. Interactive numeric thermal inertia point-sampling is not provided in this application.",
     ],
     sourceReference:
       "NASA PDS Geosciences Node / Mars Trek (Mellon et al., 2000; Putzig & Mellon, 2007)",
@@ -446,6 +541,9 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     spatialResolutionLabel: "~7.4 km/pixel (8 pixels/degree)",
     resolutionMeters: 7410,
     geographicCoverage: "Global (90°S–90°N, 180°W–180°E)",
+    coverageScope: "GLOBAL",
+    latitudeLimits: { minLat: -90, maxLat: 90 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "1999–2006 (MGS Mapping Mission)",
     scientificPurpose:
       "Differentiate bright ferric dust-mantled regions from dark, wind-swept basaltic sand and bedrock.",
@@ -453,6 +551,7 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     limitations: [
       "Broadband reflectance scalar only; contains no diagnostic absorption bands for mineral identification.",
       "Subject to temporal shifts following regional or global dust storms.",
+      "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'tes_albedo') and structured mission evidence citation source. Interactive numeric albedo point-sampling is not provided in this application.",
     ],
     sourceReference:
       "NASA PDS Geosciences Node / Mars Trek (Christensen et al., 2001)",
@@ -479,15 +578,23 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
       "Modeled areal abundance fraction of high-silica / sheet-silicate spectral endmembers from 6–50 µm thermal emissivity.",
     spatialResolutionLabel: "~3–8 km/pixel (8–20 pixels/degree)",
     resolutionMeters: 3000,
-    geographicCoverage: "Global (60°S–60°N, low-dust surfaces)",
+    geographicCoverage: "Global map extent · app filters to 60°S–60°N · usable retrievals vary",
+    coverageScope: "GLOBAL",
+    latitudeLimits: { minLat: -60, maxLat: 60 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "1999–2006 (MGS Mapping Mission)",
     scientificPurpose:
       "Provide broad regional context for high-silica crustal provinces and weathered basaltic surfaces.",
     suitability: "Regional Context Only (Coarse Resolution)",
     limitations: [
       "CRITICAL SCIENTIFIC LIMITATION: Thermal infrared deconvolution at ~3–8 km/px cannot uniquely distinguish hydrated phyllosilicate clays (e.g., Fe/Mg smectite) from primary high-silica volcanic glass or amorphous silica coatings.",
+      TES_MINERAL_DUST_LIMITATION,
       "A single ~3 km TES pixel spans nearly the entire western Jezero delta; this dataset CANNOT independently prove fine-grained lacustrine clay strata and must be supplemented by targeted VNIR spectroscopy (CRISM) or in-situ contact instruments.",
+      "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'tes_glass_clay') and structured mission evidence citation source. Interactive numeric deconvolution point-sampling is not provided in this application.",
     ],
+    regionalCaveats: {
+      "olympus-mons": TES_MINERAL_DUST_LIMITATION,
+    },
     sourceReference:
       "NASA PDS Geosciences Node / Mars Trek (Bandfield et al., 2000; Rogers & Christensen, 2007)",
     pdsProductId: "TES_Glass_Clay",
@@ -509,15 +616,23 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
       "Modeled areal abundance fraction of clinopyroxene in dust-free mafic surfaces.",
     spatialResolutionLabel: "~3–8 km/pixel",
     resolutionMeters: 3000,
-    geographicCoverage: "Global (60°S–60°N, low-dust surfaces)",
+    geographicCoverage: "Global map extent · app filters to 60°S–60°N · usable retrievals vary",
+    coverageScope: "GLOBAL",
+    latitudeLimits: { minLat: -60, maxLat: 60 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "1999–2006 (MGS Mapping Mission)",
     scientificPurpose:
       "Characterize regional mafic igneous crust and volcanic floor units surrounding impact basins.",
     suitability: "Regional Context Only (Coarse Resolution)",
     limitations: [
       "Coarse ~3–8 km spatial resolution cannot resolve individual crater-floor outcrops or thin sedimentary beds.",
-      "Spectral deconvolution is unreliable where the Surface Dust Cover Index (DCI) is high.",
+      TES_MINERAL_DUST_LIMITATION,
+      "Under the Dust Cover Index (DCI) convention of Ruff & Christensen (2002), lower values generally indicate dustier surfaces.",
+      "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'tes_clinopyroxene') and structured mission evidence citation source. Interactive numeric mineral abundance point-sampling is not provided in this application.",
     ],
+    regionalCaveats: {
+      "olympus-mons": TES_MINERAL_DUST_LIMITATION,
+    },
     sourceReference:
       "NASA PDS Geosciences Node / Mars Trek (Bandfield, 2002; Christensen et al.)",
     pdsProductId: "TES_Clinopyroxene",
@@ -539,15 +654,22 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
       "Modeled areal abundance fraction of plagioclase feldspar from thermal infrared emissivity spectra.",
     spatialResolutionLabel: "~3–8 km/pixel",
     resolutionMeters: 3000,
-    geographicCoverage: "Global (60°S–60°N, low-dust surfaces)",
+    geographicCoverage: "Near-global map extent · app filters to 60°S–60°N · usable retrievals vary",
+    coverageScope: "GLOBAL",
+    latitudeLimits: { minLat: -60, maxLat: 60 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "1999–2006 (MGS Mapping Mission)",
     scientificPurpose:
       "Evaluate regional feldspathic crustal composition and primary igneous petrology.",
     suitability: "Regional Context Only (Coarse Resolution)",
     limitations: [
       "Coarse ~3–8 km spatial resolution cannot isolate outcrop-scale sedimentary strata or detrital mineral grains.",
-      "Masked in regions with moderate-to-thick ferric dust coatings.",
+      TES_MINERAL_DUST_LIMITATION,
+      "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'tes_plagioclase') and structured mission evidence citation source. Interactive numeric mineral abundance point-sampling is not provided in this application.",
     ],
+    regionalCaveats: {
+      "olympus-mons": TES_MINERAL_DUST_LIMITATION,
+    },
     sourceReference:
       "NASA PDS Geosciences Node / Mars Trek (Bandfield, 2002; Rogers & Christensen, 2007)",
     pdsProductId: "TES_Plagioclase",
@@ -556,35 +678,35 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     integrationStatusLabel: INTEGRATION_STATUS_LABELS.integrated_active,
   },
   {
-    id: "crism_jezero_vnir",
-    name: "CRISM Targeted VNIR Spectral Observations (Jezero Delta)",
+    id: CRISM_REFERENCE_DATASET_ID,
+    name: "CRISM VNIR Reference Profiles (Jezero)",
     instrument: "CRISM (Compact Reconnaissance Imaging Spectrometer for Mars)",
     mission: "Mars Reconnaissance Orbiter (MRO)",
     category: "composition",
     mapCategory: "composition",
-    description:
-      "Targeted visible and near-infrared (0.36–3.92 µm) imaging spectroscopy resolving diagnostic vibrational absorption bands of hydrated phyllosilicates (smectite) and carbonates in Jezero Crater.",
-    measurementProvided:
-      "VNIR spectral reflectance (I/F) across 544 channels detecting 1.4 µm OH, 1.9 µm H₂O, 2.296 µm Fe/Mg-OH (smectite clay), and 2.30 / 2.51 µm Mg-carbonate overtones.",
-    spatialResolutionLabel: "18–36 m/pixel (Targeted Full/Half Resolution)",
-    resolutionMeters: 18,
+    description: CRISM_REFERENCE_LIMITATION,
+    measurementProvided: "Preset wavelength–reflectance pairs and band parameters for reference.",
+    spatialResolutionLabel: "Bundled profiles · extraction footprint unverified",
     geographicCoverage:
-      "Targeted Footprints · Jezero Western Delta & Margin (FRT00005C5E, HRL000040FF, FRT0000B204)",
-    temporalCoverage: "2006–2023 (MRO CRISM Science Operations)",
+      "Jezero reference locations · extraction footprints unverified",
+    coverageScope: "LOCAL_INSITU",
+    supportedRegionIds: ["jezero-crater"],
+    geographicBounds: { minLat: 18.35, maxLat: 18.55, minLon: 77.30, maxLon: 77.55 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "INTEGRATED"],
+    temporalCoverage: "2006–2012 (NASA PDS MTRDR archive)",
     scientificPurpose:
-      "Support mineralogical investigation of Fe/Mg-smectite phyllosilicates in bottomset/foreset delta beds vs. Mg-carbonate and olivine margin units.",
-    suitability: "Direct Quantitative Analysis",
+      "Illustrate spectral features discussed in Jezero mineralogy studies and provide a reference to the NASA PDS archive.",
+    suitability: "Reference Only (Unverified Provenance)",
     limitations: [
-      "INTEGRATION STATUS: Active interactive spectral inspection integrated (MRO CRISM MTRDR cubes FRT00005C5E, HRL000040FF, FRT0000B204).",
-      "Even at 18 m/pixel, orbital VNIR spectroscopy cannot determine whether Jezero delta phyllosilicates formed authigenically in situ or were transported as detrital grains from the Nili Fossae watershed, nor can it resolve millimeter-scale laminations.",
-      "Definitive confirmation of sustained standing water vs. episodic flooding requires in-situ textural/isotopic contact analysis (Perseverance or EVA sampling).",
+      CRISM_REFERENCE_LIMITATION,
+      "The plotted values and preset band parameters are for reference. Quantitative interpretation requires traceable measurements from the archive.",
     ],
     sourceReference:
-      "NASA PDS Geosciences Node (urn:nasa:pds:crism_mtrdr; Ehlmann et al., 2008; Goudge et al., 2015; Horgan et al., 2020)",
-    pdsProductId: "urn:nasa:pds:crism_mtrdr",
+      "NASA PDS Geosciences Node (archive); Ehlmann et al. (2008), Goudge et al. (2015), Horgan et al. (2020) (Jezero scientific context)",
+    pdsProductId: CRISM_MTRDR_BUNDLE_ID,
     available: true,
     integrationStatus: "integrated_active",
-    integrationStatusLabel: INTEGRATION_STATUS_LABELS.integrated_active,
+    integrationStatusLabel: "Bundled Reference Profiles · Unverified Extraction",
   },
   {
     id: "omega_vnir_regional",
@@ -601,6 +723,9 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     resolutionMeters: 1000,
     geographicCoverage:
       "Regional Swaths · Nili Fossae, Syrtis Major & Circum-Isidis Highlands",
+    coverageScope: "REGIONAL",
+    supportedRegionIds: ["jezero-crater"],
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "UNAVAILABLE"],
     temporalCoverage: "2004–Present (ESA Mars Express)",
     scientificPurpose:
       "Provide broader watershed-scale spectral context for hydrated silicate provinces feeding into the Jezero Crater basin.",
@@ -636,6 +761,9 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     spatialResolutionLabel: "~3 km/pixel",
     resolutionMeters: 3000,
     geographicCoverage: "Global (90°S–90°N, 180°W–180°E)",
+    coverageScope: "GLOBAL",
+    latitudeLimits: { minLat: -90, maxLat: 90 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "1999–2006 (MGS Mapping Mission)",
     scientificPurpose:
       "Determine whether orbital thermal/spectral measurements in a study region are obscured by surface dust coatings, and assess dust adhesion hazards.",
@@ -643,6 +771,7 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     limitations: [
       "Measures micron-scale surface dust coatings across ~3 km footprints; does not measure bedrock composition.",
       "High dust cover masks underlying mineral signatures in both VNIR and TIR orbital datasets.",
+      "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'tes_ruffdust') and structured mission evidence citation source. Interactive numeric dust cover point-sampling is not provided in this application.",
     ],
     sourceReference:
       "NASA PDS Geosciences Node / Mars Trek (Ruff & Christensen, 2002)",
@@ -666,12 +795,16 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     spatialResolutionLabel: "~30–60 km/pixel",
     resolutionMeters: 30000,
     geographicCoverage: "Global (90°S–90°N, 180°W–180°E)",
+    coverageScope: "GLOBAL",
+    latitudeLimits: { minLat: -90, maxLat: 90 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "VALIDATED", "INTEGRATED"],
     temporalCoverage: "1999–2006 (MGS Mapping Mission)",
     scientificPurpose:
       "Assess regional atmospheric dust loading, solar power attenuation, and orbital observation clarity.",
     suitability: "Regional Context Only (Coarse Resolution)",
     limitations: [
       "Historical orbital climatology; does not provide real-time local surface wind or visibility without in-situ station telemetry.",
+      "Application data access: Integrated as a global visual map overlay (NASA Mars Trek WMTS layer 'tes_dust') and structured mission evidence citation source. Interactive numeric optical depth point-sampling is not provided in this application.",
     ],
     sourceReference:
       "NASA PDS Atmospheres Node / Mars Trek (Smith, 2004)",
@@ -695,6 +828,10 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     resolutionMeters: 1,
     geographicCoverage:
       "Local · Jezero Crater Floor (Octavia E. Butler Landing Site, ~2.2 km SE of Western Delta Front)",
+    coverageScope: "LOCAL_INSITU",
+    supportedRegionIds: ["jezero-crater"],
+    geographicBounds: { minLat: 18.44, maxLat: 18.45, minLon: 77.44, maxLon: 77.46 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "DOWNLOADED", "VALIDATED", "INTEGRATED"],
     temporalCoverage:
       "Sol 0001 (2021-02-19, ATS/PS/TIRS/RHS/RDS/ANC) & Sol 0036 (2021-03-27, WS) · 53,263 validated PDS4 records",
     scientificPurpose:
@@ -703,10 +840,47 @@ export const EVIDENCE_DATASETS: readonly EvidenceDatasetEntry[] = [
     limitations: [
       "Environmental measurements only: MEDA characterizes modern meteorological conditions at the rover's Jezero Crater floor location (~2.2 km SE of the western delta front) and is NOT direct evidence of ancient lake deposits or phyllosilicate mineralogy.",
       "Archive subset covers Sol 0001 (ATS, PS, TIRS, RHS, RDS, ANC) and Sol 0036 (WS); 1,990 WS rows containing PDS invalid sentinel `999999999` are preserved as missing values (never interpreted as zero).",
+      "Application data access: Verified local PDS4 processed bundle stored in /public/data/meda_processed_bundle.json (53,263 validated records across Sol 0001 & Sol 0036). Interactive environmental sensor queries execute locally against this pre-bundled archive.",
     ],
     sourceReference:
       "NASA PDS Atmospheres Node (https://atmos.nmsu.edu/PDS/data/PDS4/Mars2020/mars2020_meda/ · Rodriguez-Manfredi et al., 2021)",
     pdsProductId: "urn:nasa:pds:mars2020_meda",
+    available: true,
+    integrationStatus: "integrated_active",
+    integrationStatusLabel: INTEGRATION_STATUS_LABELS.integrated_active,
+  },
+  {
+    id: "msl_rems_env",
+    name: "Curiosity REMS Surface Environmental Telemetry (PDS Sol 10 & Sol 1600)",
+    instrument: "REMS (Rover Environmental Monitoring Station)",
+    mission: "Mars Science Laboratory (MSL) Curiosity",
+    category: "atmosphere_environment",
+    mapCategory: "atmosphere",
+    description:
+      "Validated in-situ meteorological measurements recorded on the floor of Gale Crater by the Curiosity rover across 6 sensor subsystems (Pressure, Air Temperature, Ground Temperature, Relative Humidity, Wind, and UV Radiation).",
+    measurementProvided:
+      "Atmospheric surface pressure (Barocap, Pa), dual-boom air temperatures (PT1000 RTD, K & °C), ground brightness temperature (thermopile, K & °C), relative humidity (capacitive thin-film, %), wind speed & direction (derived CFD flow vector, m/s & deg), and UV flux (photodiodes, W/m²).",
+    spatialResolutionLabel: "In-situ rover station (Bradbury Landing / Mount Sharp traverse · 4.59°S, 137.44°E)",
+    resolutionMeters: 1,
+    geographicCoverage:
+      "Local · Gale Crater Floor (Bradbury Landing to Aeolis Mons / Mount Sharp lower mound)",
+    coverageScope: "LOCAL_INSITU",
+    supportedRegionIds: ["gale-crater"],
+    geographicBounds: { minLat: -5.85, maxLat: -4.0, minLon: 137.0, maxLon: 138.0 },
+    operationalStatus: ["REGISTERED", "ACCESSIBLE", "DOWNLOADED", "VALIDATED", "INTEGRATED"],
+    temporalCoverage:
+      "Sol 0010 (2012-08-15, pre-degradation baseline) & Sol 01600 (2017-02-04, post-wind degradation) · 44,459 raw PDS source table records; 1,081 packaged sampled observations in application bundle",
+    scientificPurpose:
+      "Characterize Gale Crater boundary-layer atmospheric pressure oscillations, ground/air thermal extremes, humidity cycles, and UV flux variations along the Mount Sharp exploration corridor.",
+    suitability: "Direct Quantitative Analysis",
+    limitations: [
+      "Hardware Degradation Timeline: Boom 1 wind sensor damaged on landing (Sol 0) by Sky Crane ejecta; Boom 2 operational Sols 0–854; Boom 2 degraded Sols 854–1504; all wind sensor boards across both booms permanently failed on Sol 1504. Sol 1600 wind telemetry is inoperative.",
+      "Sampling Cadence: REMS operates on a commanded duty cycle of 5 minutes at the start of each hour (120 minutes/sol active recording). Telemetry is discrete hourly bursts across LMST, not continuous 24-hour recording.",
+      "Application data access: Verified local PDS processed bundle stored in /data/rems_processed_bundle.json (44,459 raw source records downsampled to 1,081 packaged observations across Sols 10 & 1600). Interactive queries execute locally against this pre-bundled archive.",
+    ],
+    sourceReference:
+      "NASA PDS Atmospheres Node (https://pds-atmospheres.nmsu.edu/PDS/data/mslrem_1001/ · Gómez-Elvira et al., 2012; Newman et al., 2017)",
+    pdsProductId: "urn:nasa:pds:msl_rems:data_derived_envrdr",
     available: true,
     integrationStatus: "integrated_active",
     integrationStatusLabel: INTEGRATION_STATUS_LABELS.integrated_active,
@@ -717,6 +891,143 @@ export const EVIDENCE_DATASETS_BY_ID: Record<string, EvidenceDatasetEntry> =
   Object.fromEntries(EVIDENCE_DATASETS.map((entry) => [entry.id, entry]));
 
 /**
+ * Filter options for region-aware scientific dataset retrieval.
+ */
+export interface DatasetFilterOptions {
+  /** If true, includes PLANNED and UNAVAILABLE datasets. Default false. */
+  includePlannedOrUnavailable?: boolean;
+  /** Filter by category */
+  category?: EvidenceDatasetCategory | "all" | "selected";
+  /** Additional search query */
+  search?: string;
+}
+
+/**
+ * Checks whether a dataset is applicable to a specific region based on its
+ * geographic coverage scope, supportedRegionIds, and latitude limits.
+ *
+ * For GLOBAL datasets with latitude limits, checks the region's south and north
+ * bounds or falls back to its center latitude. Other datasets use supported region
+ * IDs. This filter does not verify longitude, product footprints, or usable pixels.
+ */
+export function isDatasetApplicableToRegion(
+  entry: EvidenceDatasetEntry,
+  regionOrId?:
+    | string
+    | MarsRegion
+    | {
+        coordinates: { latitude: number; longitude: number };
+        geographicBounds?: {
+          southLatDeg: number;
+          northLatDeg: number;
+          westLonDeg?: number;
+          eastLonDeg?: number;
+        };
+        id?: string;
+      }
+): boolean {
+  if (!regionOrId) return true;
+
+  const region =
+    typeof regionOrId === "string"
+      ? MARS_REGIONS[regionOrId]
+      : regionOrId;
+
+  const regionId =
+    typeof regionOrId === "string"
+      ? regionOrId
+      : "id" in regionOrId && regionOrId.id
+        ? regionOrId.id
+        : undefined;
+
+  if (entry.coverageScope === "GLOBAL") {
+    if (region && entry.latitudeLimits) {
+      if (region.geographicBounds) {
+        const { southLatDeg, northLatDeg } = region.geographicBounds;
+        if (
+          southLatDeg < entry.latitudeLimits.minLat ||
+          northLatDeg > entry.latitudeLimits.maxLat
+        ) {
+          return false;
+        }
+      } else {
+        const lat = region.coordinates.latitude;
+        if (
+          lat < entry.latitudeLimits.minLat ||
+          lat > entry.latitudeLimits.maxLat
+        ) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  if (entry.supportedRegionIds && entry.supportedRegionIds.length > 0) {
+    return regionId ? entry.supportedRegionIds.includes(regionId) : false;
+  }
+
+  return false;
+}
+
+/**
+ * Checks whether a dataset is usable in active missions (integrated, accessible, and not unavailable).
+ */
+export function isDatasetUsable(entry: EvidenceDatasetEntry): boolean {
+  if (!entry.available) return false;
+  if (
+    entry.operationalStatus.includes("UNAVAILABLE") ||
+    entry.operationalStatus.includes("PLANNED")
+  ) {
+    return false;
+  }
+  return entry.operationalStatus.includes("INTEGRATED");
+}
+
+/**
+ * Returns datasets that are applicable and usable for the specified region.
+ */
+export function getDatasetsForRegion(
+  regionId?: string,
+  options: DatasetFilterOptions = {}
+): EvidenceDatasetEntry[] {
+  return EVIDENCE_DATASETS.filter((entry) => {
+    if (!isDatasetApplicableToRegion(entry, regionId)) return false;
+    if (!options.includePlannedOrUnavailable && !isDatasetUsable(entry)) {
+      return false;
+    }
+    if (
+      options.category &&
+      options.category !== "all" &&
+      options.category !== "selected" &&
+      entry.category !== options.category
+    ) {
+      return false;
+    }
+    if (options.search && options.search.trim()) {
+      const q = options.search.trim().toLowerCase();
+      const hay =
+        `${entry.name} ${entry.instrument} ${entry.mission} ${entry.description} ${entry.measurementProvided} ${EVIDENCE_CATEGORY_LABELS[entry.category]}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * Returns datasets that are planned, documented reference only, or unavailable
+ * for the specified region (for future catalog references, not for active selection).
+ */
+export function getPlannedOrUnavailableDatasetsForRegion(
+  regionId?: string
+): EvidenceDatasetEntry[] {
+  return EVIDENCE_DATASETS.filter((entry) => {
+    if (!isDatasetApplicableToRegion(entry, regionId)) return false;
+    return !isDatasetUsable(entry);
+  });
+}
+
+/**
  * Converts a verified `EvidenceDatasetEntry` into a `Dataset` object for storage
  * in `Mission.selectedDatasets`, preserving full backward compatibility.
  */
@@ -724,7 +1035,10 @@ export function toMissionDataset(entry: EvidenceDatasetEntry): Dataset {
   return {
     id: entry.id,
     name: entry.name,
-    source: `${entry.instrument} · ${entry.mission}`,
+    source:
+      entry.id === CRISM_REFERENCE_DATASET_ID
+        ? CRISM_REFERENCE_SOURCE
+        : `${entry.instrument} · ${entry.mission}`,
     description: entry.description,
     resolutionMeters: entry.resolutionMeters,
     available: entry.available,
@@ -734,6 +1048,10 @@ export function toMissionDataset(entry: EvidenceDatasetEntry): Dataset {
     measurementProvided: entry.measurementProvided,
     spatialResolutionLabel: entry.spatialResolutionLabel,
     geographicCoverage: entry.geographicCoverage,
+    coverageScope: entry.coverageScope,
+    supportedRegionIds: entry.supportedRegionIds ? [...entry.supportedRegionIds] : undefined,
+    operationalStatus: [...entry.operationalStatus],
+    regionalCaveats: entry.regionalCaveats ? { ...entry.regionalCaveats } : undefined,
     temporalCoverage: entry.temporalCoverage,
     scientificPurpose: entry.scientificPurpose,
     suitability: entry.suitability,
@@ -749,11 +1067,160 @@ export function toMissionDataset(entry: EvidenceDatasetEntry): Dataset {
 }
 
 /**
+ * Genuine pre-bundled local dataset files resident on disk in the application repository.
+ * Datasets claiming DOWNLOADED status MUST be in this list.
+ */
+export const GENUINE_LOCAL_DATASET_IDS: readonly string[] = [
+  "ctx_jezero_dtm_20m", // /jezero/manifest.json, /jezero/overview.u16, /jezero/height/*.u16
+  "ctx_jezero_ortho_5m", // /jezero/overview.jpg, /jezero/tex/*.jpg
+  "m2020_meda_env", // /public/data/meda_processed_bundle.json
+  "msl_rems_env", // /public/data/rems_processed_bundle.json
+] as const;
+
+export interface DatasetLifecycleValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+/**
+ * Validates operational status and geographic consistency invariants for an EvidenceDatasetEntry.
+ */
+export function validateDatasetLifecycle(
+  entry: EvidenceDatasetEntry
+): DatasetLifecycleValidationResult {
+  const errors: string[] = [];
+
+  // 1. If operationalStatus includes DOWNLOADED, verify that genuine local files exist
+  if (entry.operationalStatus.includes("DOWNLOADED")) {
+    if (!GENUINE_LOCAL_DATASET_IDS.includes(entry.id)) {
+      errors.push(
+        `Dataset '${entry.id}' specifies DOWNLOADED status, but does not correspond to verified pre-bundled local files.`
+      );
+    }
+  }
+
+  // 2. A dataset cannot have both PLANNED and INTEGRATED
+  if (
+    entry.operationalStatus.includes("PLANNED") &&
+    entry.operationalStatus.includes("INTEGRATED")
+  ) {
+    errors.push(
+      `Dataset '${entry.id}' cannot have both PLANNED and INTEGRATED operational statuses.`
+    );
+  }
+
+  // 3. A dataset cannot have both UNAVAILABLE and INTEGRATED
+  if (
+    entry.operationalStatus.includes("UNAVAILABLE") &&
+    entry.operationalStatus.includes("INTEGRATED")
+  ) {
+    errors.push(
+      `Dataset '${entry.id}' cannot have both UNAVAILABLE and INTEGRATED operational statuses.`
+    );
+  }
+
+  // 4. A dataset cannot have both DOWNLOADED and UNAVAILABLE
+  if (
+    entry.operationalStatus.includes("DOWNLOADED") &&
+    entry.operationalStatus.includes("UNAVAILABLE")
+  ) {
+    errors.push(
+      `Dataset '${entry.id}' cannot have both DOWNLOADED and UNAVAILABLE operational statuses.`
+    );
+  }
+
+  // 5. If available === false, operationalStatus must include UNAVAILABLE or PLANNED, and cannot include INTEGRATED
+  if (!entry.available) {
+    if (entry.operationalStatus.includes("INTEGRATED")) {
+      errors.push(
+        `Dataset '${entry.id}' has available=false but includes INTEGRATED operational status.`
+      );
+    }
+    if (
+      !entry.operationalStatus.includes("UNAVAILABLE") &&
+      !entry.operationalStatus.includes("PLANNED")
+    ) {
+      errors.push(
+        `Dataset '${entry.id}' has available=false but does not include UNAVAILABLE or PLANNED in operationalStatus.`
+      );
+    }
+  }
+
+  // 6. If operationalStatus includes INTEGRATED, available must be true
+  if (entry.operationalStatus.includes("INTEGRATED") && !entry.available) {
+    errors.push(
+      `Dataset '${entry.id}' has INTEGRATED operational status but available is false.`
+    );
+  }
+
+  // 7. Every dataset must have at least REGISTERED in its operationalStatus
+  if (!entry.operationalStatus.includes("REGISTERED")) {
+    errors.push(
+      `Dataset '${entry.id}' must include REGISTERED in its operationalStatus.`
+    );
+  }
+
+  // 8. If coverageScope is GLOBAL, supportedRegionIds should be undefined or empty
+  if (
+    entry.coverageScope === "GLOBAL" &&
+    entry.supportedRegionIds &&
+    entry.supportedRegionIds.length > 0
+  ) {
+    errors.push(
+      `GLOBAL dataset '${entry.id}' must not define supportedRegionIds.`
+    );
+  }
+
+  // 9. If coverageScope is REGIONAL or LOCAL_INSITU, supportedRegionIds must be non-empty
+  if (
+    (entry.coverageScope === "REGIONAL" || entry.coverageScope === "LOCAL_INSITU") &&
+    (!entry.supportedRegionIds || entry.supportedRegionIds.length === 0)
+  ) {
+    errors.push(
+      `${entry.coverageScope} dataset '${entry.id}' must specify at least one supportedRegionId.`
+    );
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * Validates all datasets in EVIDENCE_DATASETS against lifecycle invariants.
+ */
+export function validateAllDatasetsLifecycle(): {
+  valid: boolean;
+  results: Record<string, DatasetLifecycleValidationResult>;
+  totalErrors: number;
+} {
+  const results: Record<string, DatasetLifecycleValidationResult> = {};
+  let totalErrors = 0;
+
+  for (const entry of EVIDENCE_DATASETS) {
+    const res = validateDatasetLifecycle(entry);
+    results[entry.id] = res;
+    totalErrors += res.errors.length;
+  }
+
+  return {
+    valid: totalErrors === 0,
+    results,
+    totalErrors,
+  };
+}
+
+/**
  * Resolves metadata for any dataset ID stored in an existing `Mission` or `Observation`,
  * including backward-compatible fallback for legacy visualization-only `MapLayerId`s
- * saved before the T-2.1 catalog separation.
+ * saved before the T-2.1 catalog separation. Optionally takes a regionId to resolve
+ * active regional caveats.
  */
-export function resolveDatasetMetadata(datasetId: string): {
+export function resolveDatasetMetadata(
+  datasetId: string,
+  regionId?: string
+): {
   id: string;
   name: string;
   instrumentAndMission: string;
@@ -761,6 +1228,11 @@ export function resolveDatasetMetadata(datasetId: string): {
   measurementProvided: string;
   spatialResolutionLabel: string;
   geographicCoverage: string;
+  coverageScope?: GeographicCoverageScope;
+  supportedRegionIds?: readonly string[];
+  operationalStatus?: readonly DatasetOperationalStatus[];
+  regionalCaveats?: Record<string, string>;
+  activeRegionalCaveat?: string;
   scientificPurpose: string;
   suitability: string;
   integrationStatus: DatasetIntegrationStatus | "legacy_visualization_layer" | "custom_record";
@@ -772,6 +1244,11 @@ export function resolveDatasetMetadata(datasetId: string): {
 } {
   const evidence = EVIDENCE_DATASETS_BY_ID[datasetId];
   if (evidence) {
+    const activeRegionalCaveat =
+      regionId && evidence.regionalCaveats?.[regionId]
+        ? evidence.regionalCaveats[regionId]
+        : undefined;
+
     return {
       id: evidence.id,
       name: evidence.name,
@@ -780,6 +1257,11 @@ export function resolveDatasetMetadata(datasetId: string): {
       measurementProvided: evidence.measurementProvided,
       spatialResolutionLabel: evidence.spatialResolutionLabel,
       geographicCoverage: evidence.geographicCoverage,
+      coverageScope: evidence.coverageScope,
+      supportedRegionIds: evidence.supportedRegionIds,
+      operationalStatus: evidence.operationalStatus,
+      regionalCaveats: evidence.regionalCaveats,
+      activeRegionalCaveat,
       scientificPurpose: evidence.scientificPurpose,
       suitability: evidence.suitability,
       integrationStatus: evidence.integrationStatus,
@@ -807,6 +1289,9 @@ export function resolveDatasetMetadata(datasetId: string): {
         "Sub-millimeter to millimeter outcrop scale (in-situ surface camera)",
       geographicCoverage:
         "Local · Perseverance Traverse in Jezero Crater (Site/Drive & Local XYZ recorded; planetocentric lat/lon not embedded in raw EDR frames)",
+      coverageScope: "LOCAL_INSITU",
+      supportedRegionIds: ["jezero-crater"],
+      operationalStatus: ["REGISTERED", "ACCESSIBLE", "DOWNLOADED", "VALIDATED", "INTEGRATED"],
       scientificPurpose:
         "Document in-situ rock textures, outcrop bedding, and surface morphology along Perseverance's traverse to complement orbital imagery.",
       suitability: "Contextual & Hazard Analysis",
@@ -834,6 +1319,8 @@ export function resolveDatasetMetadata(datasetId: string): {
         "Rendered visual hillshade or color-blended display mosaic for geographic context. Not a direct mineralogical or physical measurement.",
       spatialResolutionLabel: "Global WMTS display mosaic (~200–463 m/pixel)",
       geographicCoverage: "Global (90°S–90°N, 180°W–180°E)",
+      coverageScope: "GLOBAL",
+      operationalStatus: ["REGISTERED", "ACCESSIBLE", "INTEGRATED"],
       scientificPurpose:
         "Geographic orientation and visual basemap context on the 3D Globe and 2D Map.",
       suitability: "Visualization Only (Not Empirical Evidence)",

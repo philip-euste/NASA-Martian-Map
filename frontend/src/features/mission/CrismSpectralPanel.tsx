@@ -1,33 +1,26 @@
 // frontend/src/features/mission/CrismSpectralPanel.tsx
 // Phase 3, Task T-3.3: Interactive MRO CRISM Targeted VNIR Spectral Inspector.
 //
-// Scientific Grounding:
-// MRO CRISM Targeted Hyperspectral Observations over Jezero Crater:
-// - FRT00005C5E: Western Delta Scarp (Fe/Mg smectite phyllosilicates)
-// - HRL000040FF: Western Crater Margin (Mg-Carbonates & hydrated silica)
-// - FRT0000B204: Séítah Formation (Olivine Fo60 cumulate)
-//
-// Key Diagnostic Absorption Features:
-// 1. 1.4 µm: OH overtone and H2O combination band
-// 2. 1.9 µm: Molecular H2O hydration band
-// 3. 2.29–2.31 µm: Metal-OH vibrational band (Fe/Mg-OH smectite clay)
-// 4. 2.30 µm & 2.51 µm: CO3 vibrational overtone (Mg-Carbonate)
-// 5. 1.05 µm: Broad Fe2+ crystal field absorption (Olivine)
+// The bundled values and annotations have unverified extraction provenance.
+// Archive references identify published products independently of the plotted values.
 
 import { useState } from "react";
 import {
-  Activity,
   AlertTriangle,
   Check,
   ChevronDown,
   ChevronUp,
-  Download,
   ExternalLink,
-  Layers,
   Plus,
-  Sparkles,
 } from "lucide-react";
-import { DataField, formatCoordinates } from "../../components/ui";
+import { formatCoordinates } from "../../components/ui";
+import {
+  CRISM_MTRDR_ARCHIVE_URL,
+  CRISM_REFERENCE_DATASET_ID,
+  CRISM_REFERENCE_LIMITATION,
+  CRISM_REFERENCE_METHOD,
+  CRISM_REFERENCE_SOURCE,
+} from "../../data/evidenceDatasets";
 import { useMission } from "../../state/mission/MissionContext";
 import type { Observation } from "../../types";
 import { createId, toMutable } from "./missionHelpers";
@@ -35,11 +28,11 @@ import { createId, toMutable } from "./missionHelpers";
 interface SpectralTargetProfile {
   id: string;
   name: string;
-  crismPdsProduct: string;
+  referencedObservationId: string;
+  archiveProduct?: string;
   coordinates: { latitude: number; longitude: number };
   geologicUnit: string;
   mineralogy: string;
-  interpretation: string;
   parameters: {
     d2300: number;
     bd1900: number;
@@ -55,12 +48,11 @@ const CRISM_SPECTRA: Record<string, SpectralTargetProfile> = {
   jezero_delta_smectite: {
     id: "jezero_delta_smectite",
     name: "Western Delta Scarp — Fe/Mg Smectite Phyllosilicate",
-    crismPdsProduct: "urn:nasa:pds:crism_mtrdr:frt00005c5e_07_if166l_mtr3",
+    referencedObservationId: "FRT00005C5E",
+    archiveProduct: "frt00005c5e_07_if166j_mtr3::1.0",
     coordinates: { latitude: 18.4585, longitude: 77.4052 },
     geologicUnit: "HpHd_scarp (Western Delta Scarp Formation)",
     mineralogy: "Fe/Mg Smectite (Nontronite / Saponite) with Hydrated Silica",
-    interpretation:
-      "Aqueous deposition of fine-grained smectite clay in low-energy lacustrine delta strata.",
     parameters: {
       d2300: 0.042,
       bd1900: 0.068,
@@ -97,12 +89,11 @@ const CRISM_SPECTRA: Record<string, SpectralTargetProfile> = {
   jezero_marginal_carbonate: {
     id: "jezero_marginal_carbonate",
     name: "Western Margin — Magnesite / Mg-Carbonate Bench",
-    crismPdsProduct: "urn:nasa:pds:crism_mtrdr:hrl000040ff_07_if166l_mtr3",
+    referencedObservationId: "HRL000040FF",
+    archiveProduct: "hrl000040ff_07_if183j_mtr3::1.0",
     coordinates: { latitude: 18.472, longitude: 77.345 },
     geologicUnit: "Hcf_m (Marginal Carbonate Bench Unit)",
     mineralogy: "Magnesite (Mg-Carbonate) with Talc & Amorphous Silica",
-    interpretation:
-      "Chemical precipitation along paleolake shoreline bench or hydrothermal spring discharge.",
     parameters: {
       d2300: 0.058,
       bd1900: 0.024,
@@ -137,12 +128,10 @@ const CRISM_SPECTRA: Record<string, SpectralTargetProfile> = {
   jezero_seitah_olivine: {
     id: "jezero_seitah_olivine",
     name: "Séítah Formation — Olivine Cumulate Bedrock",
-    crismPdsProduct: "urn:nasa:pds:crism_mtrdr:frt0000b204_07_if166l_mtr3",
+    referencedObservationId: "FRT0000B204",
     coordinates: { latitude: 18.4295, longitude: 77.439 },
     geologicUnit: "HNcf_f (Crater Floor Fractured Unit)",
     mineralogy: "Forsteritic Olivine (Fo60) with Augite Pyroxene",
-    interpretation:
-      "Igneous cumulate lava lake ponding or differentiated sill, unaltered by delta aqueous phases.",
     parameters: {
       d2300: 0.005,
       bd1900: 0.008,
@@ -216,28 +205,19 @@ export default function CrismSpectralPanel({
   function handleLogSpectralObservation() {
     const newObs: Observation = {
       id: createId("obs"),
-      name: `CRISM VNIR: ${activeProfile.name}`,
-      datasetId: "crism_jezero_vnir",
+      name: `CRISM reference · ${activeProfile.name}`,
+      datasetId: CRISM_REFERENCE_DATASET_ID,
       coordinates: { ...activeProfile.coordinates },
-      observationDate: "2021-04-15",
-      source: "MRO CRISM Targeted Spectral Cube",
+      observationDate: new Date().toISOString().slice(0, 10),
+      source: CRISM_REFERENCE_SOURCE,
       provenance: {
-        source: "MRO CRISM Targeted Reduced Data Record (MTRDR)",
-        sourceId: activeProfile.crismPdsProduct,
-        sourceUrl: "https://pds-geosciences.wustl.edu/mro/mro-m-crism-3-rdr-targeted-v1/",
-        processingMethod: `MRO CRISM 544-channel VNIR I/F spectral reflectance with atmospheric volcano-scan ratioing and continuum removal. Product: ${activeProfile.crismPdsProduct}. Diagnostic Band: 2.296 µm (D2300 = ${activeProfile.parameters.d2300}).`,
-        limitations: [
-          "Orbital resolution (18 m/pixel) cannot resolve millimeter-scale delta laminations or micro-textures.",
-          "Spectral absorption proves the presence of Fe/Mg smectite, but cannot determine whether the clay formed authigenically in an ancient standing lake or was eroded from the pre-existing Noachian watershed.",
-          "Surface dust mantling attenuates band depth; required high-altitude atmospheric transmission correction.",
-        ],
+        source: CRISM_REFERENCE_SOURCE,
+        sourceId: activeProfile.id,
+        sourceUrl: CRISM_MTRDR_ARCHIVE_URL,
+        processingMethod: CRISM_REFERENCE_METHOD,
+        limitations: [CRISM_REFERENCE_LIMITATION],
       },
-      description: `Targeted spectral signature at ${formatCoordinates(
-        activeProfile.coordinates.latitude,
-        activeProfile.coordinates.longitude
-      )}. Geologic formation: ${activeProfile.geologicUnit}. Mineralogy: ${
-        activeProfile.mineralogy
-      }. ${activeProfile.interpretation}`,
+      description: `Bundled reference profile ${activeProfile.id}. Referenced observation ID ${activeProfile.referencedObservationId}.`,
     };
 
     if (onRecordObservation) {
@@ -255,24 +235,23 @@ export default function CrismSpectralPanel({
   return (
     <section
       className="rounded-lg border border-mx-border bg-mx-surface/80 p-5 backdrop-blur"
-      aria-label="CRISM Targeted VNIR Spectral Inspector"
+      aria-label="CRISM VNIR Reference Inspector"
     >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-mx-border pb-4">
         <div>
           <span className="mx-eyebrow text-emerald-400">
-            MRO CRISM TARGETED VNIR SPECTRAL INSPECTION
+            CRISM VNIR REFERENCE INSPECTOR
           </span>
           <h3 className="mx-display m-0 mt-1 text-lg sm:text-xl text-mx-text">
-            Jezero Crater Hyperspectral Mineral Analysis
+            Jezero Crater Reference Profiles
           </h3>
           <p className="m-0 mt-1 text-xs text-mx-muted">
-            Empirical 0.4–3.9 µm reflectance spectroscopy identifying hydrated
-            phyllosilicates and carbonates.
+            {CRISM_REFERENCE_LIMITATION}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {Object.entries(CRISM_SPECTRA).map(([key, item]) => (
+          {Object.keys(CRISM_SPECTRA).map((key) => (
             <button
               key={key}
               type="button"
@@ -296,24 +275,30 @@ export default function CrismSpectralPanel({
       {/* Target Profile Metadata Banner */}
       <div className="mt-4 grid gap-3 sm:grid-cols-2 md:grid-cols-4 rounded border border-mx-border bg-mx-bg p-3.5 text-xs">
         <div>
-          <span className="text-mx-dim block text-[10px] uppercase font-mono">Geologic Unit</span>
+          <span className="text-mx-dim block text-[10px] uppercase font-mono">Reference Unit</span>
           <span className="font-semibold text-mx-text">{activeProfile.geologicUnit}</span>
         </div>
         <div>
-          <span className="text-mx-dim block text-[10px] uppercase font-mono">Primary Mineralogy</span>
+          <span className="text-mx-dim block text-[10px] uppercase font-mono">Profile Annotation</span>
           <span className="font-semibold text-emerald-300">{activeProfile.mineralogy}</span>
         </div>
         <div>
-          <span className="text-mx-dim block text-[10px] uppercase font-mono">Coordinates</span>
+          <span className="text-mx-dim block text-[10px] uppercase font-mono">Reference Coordinates</span>
           <span className="font-mono text-mx-text">
             {formatCoordinates(activeProfile.coordinates.latitude, activeProfile.coordinates.longitude)}
           </span>
         </div>
         <div>
-          <span className="text-mx-dim block text-[10px] uppercase font-mono">PDS Product LID</span>
-          <span className="font-mono text-[11px] text-mx-accent truncate block" title={activeProfile.crismPdsProduct}>
-            {activeProfile.crismPdsProduct.split(":").pop()}
+          <span className="text-mx-dim block text-[10px] uppercase font-mono">Referenced Observation ID</span>
+          <span className="font-mono">{activeProfile.referencedObservationId}</span>
+          <span className="mt-1 block break-all font-mono text-[11px] text-mx-muted">
+            {activeProfile.archiveProduct
+              ? `Archive product ${activeProfile.archiveProduct}`
+              : "Archive product unconfirmed"}
           </span>
+          <a className="mt-1 inline-flex items-center gap-1 text-mx-accent underline" href={CRISM_MTRDR_ARCHIVE_URL} target="_blank" rel="noreferrer">
+            NASA PDS MTRDR archive <ExternalLink size={12} aria-hidden="true" />
+          </a>
         </div>
       </div>
 
@@ -326,9 +311,9 @@ export default function CrismSpectralPanel({
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1 text-emerald-400 font-mono">
               <span className="inline-block h-2 w-3 rounded-sm bg-emerald-400" />
-              Empirical CRISM Spectrum
+              Bundled reference profile
             </span>
-            <span className="text-amber-400 font-mono">▼ Diagnostic Absorption</span>
+            <span className="text-amber-400 font-mono">▼ Reference band marker</span>
           </div>
         </div>
 
@@ -587,7 +572,7 @@ export default function CrismSpectralPanel({
           ) : (
             <>
               <Plus size={14} />
-              Record CRISM Observation
+              Record Reference Profile
             </>
           )}
         </button>
@@ -610,17 +595,17 @@ export default function CrismSpectralPanel({
         {showLimitations && (
           <div className="mt-2.5 rounded border border-amber-500/30 bg-amber-950/20 p-3 text-[11px] text-amber-200/90 leading-relaxed">
             <p className="m-0 font-medium text-amber-300">
-              Orbital Spectral Limitations for Jezero Lake Hypotheses:
+              Interpreting the reference profiles
             </p>
             <ul className="m-0 mt-1.5 list-disc pl-4 space-y-1">
               <li>
-                <strong>Spatial Resolution Limit:</strong> CRISM pixels are 18–36 meters. They sample composite outcrop surfaces and cannot resolve individual thin laminae (millimeter to centimeter scale).
+                {CRISM_REFERENCE_METHOD}
               </li>
               <li>
-                <strong>Origin Ambiguity:</strong> While the 2.296 µm absorption definitively proves Fe/Mg smectite clay, orbital data alone cannot determine whether the smectites formed <em>in-situ</em> within a quiet standing lake, or were weathered in the upstream Nili Fossae catchment and washed into the crater during episodic catastrophic flooding.
+                The profile annotations describe spectral features for reference. Identifying minerals at these locations requires traceable measurements.
               </li>
               <li>
-                <strong>Operational Implication:</strong> Definitive proof requires physical sample return or in-situ microscopic texture examination via rover Mastcam-Z/SHERLOC or astronaut EVA field sampling.
+                A traceable orbital spectrum can constrain mineralogy. Interpreting how a deposit formed also requires geologic context.
               </li>
             </ul>
           </div>

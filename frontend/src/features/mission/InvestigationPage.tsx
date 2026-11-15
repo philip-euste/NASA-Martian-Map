@@ -1,5 +1,5 @@
 // frontend/src/features/mission/InvestigationPage.tsx
-// Guided Scientific Investigation Workspace (Phase 3C).
+// Guided Scientific Investigation Workspace (Phase 3C & Phase 2.1 Multi-Region Datasets).
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -9,6 +9,7 @@ import {
   ChevronUp,
   Compass,
   Database,
+  FileText,
   FlaskConical,
   Info,
   MapPin,
@@ -27,9 +28,21 @@ import {
 } from "../../components/ui";
 import { EXPLORATION_SITES } from "../../data/explorationSites";
 import {
+  MARS_REGION_LIST,
+  getMarsRegionById,
+} from "../../data/regions";
+import {
+  COVERAGE_SCOPE_LABELS,
+  CRISM_MTRDR_ARCHIVE_URL,
+  CRISM_REFERENCE_DATASET_ID,
+  CRISM_REFERENCE_METHOD,
+  CRISM_REFERENCE_SOURCE,
   EVIDENCE_CATEGORY_LABELS,
   EVIDENCE_DATASETS,
   EVIDENCE_DATASETS_BY_ID,
+  getDatasetsForRegion,
+  getPlannedOrUnavailableDatasetsForRegion,
+  isDatasetApplicableToRegion,
   resolveDatasetMetadata,
   toMissionDataset,
   type EvidenceDatasetCategory,
@@ -39,6 +52,7 @@ import { useMission } from "../../state/mission/MissionContext";
 import type { Observation, UserHypothesis } from "../../types";
 import MissionLayout from "./MissionLayout";
 import MedaEnvironmentalPanel from "./MedaEnvironmentalPanel";
+import RemsEnvironmentalPanel from "./RemsEnvironmentalPanel";
 import PerseveranceImageryPanel from "./PerseveranceImageryPanel";
 import CrismSpectralPanel from "./CrismSpectralPanel";
 import {
@@ -67,6 +81,12 @@ const EXAMPLE_QUESTIONS: { label: string; question: string; regionId: string }[]
     question:
       "What does exposed canyon wall layering reveal about early Martian crustal composition and subsurface volatile release?",
   },
+  {
+    label: "Olympus Mons Volcanic Evolution",
+    regionId: "olympus-mons",
+    question:
+      "What do thermal emissivity and surface roughness across the Olympus Mons aureole reveal about caldera construction and late-stage Amazonian volcanism?",
+  },
 ];
 
 export default function InvestigationPage() {
@@ -84,6 +104,20 @@ export default function InvestigationPage() {
     updateMission({ question: questionDraft });
   }
 
+  // Active region resolution & dataset availability (Phase 2.1)
+  const activeRegionId = mission.region?.id ?? "jezero-crater";
+  const isJezero = !mission.region || mission.region.id === "jezero-crater";
+  const isGale = mission.region?.id === "gale-crater";
+
+  const applicableDatasets = useMemo(
+    () => getDatasetsForRegion(activeRegionId),
+    [activeRegionId]
+  );
+  const plannedOrUnavailableDatasets = useMemo(
+    () => getPlannedOrUnavailableDatasetsForRegion(activeRegionId),
+    [activeRegionId]
+  );
+
   // Dataset filtering & progressive disclosure
   const [categoryFilter, setCategoryFilter] = useState<
     EvidenceDatasetCategory | "all" | "selected"
@@ -100,16 +134,32 @@ export default function InvestigationPage() {
   const [showTargetForm, setShowTargetForm] = useState(false);
   const [showHypotheses, setShowHypotheses] = useState(false);
   const [showMedaInspector, setShowMedaInspector] = useState(false);
+  const [showRemsInspector, setShowRemsInspector] = useState(false);
   const [showRoverImagery, setShowRoverImagery] = useState(false);
   const [showCrismInspector, setShowCrismInspector] = useState(false);
 
-  // Observation draft state — default to first selected empirical evidence dataset
-  const defaultEvidenceId =
-    mission.selectedDatasets.find((d) => d.id in EVIDENCE_DATASETS_BY_ID)?.id ??
-    "hirise_jezero_dtm";
+  // Observation draft state — resolve first applicable dataset for the active region
+  const defaultEvidenceId = useMemo(() => {
+    const selectedApplicable = mission.selectedDatasets.find((d) => {
+      const entry = EVIDENCE_DATASETS_BY_ID[d.id];
+      return entry && isDatasetApplicableToRegion(entry, activeRegionId);
+    });
+    if (selectedApplicable) return selectedApplicable.id;
+    if (applicableDatasets.length > 0) return applicableDatasets[0].id;
+    return isJezero ? "hirise_jezero_dtm" : "mars_mola_roughness";
+  }, [mission.selectedDatasets, activeRegionId, applicableDatasets, isJezero]);
 
   const [obsName, setObsName] = useState("");
   const [obsDatasetId, setObsDatasetId] = useState<string>(defaultEvidenceId);
+
+  // Synchronize observation source dataset if region changed or current selection is invalid
+  useEffect(() => {
+    const currentEntry = EVIDENCE_DATASETS_BY_ID[obsDatasetId];
+    if (currentEntry && !isDatasetApplicableToRegion(currentEntry, activeRegionId)) {
+      setObsDatasetId(defaultEvidenceId);
+    }
+  }, [activeRegionId, defaultEvidenceId, obsDatasetId]);
+
   const [obsLat, setObsLat] = useState("");
   const [obsLon, setObsLon] = useState("");
   const [obsDescription, setObsDescription] = useState("");
@@ -144,7 +194,7 @@ export default function InvestigationPage() {
   );
 
   const filteredDatasets = useMemo(() => {
-    return EVIDENCE_DATASETS.filter((entry) => {
+    return applicableDatasets.filter((entry) => {
       if (categoryFilter === "selected") {
         if (!selectedDatasetIds.has(entry.id)) return false;
       } else if (categoryFilter !== "all" && entry.category !== categoryFilter) {
@@ -158,7 +208,7 @@ export default function InvestigationPage() {
       }
       return true;
     });
-  }, [categoryFilter, datasetSearch, selectedDatasetIds]);
+  }, [applicableDatasets, categoryFilter, datasetSearch, selectedDatasetIds]);
 
   function toggleDataset(entry: EvidenceDatasetEntry): void {
     const current = toMutable(mission.selectedDatasets);
@@ -211,13 +261,16 @@ export default function InvestigationPage() {
 
     const hasCoords = Number.isFinite(latNum) && Number.isFinite(lonNum);
     const catalogEntry = EVIDENCE_DATASETS_BY_ID[obsDatasetId];
-    const resolvedMeta = resolveDatasetMetadata(obsDatasetId);
+    const resolvedMeta = resolveDatasetMetadata(obsDatasetId, activeRegionId);
+    const isCrismReference = obsDatasetId === CRISM_REFERENCE_DATASET_ID;
 
     const obsRecord: Observation = {
       id: editingObsId ?? createId("obs"),
       datasetId: obsDatasetId,
       name: obsName.trim(),
-      source: catalogEntry?.name ?? resolvedMeta.name,
+      source: isCrismReference
+        ? CRISM_REFERENCE_SOURCE
+        : catalogEntry?.name ?? resolvedMeta.name,
       coordinates: hasCoords
         ? { latitude: latNum, longitude: lonNum }
         : mission.region
@@ -225,13 +278,15 @@ export default function InvestigationPage() {
           : undefined,
       observationDate: obsDate,
       description: obsDescription.trim() || undefined,
+      regionId: mission.region?.id,
       provenance: {
-        source: catalogEntry
-          ? `${catalogEntry.instrument} · ${catalogEntry.mission} (${catalogEntry.sourceReference})`
+        source: isCrismReference
+          ? CRISM_REFERENCE_SOURCE
           : `${resolvedMeta.instrumentAndMission} (${resolvedMeta.sourceReference})`,
-        sourceId: catalogEntry?.pdsProductId ?? resolvedMeta.pdsProductId,
-        processingMethod: catalogEntry
-          ? `${catalogEntry.measurementProvided} (${catalogEntry.spatialResolutionLabel})`
+        sourceId: isCrismReference ? undefined : resolvedMeta.pdsProductId,
+        sourceUrl: isCrismReference ? CRISM_MTRDR_ARCHIVE_URL : undefined,
+        processingMethod: isCrismReference
+          ? CRISM_REFERENCE_METHOD
           : `${resolvedMeta.measurementProvided} (${resolvedMeta.spatialResolutionLabel})`,
         limitations: obsLimitation.trim()
           ? [
@@ -246,6 +301,14 @@ export default function InvestigationPage() {
     const existingEditingObs = editingObsId
       ? currentObsList.find((o) => o.id === editingObsId)
       : undefined;
+
+    if (
+      isCrismReference &&
+      existingEditingObs?.source === CRISM_REFERENCE_SOURCE &&
+      obsRecord.provenance
+    ) {
+      obsRecord.provenance.sourceId = existingEditingObs.provenance?.sourceId;
+    }
 
     if (existingEditingObs?.surfaceImage) {
       obsRecord.surfaceImage = { ...existingEditingObs.surfaceImage };
@@ -291,7 +354,7 @@ export default function InvestigationPage() {
     setObsDescription(obs.description ?? "");
     const catalogLimits =
       EVIDENCE_DATASETS_BY_ID[obs.datasetId]?.limitations ??
-      resolveDatasetMetadata(obs.datasetId).limitations;
+      resolveDatasetMetadata(obs.datasetId, activeRegionId).limitations;
     const customLim = (obs.provenance?.limitations ?? []).find(
       (lim) => !catalogLimits.includes(lim)
     );
@@ -357,7 +420,8 @@ export default function InvestigationPage() {
         buildTarget(
           targetName.trim(),
           { latitude: lat, longitude: lon },
-          targetDesc.trim() || "Scientific target logged during investigation."
+          targetDesc.trim() || "Scientific target logged during investigation.",
+          mission.region?.id
         ),
       ],
     });
@@ -470,26 +534,16 @@ export default function InvestigationPage() {
               </div>
 
               <div className="grid gap-2.5 sm:grid-cols-2">
-                {EXPLORATION_SITES.map((site) => {
-                  const active = mission.region?.id === site.id;
+                {MARS_REGION_LIST.map((reg) => {
+                  const active = mission.region?.id === reg.id;
+                  const isAvailable = reg.simulatorAvailability === "AVAILABLE";
+                  const isPlanned = reg.simulatorAvailability === "PLANNED";
                   return (
                     <button
-                      key={site.id}
+                      key={reg.id}
                       type="button"
                       aria-pressed={active}
-                      onClick={() =>
-                        setRegion(
-                          buildRegion(
-                            site.id,
-                            site.name,
-                            {
-                              latitude: site.latitude,
-                              longitude: site.longitude,
-                            },
-                            site.description
-                          )
-                        )
-                      }
+                      onClick={() => setRegion(reg)}
                       className={`flex flex-col items-start rounded-lg border p-3.5 text-left transition ${
                         active
                           ? "border-mx-accent bg-mx-panel-2"
@@ -497,15 +551,35 @@ export default function InvestigationPage() {
                       }`}
                     >
                       <div className="flex w-full items-center justify-between gap-2">
-                        <span className="font-display text-sm font-semibold text-mx-text">
-                          {site.name}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-display text-sm font-semibold text-mx-text">
+                            {reg.name}
+                          </span>
+                          <span
+                            className={`rounded px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider ${
+                              isAvailable
+                                ? "border border-emerald-500/40 bg-emerald-500/20 text-emerald-400"
+                                : isPlanned
+                                  ? "border border-amber-500/40 bg-amber-500/20 text-amber-400"
+                                  : "border border-zinc-700 bg-zinc-800 text-zinc-400"
+                            }`}
+                          >
+                            {isAvailable
+                              ? "3D Active"
+                              : isPlanned
+                                ? "3D Planned"
+                                : "2D Only"}
+                          </span>
+                        </div>
                         <span className="mx-mono text-[11px] text-mx-accent">
-                          {formatCoordinates(site.latitude, site.longitude)}
+                          {formatCoordinates(
+                            reg.coordinates.latitude,
+                            reg.coordinates.longitude
+                          )}
                         </span>
                       </div>
                       <span className="mx-body mt-1 text-xs line-clamp-2">
-                        {site.description}
+                        {reg.description}
                       </span>
                     </button>
                   );
@@ -513,7 +587,7 @@ export default function InvestigationPage() {
               </div>
 
               {mission.region && (
-                <div className="mt-3 grid gap-4 rounded-lg border border-mx-border bg-mx-bg p-4 sm:grid-cols-3">
+                <div className="mt-3 grid gap-4 rounded-lg border border-mx-border bg-mx-bg p-4 sm:grid-cols-4">
                   <DataField
                     label="Selected Study Region"
                     value={mission.region.name}
@@ -524,6 +598,18 @@ export default function InvestigationPage() {
                       mission.region.coordinates.latitude,
                       mission.region.coordinates.longitude
                     )}
+                  />
+                  <DataField
+                    label="3D Simulator"
+                    value={
+                      getMarsRegionById(mission.region.id)
+                        ?.simulatorAvailability === "AVAILABLE"
+                        ? "Active (3D Jezero EVA)"
+                        : getMarsRegionById(mission.region.id)
+                              ?.simulatorAvailability === "PLANNED"
+                          ? "Planned (Phase 2+)"
+                          : "2D Research Only"
+                    }
                   />
                   <DataField
                     label="Regional Context"
@@ -577,21 +663,11 @@ export default function InvestigationPage() {
                     onClick={() => {
                       setQuestionDraft(preset.question);
                       updateMission({ question: preset.question });
-                      const matchingSite = EXPLORATION_SITES.find(
+                      const matchingRegion = MARS_REGION_LIST.find(
                         (s) => s.id === preset.regionId
                       );
-                      if (matchingSite && !mission.region) {
-                        setRegion(
-                          buildRegion(
-                            matchingSite.id,
-                            matchingSite.name,
-                            {
-                              latitude: matchingSite.latitude,
-                              longitude: matchingSite.longitude,
-                            },
-                            matchingSite.description
-                          )
-                        );
+                      if (matchingRegion && !mission.region) {
+                        setRegion(matchingRegion);
                       }
                     }}
                     className="mx-chip !py-1 !px-2 !text-[10px]"
@@ -723,8 +799,20 @@ export default function InvestigationPage() {
                               </span>
                             )}
                             <span
+                              className="mx-badge mx-badge--outline"
+                              title={COVERAGE_SCOPE_LABELS[entry.coverageScope]}
+                            >
+                              {entry.coverageScope === "GLOBAL"
+                                ? "Global"
+                                : entry.coverageScope === "LOCAL_INSITU"
+                                  ? "In-Situ"
+                                  : "Regional"}
+                            </span>
+                            <span
                               className={`mx-badge ${
-                                entry.integrationStatus === "integrated_active"
+                                entry.id === CRISM_REFERENCE_DATASET_ID
+                                  ? "mx-badge--accent"
+                                  : entry.integrationStatus === "integrated_active"
                                   ? "mx-badge--success"
                                   : entry.integrationStatus ===
                                       "integrated_backend"
@@ -733,13 +821,23 @@ export default function InvestigationPage() {
                               }`}
                               title={entry.integrationStatusLabel}
                             >
-                              {entry.integrationStatus === "integrated_active"
+                              {entry.id === CRISM_REFERENCE_DATASET_ID
+                                ? "Bundled Reference Profiles"
+                                : entry.integrationStatus === "integrated_active"
                                 ? "Live Integrated"
                                 : entry.integrationStatus ===
                                     "integrated_backend"
                                   ? "Backend / Archive Verified"
                                   : "Verified Catalog Reference"}
                             </span>
+                            {entry.regionalCaveats?.[activeRegionId] && (
+                              <span
+                                className="mx-badge border border-amber-500/40 bg-amber-950/40 text-amber-300"
+                                title="Regional scientific caveat applies to current study region"
+                              >
+                                ⚠ Regional Caveat
+                              </span>
+                            )}
                             <span
                               className={`mx-badge ${
                                 entry.suitability ===
@@ -835,6 +933,16 @@ export default function InvestigationPage() {
                                   {entry.limitations.join(" ")}
                                 </div>
                               )}
+                              {entry.regionalCaveats?.[activeRegionId] && (
+                                <div className="rounded border border-amber-500/40 bg-amber-950/40 p-2 text-amber-200">
+                                  <strong className="text-amber-300">
+                                    Regional Caveat (
+                                    {getMarsRegionById(activeRegionId)?.name ?? activeRegionId}
+                                    ):
+                                  </strong>{" "}
+                                  {entry.regionalCaveats[activeRegionId]}
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
@@ -875,128 +983,111 @@ export default function InvestigationPage() {
               </div>
             )}
 
-            {/* T-2.2: Interactive MEDA Environmental Measurements Inspector */}
-            <div className="mt-5 border-t border-mx-border pt-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <span className="mx-eyebrow mx-eyebrow--accent">
-                    In-Situ Rover Environmental Telemetry · MEDA (`m2020_meda_env`)
-                  </span>
-                  <p className="m-0 mt-0.5 text-xs text-mx-muted">
-                    Inspect real Perseverance MEDA pressure, air/ground
-                    temperature, relative humidity, wind, and solar radiation
-                    from NASA PDS4 (Sol 0001 &amp; Sol 0036).
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowMedaInspector((prev) => !prev)}
-                  aria-expanded={showMedaInspector}
-                  className="mx-btn mx-btn--secondary mx-btn--sm"
-                >
-                  {showMedaInspector ? (
-                    <>
-                      <ChevronUp size={14} aria-hidden="true" /> Hide MEDA
-                      Inspector
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown size={14} aria-hidden="true" /> Inspect MEDA
-                      Measurements
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {(showMedaInspector ||
-                selectedDatasetIds.has("m2020_meda_env")) && (
-                <div className="mt-4">
-                  <MedaEnvironmentalPanel
-                    onLogObservation={(params) => {
-                      const medaEntry =
-                        EVIDENCE_DATASETS_BY_ID["m2020_meda_env"];
-                      const newObs: Observation = {
-                        id: createId("obs"),
-                        datasetId: "m2020_meda_env",
-                        name: params.name,
-                        source:
-                          medaEntry?.name ??
-                          "Perseverance MEDA Surface Environmental Measurements",
-                        coordinates: {
-                          latitude: 18.4447,
-                          longitude: 77.4508,
-                        },
-                        observationDate: params.observationDate,
-                        description: params.description,
-                        provenance: {
-                          source: `${medaEntry?.instrument ?? "MEDA"} · ${
-                            medaEntry?.mission ?? "Mars 2020 Perseverance"
-                          } (${medaEntry?.sourceReference ?? "NASA PDS4"})`,
-                          sourceId: params.sourceId,
-                          processingMethod: params.processingMethod,
-                          limitations: [
-                            params.limitation,
-                            ...(medaEntry?.limitations ?? []),
-                          ],
-                        },
-                      };
-                      const nextDatasets = toMutable(mission.selectedDatasets);
-                      if (
-                        medaEntry &&
-                        !nextDatasets.some((d) => d.id === medaEntry.id)
-                      ) {
-                        nextDatasets.push(toMissionDataset(medaEntry));
-                      }
-                      updateMission({
-                        selectedObservations: [
-                          ...toMutable(mission.selectedObservations),
-                          newObs,
-                        ],
-                        selectedDatasets: nextDatasets,
-                      });
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* T-3.3: CRISM Targeted VNIR Hyperspectral Inspector */}
-              <div className="mt-4 border-t border-mx-border pt-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Documented Reference & Planned Datasets (Catalog metadata available, interactive data not active) */}
+            {plannedOrUnavailableDatasets.length > 0 && (
+              <div className="mt-5 rounded-lg border border-dashed border-mx-border bg-mx-panel/40 p-4">
+                <div className="flex items-center justify-between">
                   <div>
                     <h3 className="mx-heading m-0 text-sm flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                      MRO CRISM Targeted Spectral Analysis (Jezero Delta)
+                      <FileText size={15} className="text-mx-muted" />
+                      Documented Reference &amp; Planned Catalog Datasets ({plannedOrUnavailableDatasets.length})
                     </h3>
                     <p className="mx-body m-0 mt-0.5 text-xs text-mx-muted">
-                      Inspect diagnostic 2.296 µm Fe/Mg smectite clay and Mg-carbonate absorption curves to test delta aqueous lacustrine deposition.
+                      Calibrated catalog references and future planned datasets applicable to {mission.region?.name ?? "this region"}. Interactive pixel sampling is not yet integrated for active mission logging.
                     </p>
                   </div>
+                </div>
 
+                <div className="mt-3 space-y-2">
+                  {plannedOrUnavailableDatasets.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded border border-mx-border bg-mx-bg/80 p-2.5 text-xs"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-mx-text">{entry.name}</span>
+                          <span className="mx-badge mx-badge--outline text-[10px]">
+                            {entry.integrationStatusLabel}
+                          </span>
+                        </div>
+                        <p className="m-0 mt-0.5 text-[11px] text-mx-muted">
+                          {entry.instrument} · {entry.mission} ({entry.spatialResolutionLabel}) — {entry.scientificPurpose}
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-mono text-mx-muted">
+                        PDS: {entry.pdsProductId}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Regional In-Situ / Environmental Instruments */}
+            {isGale ? (
+              <div className="mt-5 border-t border-mx-border pt-4">
+                {/* Interactive Curiosity REMS Telemetry Inspector */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="mx-eyebrow mx-eyebrow--accent">
+                      In-Situ Rover Environmental Telemetry · Curiosity REMS (`msl_rems_env`)
+                    </span>
+                    <p className="m-0 mt-0.5 text-xs text-mx-muted">
+                      Inspect authentic NASA PDS REMS surface pressure, air/ground temperature, relative humidity, UV flux, and wind hardware degradation timeline for Gale Crater (Sol 0010 &amp; Sol 01600).
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setShowCrismInspector((prev) => !prev)}
+                    onClick={() => setShowRemsInspector((prev) => !prev)}
+                    aria-expanded={showRemsInspector}
                     className="mx-btn mx-btn--secondary mx-btn--sm"
                   >
-                    {showCrismInspector ? (
+                    {showRemsInspector ? (
                       <>
-                        <ChevronUp size={14} aria-hidden="true" /> Hide CRISM Inspector
+                        <ChevronUp size={14} aria-hidden="true" /> Hide REMS Inspector
                       </>
                     ) : (
                       <>
-                        <ChevronDown size={14} aria-hidden="true" /> Inspect CRISM Spectra
+                        <ChevronDown size={14} aria-hidden="true" /> Inspect REMS Measurements
                       </>
                     )}
                   </button>
                 </div>
 
-                {(showCrismInspector || selectedDatasetIds.has("crism_jezero_vnir")) && (
+                {(showRemsInspector || selectedDatasetIds.has("msl_rems_env")) && (
                   <div className="mt-4">
-                    <CrismSpectralPanel
-                      onRecordObservation={(newObs) => {
-                        const crismEntry = EVIDENCE_DATASETS_BY_ID["crism_jezero_vnir"];
+                    <RemsEnvironmentalPanel
+                      onLogObservation={(params) => {
+                        const remsEntry = EVIDENCE_DATASETS_BY_ID["msl_rems_env"];
+                        const newObs: Observation = {
+                          id: createId("obs"),
+                          datasetId: "msl_rems_env",
+                          name: params.name,
+                          source: remsEntry?.name ?? "Curiosity REMS Surface Environmental Telemetry",
+                          coordinates: {
+                            latitude: -4.5895,
+                            longitude: 137.4417,
+                          },
+                          observationDate: params.observationDate,
+                          description: params.description,
+                          regionId: mission.region?.id,
+                          provenance: {
+                            source: `${remsEntry?.instrument ?? "REMS"} · ${remsEntry?.mission ?? "MSL Curiosity"} (${remsEntry?.sourceReference ?? "NASA PDS"})`,
+                            sourceId: params.sourceId,
+                            processingMethod: params.processingMethod,
+                            limitations: [
+                              params.limitation,
+                              ...(remsEntry?.limitations ?? []),
+                            ],
+                          },
+                        };
                         const nextDatasets = toMutable(mission.selectedDatasets);
-                        if (crismEntry && !nextDatasets.some((d) => d.id === crismEntry.id)) {
-                          nextDatasets.push(toMissionDataset(crismEntry));
+                        if (
+                          remsEntry &&
+                          !nextDatasets.some((d) => d.id === remsEntry.id)
+                        ) {
+                          nextDatasets.push(toMissionDataset(remsEntry));
                         }
                         updateMission({
                           selectedObservations: [
@@ -1010,7 +1101,161 @@ export default function InvestigationPage() {
                   </div>
                 )}
               </div>
-            </div>
+            ) : !isJezero ? (
+              <div className="mt-5 rounded-md border border-mx-border bg-mx-panel/50 p-4">
+                <div className="flex items-start gap-3">
+                  <Info size={16} className="mt-0.5 text-mx-accent shrink-0" aria-hidden="true" />
+                  <div className="text-xs text-mx-muted">
+                    <p className="m-0 font-medium text-mx-text">
+                      Orbital Exploration Environment · {mission.region?.name ?? "Selected Region"}
+                    </p>
+                    <p className="m-0 mt-1">
+                      In-situ surface rover telemetry (Perseverance MEDA &amp; Curiosity REMS) is mapped to their respective landing craters. Global orbital datasets (MOLA roughness, THEMIS nighttime/daytime thermal IR, and TES mineral/dust maps) and authentic 3D terrain elevation models are active for <strong>{mission.region?.name ?? "the selected region"}</strong>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-5 border-t border-mx-border pt-4">
+                {/* T-2.2: Interactive MEDA Environmental Measurements Inspector */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="mx-eyebrow mx-eyebrow--accent">
+                      In-Situ Rover Environmental Telemetry · MEDA (`m2020_meda_env`)
+                    </span>
+                    <p className="m-0 mt-0.5 text-xs text-mx-muted">
+                      Inspect real Perseverance MEDA pressure, air/ground
+                      temperature, relative humidity, wind, and solar radiation
+                      from NASA PDS4 (Sol 0001 &amp; Sol 0036).
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowMedaInspector((prev) => !prev)}
+                    aria-expanded={showMedaInspector}
+                    className="mx-btn mx-btn--secondary mx-btn--sm"
+                  >
+                    {showMedaInspector ? (
+                      <>
+                        <ChevronUp size={14} aria-hidden="true" /> Hide MEDA
+                        Inspector
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown size={14} aria-hidden="true" /> Inspect MEDA
+                        Measurements
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {(showMedaInspector ||
+                  selectedDatasetIds.has("m2020_meda_env")) && (
+                  <div className="mt-4">
+                    <MedaEnvironmentalPanel
+                      onLogObservation={(params) => {
+                        if (!isJezero) return;
+                        const medaEntry =
+                          EVIDENCE_DATASETS_BY_ID["m2020_meda_env"];
+                        const newObs: Observation = {
+                          id: createId("obs"),
+                          datasetId: "m2020_meda_env",
+                          name: params.name,
+                          source:
+                            medaEntry?.name ??
+                            "Perseverance MEDA Surface Environmental Measurements",
+                          coordinates: {
+                            latitude: 18.4447,
+                            longitude: 77.4508,
+                          },
+                          observationDate: params.observationDate,
+                          description: params.description,
+                          regionId: mission.region?.id,
+                          provenance: {
+                            source: `${medaEntry?.instrument ?? "MEDA"} · ${
+                              medaEntry?.mission ?? "Mars 2020 Perseverance"
+                            } (${medaEntry?.sourceReference ?? "NASA PDS4"})`,
+                            sourceId: params.sourceId,
+                            processingMethod: params.processingMethod,
+                            limitations: [
+                              params.limitation,
+                              ...(medaEntry?.limitations ?? []),
+                            ],
+                          },
+                        };
+                        const nextDatasets = toMutable(mission.selectedDatasets);
+                        if (
+                          medaEntry &&
+                          !nextDatasets.some((d) => d.id === medaEntry.id)
+                        ) {
+                          nextDatasets.push(toMissionDataset(medaEntry));
+                        }
+                        updateMission({
+                          selectedObservations: [
+                            ...toMutable(mission.selectedObservations),
+                            newObs,
+                          ],
+                          selectedDatasets: nextDatasets,
+                        });
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* T-3.3: CRISM Targeted VNIR Hyperspectral Inspector */}
+                <div className="mt-4 border-t border-mx-border pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="mx-heading m-0 text-sm flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                        CRISM Reference Spectra (Jezero)
+                      </h3>
+                      <p className="mx-body m-0 mt-0.5 text-xs text-mx-muted">
+                        Explore bundled spectral profiles with unverified extraction provenance and find the NASA PDS archive.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowCrismInspector((prev) => !prev)}
+                      className="mx-btn mx-btn--secondary mx-btn--sm"
+                    >
+                      {showCrismInspector ? (
+                        <>
+                          <ChevronUp size={14} aria-hidden="true" /> Hide CRISM Inspector
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown size={14} aria-hidden="true" /> Inspect CRISM Spectra
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {(showCrismInspector || selectedDatasetIds.has("crism_jezero_vnir")) && (
+                    <div className="mt-4">
+                      <CrismSpectralPanel
+                        onRecordObservation={(newObs) => {
+                          if (!isJezero) return;
+                          const crismEntry = EVIDENCE_DATASETS_BY_ID["crism_jezero_vnir"];
+                          const nextDatasets = toMutable(mission.selectedDatasets);
+                          if (crismEntry && !nextDatasets.some((d) => d.id === crismEntry.id)) {
+                            nextDatasets.push(toMissionDataset(crismEntry));
+                          }
+                          updateMission({
+                            selectedObservations: [
+                              ...toMutable(mission.selectedObservations),
+                              { ...newObs, regionId: mission.region?.id },
+                            ],
+                            selectedDatasets: nextDatasets,
+                          });
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* STEP 3: RECORD OBSERVATIONS */}
@@ -1121,56 +1366,68 @@ export default function InvestigationPage() {
                       {!(obsDatasetId in EVIDENCE_DATASETS_BY_ID) && (
                         <optgroup label="Legacy Observation Source (Migrate to Evidence Dataset)">
                           <option value={obsDatasetId}>
-                            ⚠ {resolveDatasetMetadata(obsDatasetId).name} (Legacy Map Layer)
+                            ⚠ {resolveDatasetMetadata(obsDatasetId, activeRegionId).name} (Legacy Map Layer)
                           </option>
                         </optgroup>
                       )}
-                      {mission.selectedDatasets.some(
-                        (d) => d.id in EVIDENCE_DATASETS_BY_ID
-                      ) && (
-                        <optgroup label="Selected in Your Investigation">
-                          {EVIDENCE_DATASETS.filter((entry) =>
-                            selectedDatasetIds.has(entry.id)
-                          ).map((entry) => (
-                            <option key={`sel-${entry.id}`} value={entry.id}>
-                              ★ {entry.name} ({entry.spatialResolutionLabel})
-                              {entry.integrationStatus ===
-                              "documented_not_integrated"
-                                ? " [Catalog Reference]"
-                                : ""}
+                      {obsDatasetId in EVIDENCE_DATASETS_BY_ID &&
+                        !isDatasetApplicableToRegion(
+                          EVIDENCE_DATASETS_BY_ID[obsDatasetId],
+                          activeRegionId
+                        ) && (
+                          <optgroup label="Cross-Region Source (Previously Recorded)">
+                            <option value={obsDatasetId}>
+                              ⚠ {EVIDENCE_DATASETS_BY_ID[obsDatasetId].name} (Non-regional)
                             </option>
-                          ))}
+                          </optgroup>
+                        )}
+                      {mission.selectedDatasets.some(
+                        (d) =>
+                          d.id in EVIDENCE_DATASETS_BY_ID &&
+                          isDatasetApplicableToRegion(
+                            EVIDENCE_DATASETS_BY_ID[d.id],
+                            activeRegionId
+                          )
+                      ) && (
+                        <optgroup label={`Selected in ${mission.region?.name ?? "Investigation"}`}>
+                          {applicableDatasets
+                            .filter((entry) => selectedDatasetIds.has(entry.id))
+                            .map((entry) => (
+                              <option key={`sel-${entry.id}`} value={entry.id}>
+                                ★ {entry.name} ({entry.spatialResolutionLabel})
+                              </option>
+                            ))}
                         </optgroup>
                       )}
                       {(
                         Object.keys(
                           EVIDENCE_CATEGORY_LABELS
                         ) as EvidenceDatasetCategory[]
-                      ).map((catKey) => (
-                        <optgroup
-                          key={catKey}
-                          label={EVIDENCE_CATEGORY_LABELS[catKey]}
-                        >
-                          {EVIDENCE_DATASETS.filter(
-                            (entry) => entry.category === catKey
-                          ).map((entry) => (
-                            <option key={entry.id} value={entry.id}>
-                              {entry.name} ({entry.spatialResolutionLabel})
-                              {entry.integrationStatus ===
-                              "documented_not_integrated"
-                                ? " [Catalog Reference]"
-                                : ""}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
+                      ).map((catKey) => {
+                        const catDatasets = applicableDatasets.filter(
+                          (entry) => entry.category === catKey
+                        );
+                        if (catDatasets.length === 0) return null;
+                        return (
+                          <optgroup
+                            key={catKey}
+                            label={EVIDENCE_CATEGORY_LABELS[catKey]}
+                          >
+                            {catDatasets.map((entry) => (
+                              <option key={entry.id} value={entry.id}>
+                                {entry.name} ({entry.spatialResolutionLabel})
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
                     </select>
                   </div>
                 </div>
 
                 {/* Live Scientific Context Card for Selected Source Dataset */}
                 {(() => {
-                  const activeDs = resolveDatasetMetadata(obsDatasetId);
+                  const activeDs = resolveDatasetMetadata(obsDatasetId, activeRegionId);
                   return (
                     <div className="rounded-lg border border-mx-border bg-mx-panel/70 p-3 text-xs">
                       <div className="space-y-1.5">
@@ -1179,6 +1436,14 @@ export default function InvestigationPage() {
                             {activeDs.instrumentAndMission}
                           </span>
                           <div className="flex flex-wrap items-center gap-1.5">
+                            {activeDs.activeRegionalCaveat && (
+                              <span
+                                className="mx-badge border border-amber-500/40 bg-amber-950/40 text-amber-300"
+                                title="Regional scientific caveat applies to current study region"
+                              >
+                                ⚠ Regional Caveat
+                              </span>
+                            )}
                             <span
                               className={`mx-badge ${
                                 activeDs.integrationStatus ===
@@ -1201,7 +1466,7 @@ export default function InvestigationPage() {
                           </div>
                         </div>
                         <p className="m-0 text-mx-text">
-                          <strong>Measures:</strong>{" "}
+                          <strong>{obsDatasetId === CRISM_REFERENCE_DATASET_ID ? "Profile contents" : "Measures"}:</strong>{" "}
                           {activeDs.measurementProvided}
                         </p>
                         <p className="m-0 text-mx-muted">
@@ -1212,6 +1477,16 @@ export default function InvestigationPage() {
                           <strong>Limitations:</strong>{" "}
                           {activeDs.limitations[0]}
                         </p>
+                        {activeDs.activeRegionalCaveat && (
+                          <div className="rounded border border-amber-500/40 bg-amber-950/40 p-2 text-amber-200">
+                            <strong className="text-amber-300">
+                              Regional Interpretive Caveat (
+                              {getMarsRegionById(activeRegionId)?.name ?? activeRegionId}
+                              ):
+                            </strong>{" "}
+                            {activeDs.activeRegionalCaveat}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -1351,7 +1626,10 @@ export default function InvestigationPage() {
             ) : (
               <div className="grid gap-2.5 sm:grid-cols-2">
                 {mission.selectedObservations.map((obs) => {
-                  const meta = resolveDatasetMetadata(obs.datasetId);
+                  const meta = resolveDatasetMetadata(
+                    obs.datasetId,
+                    obs.regionId ?? activeRegionId
+                  );
                   return (
                     <div
                       key={obs.id}
@@ -1365,6 +1643,14 @@ export default function InvestigationPage() {
                           <span className="mx-badge text-[10px]">
                             {meta.spatialResolutionLabel}
                           </span>
+                          {meta.activeRegionalCaveat && (
+                            <span
+                              className="mx-badge border border-amber-500/40 bg-amber-950/30 text-amber-300 text-[10px]"
+                              title={meta.activeRegionalCaveat}
+                            >
+                              ⚠ Regional Caveat
+                            </span>
+                          )}
                           {meta.isVisualizationOnlyLegacy && (
                             <span className="mx-badge mx-badge--danger text-[10px]">
                               Legacy Map Layer
@@ -1420,72 +1706,76 @@ export default function InvestigationPage() {
               </div>
             )}
 
-            {/* T-2.3: Perseverance Surface Imagery Catalog (Catalog #3) */}
-            <div className="mt-6 border-t border-mx-border pt-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <span className="mx-eyebrow mx-eyebrow--accent">
-                    Surface Imagery Catalog (Catalog #3) · Perseverance Rover Photographs
-                  </span>
-                  <p className="m-0 mt-0.5 text-xs text-mx-muted">
-                    Browse authentic Mastcam-Z, Navcam, and SuperCam RMI surface
-                    photographs from NASA&apos;s Perseverance rover and reference
-                    them in your scientific observations.
-                  </p>
+            {/* T-2.3: Perseverance Surface Imagery Catalog (Catalog #3) - Jezero Only */}
+            {isJezero && (
+              <div className="mt-6 border-t border-mx-border pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="mx-eyebrow mx-eyebrow--accent">
+                      Surface Imagery Catalog (Catalog #3) · Perseverance Rover Photographs
+                    </span>
+                    <p className="m-0 mt-0.5 text-xs text-mx-muted">
+                      Browse authentic Mastcam-Z, Navcam, and SuperCam RMI surface
+                      photographs from NASA&apos;s Perseverance rover and reference
+                      them in your scientific observations.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowRoverImagery((prev) => !prev)}
+                    aria-expanded={showRoverImagery}
+                    className="mx-btn mx-btn--secondary mx-btn--sm"
+                  >
+                    {showRoverImagery ? (
+                      <>
+                        <ChevronUp size={14} aria-hidden="true" /> Hide Rover
+                        Imagery Catalog
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown size={14} aria-hidden="true" /> Browse
+                        Perseverance Surface Imagery
+                      </>
+                    )}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowRoverImagery((prev) => !prev)}
-                  aria-expanded={showRoverImagery}
-                  className="mx-btn mx-btn--secondary mx-btn--sm"
-                >
-                  {showRoverImagery ? (
-                    <>
-                      <ChevronUp size={14} aria-hidden="true" /> Hide Rover
-                      Imagery Catalog
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown size={14} aria-hidden="true" /> Browse
-                      Perseverance Surface Imagery
-                    </>
-                  )}
-                </button>
-              </div>
 
-              {showRoverImagery && (
-                <div className="mt-4">
-                  <PerseveranceImageryPanel
-                    onLogObservationWithImage={(params) => {
-                      const newObs: Observation = {
-                        id: createId("obs"),
-                        datasetId: params.datasetId,
-                        name: params.name,
-                        source: `${params.surfaceImage.roverName} ${params.surfaceImage.instrument} (Surface Imagery Catalog)`,
-                        // Raw EDR records do not provide planetocentric (lat, lon); never invent coordinates.
-                        coordinates: undefined,
-                        observationDate: params.observationDate,
-                        description: params.description,
-                        provenance: {
-                          source: `${params.surfaceImage.instrumentLabel} · Mars 2020 Perseverance (${params.surfaceImage.credit})`,
-                          sourceId: params.sourceId,
-                          sourceUrl: params.sourceUrl,
-                          processingMethod: params.processingMethod,
-                          limitations: [params.limitation],
-                        },
-                        surfaceImage: params.surfaceImage,
-                      };
-                      updateMission({
-                        selectedObservations: [
-                          ...toMutable(mission.selectedObservations),
-                          newObs,
-                        ],
-                      });
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+                {showRoverImagery && (
+                  <div className="mt-4">
+                    <PerseveranceImageryPanel
+                      onLogObservationWithImage={(params) => {
+                        if (!isJezero) return;
+                        const newObs: Observation = {
+                          id: createId("obs"),
+                          datasetId: params.datasetId,
+                          name: params.name,
+                          source: `${params.surfaceImage.roverName} ${params.surfaceImage.instrument} (Surface Imagery Catalog)`,
+                          // Raw EDR records do not provide planetocentric (lat, lon); never invent coordinates.
+                          coordinates: undefined,
+                          observationDate: params.observationDate,
+                          description: params.description,
+                          regionId: mission.region?.id,
+                          provenance: {
+                            source: `${params.surfaceImage.instrumentLabel} · Mars 2020 Perseverance (${params.surfaceImage.credit})`,
+                            sourceId: params.sourceId,
+                            sourceUrl: params.sourceUrl,
+                            processingMethod: params.processingMethod,
+                            limitations: [params.limitation],
+                          },
+                          surfaceImage: params.surfaceImage,
+                        };
+                        updateMission({
+                          selectedObservations: [
+                            ...toMutable(mission.selectedObservations),
+                            newObs,
+                          ],
+                        });
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {/* STEP 4: MANAGE SCIENTIFIC TARGETS & HYPOTHESES */}

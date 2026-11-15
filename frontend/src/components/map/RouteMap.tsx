@@ -16,6 +16,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Crosshair, Layers, Minus, Plus } from "lucide-react";
 import { MAP_LAYERS, type MapLayerId } from "../../data/mapLayers";
+import { getMarsRegionById } from "../../data/regions";
 import {
   getDataProvider,
   type TileLayerConfig,
@@ -50,6 +51,7 @@ interface RouteMapProps {
   activeRouteId: string | null;
   draftWaypoints: readonly Waypoint[];
   onAddWaypoint?: (coords: Coordinates, target?: RouteTarget) => void;
+  regionId?: string;
 }
 
 function CenterUpdater({
@@ -93,6 +95,7 @@ export default function RouteMap({
   activeRouteId,
   draftWaypoints,
   onAddWaypoint,
+  regionId,
 }: RouteMapProps) {
   const [layerId, setLayerId] = useState<MapLayerId>("mars_global_mola");
   const [tileConfig, setTileConfig] = useState<TileLayerConfig | null>(null);
@@ -104,12 +107,21 @@ export default function RouteMap({
   const [showGeology, setShowGeology] = useState(true);
   const [geologyData, setGeologyData] = useState<any>(null);
 
+  const activeRegion = regionId ? getMarsRegionById(regionId) : null;
+  const isJezero = !regionId || regionId === "jezero-crater";
+  const activeGeologyDataPath =
+    activeRegion?.geologicalDatasets?.find((d) => d.dataPath)?.dataPath ??
+    (isJezero ? "/data/jezero_geology_sim3464.geojson" : null);
+
   const layer = MAP_LAYERS[layerId];
 
   useEffect(() => {
-    if (!showGeology) return;
+    if (!showGeology || !activeGeologyDataPath) {
+      setGeologyData(null);
+      return;
+    }
     let cancelled = false;
-    fetch("/data/jezero_geology_sim3464.geojson")
+    fetch(activeGeologyDataPath)
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled) setGeologyData(data);
@@ -120,7 +132,7 @@ export default function RouteMap({
     return () => {
       cancelled = true;
     };
-  }, [showGeology]);
+  }, [showGeology, activeGeologyDataPath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -266,21 +278,22 @@ export default function RouteMap({
         )}
 
         {draftWaypoints.map((wp, idx) => {
-          const unit = identifyGeologicUnitAt(wp.coordinates);
+          const unit = isJezero ? identifyGeologicUnitAt(wp.coordinates) : null;
           return (
             <CircleMarker
               key={wp.id}
               center={[wp.coordinates.latitude, wp.coordinates.longitude]}
               radius={5}
               pathOptions={{
-                color: unit.color || "#93b98a",
+                color: unit?.color || "#93b98a",
                 weight: 2.5,
                 fillColor: "#141215",
                 fillOpacity: 1,
               }}
             >
               <Tooltip direction="top" offset={[0, -6]} className="mx-site-label">
-                {wp.name ?? `Draft WP ${idx + 1}`} [{unit.unit_code}]
+                {wp.name ?? `Draft WP ${idx + 1}`}
+                {unit ? ` [${unit.unit_code}]` : ""}
               </Tooltip>
             </CircleMarker>
           );
@@ -397,11 +410,16 @@ export default function RouteMap({
             </div>
 
             <label className="flex cursor-pointer items-center justify-between gap-2 border-t border-mx-border pt-2.5 text-xs text-mx-text">
-              <span>USGS SIM 3464 Geology</span>
+              <span>
+                {activeGeologyDataPath
+                  ? "USGS SIM 3464 Geology"
+                  : "Regional Geology (In Prep)"}
+              </span>
               <input
                 type="checkbox"
                 className="mx-checkbox"
-                checked={showGeology}
+                checked={showGeology && Boolean(activeGeologyDataPath)}
+                disabled={!activeGeologyDataPath}
                 onChange={(e) => setShowGeology(e.target.checked)}
               />
             </label>

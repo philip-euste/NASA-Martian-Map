@@ -2,93 +2,129 @@
 //
 // Registry of Marswalk simulator environments.
 //
-// Jezero Crater is the active, fully data-backed implementation. Gale Crater,
-// Valles Marineris, and Olympus Mons are registered as planned environments
-// without fabricated coordinates, DEM metadata, or environmental measurements;
-// once their real DEM tile pyramids and geologic maps are prepared, they can be
-// promoted to `status: "available"` and use the same simulator engine and HUD.
+// All 4 primary exploration regions (Jezero Crater, Gale Crater, Valles Marineris,
+// and Olympus Mons) have authentic 3D digital elevation models and surface
+// textures generated from official NASA/USGS PDS datasets.
+//
+// Strict Availability Rule:
+// Each region resolves ONLY to its own verified environment.
+// Fallback across regions is strictly prohibited.
 
+import { getMarsRegionById } from "../../data/regions";
+import type { SimulatorAvailability } from "../../types/region";
 import type {
   PlannedSimulatorEnvironment,
   SimulatorEnvironmentConfig,
   SimulatorEnvironmentId,
 } from "../shared/environment";
 import { JEZERO_ENVIRONMENT } from "./jezero";
+import { GALE_ENVIRONMENT } from "./gale";
+import { VALLES_ENVIRONMENT } from "./valles";
+import { OLYMPUS_ENVIRONMENT } from "./olympus";
+
+export { JEZERO_ENVIRONMENT, GALE_ENVIRONMENT, VALLES_ENVIRONMENT, OLYMPUS_ENVIRONMENT };
+export type { SimulatorEnvironmentConfig };
 
 export const AVAILABLE_SIMULATOR_ENVIRONMENTS: Record<
-  "jezero-crater",
+  SimulatorEnvironmentId,
   SimulatorEnvironmentConfig
 > = {
   "jezero-crater": JEZERO_ENVIRONMENT,
+  "gale-crater": GALE_ENVIRONMENT,
+  "valles-marineris": VALLES_ENVIRONMENT,
+  "olympus-mons": OLYMPUS_ENVIRONMENT,
 };
 
-export const PLANNED_SIMULATOR_ENVIRONMENTS: readonly PlannedSimulatorEnvironment[] = [
-  {
-    id: "gale-crater",
-    status: "planned",
-    displayName: "Gale Crater (Aeolis Mons / Mount Sharp)",
-    requiredAssets: [
-      "Tiled 16-bit CTX/HiRISE DEM pyramid (manifest.json, overview.u16, height/*.u16)",
-      "Orthorectified CTX/HiRISE surface texture tiles (overview.jpg, tex/*.jpg)",
-      "USGS Gale Crater / Aeolis Mons chronostratigraphic unit GeoJSON",
-      "Curiosity REMS environmental reference bundle and MSL surface imagery catalog",
-    ],
-  },
-  {
-    id: "valles-marineris",
-    status: "planned",
-    displayName: "Valles Marineris (Coprates / Candor Chasma)",
-    requiredAssets: [
-      "Tiled 16-bit HRSC/CTX/MOLA DEM pyramid covering canyon wall relief",
-      "Orthorectified HRSC/CTX imagery tiles",
-      "USGS Valles Marineris geologic & landslide hazard polygon catalog",
-      "Orbital atmospheric pressure/dust reference profile for canyon floor elevation",
-    ],
-  },
-  {
-    id: "olympus-mons",
-    status: "planned",
-    displayName: "Olympus Mons (Caldera & Volcanic Flank)",
-    requiredAssets: [
-      "Tiled 16-bit HRSC/MOLA DEM pyramid covering caldera and lava flow units",
-      "Orthorectified HRSC/CTX surface imagery tiles",
-      "USGS volcanic flow unit & scarp hazard GeoJSON",
-      "High-altitude low-pressure atmospheric reference profile",
-    ],
-  },
-];
+export const PLANNED_SIMULATOR_ENVIRONMENTS: readonly PlannedSimulatorEnvironment[] = [];
+
+export interface ResolvedSimulatorResult {
+  readonly available: boolean;
+  readonly availability: SimulatorAvailability;
+  readonly environment: SimulatorEnvironmentConfig | null;
+  readonly plannedEnvironment: PlannedSimulatorEnvironment | null;
+  readonly regionId: string;
+  readonly regionName: string;
+  readonly reason?: string;
+}
 
 /**
- * Resolves the simulator environment config for a mission region. If the region
- * matches an available 3D environment, that environment is returned; otherwise
- * it falls back to the Jezero Crater reference DEM while indicating that the
- * requested region uses the reference terrain.
+ * Resolves the simulator environment for a region ID.
+ *
+ * Strictly enforces that regions with verified 3D environments return
+ * `available: true` and their own valid `environment`.
+ *
+ * NEVER falls back to Jezero Crater or across regions.
  */
-export function resolveSimulatorEnvironment(regionId?: string | null): {
-  environment: SimulatorEnvironmentConfig;
-  isFallbackEnvironment: boolean;
-  plannedEnvironment: PlannedSimulatorEnvironment | null;
-} {
-  const normalized = (regionId ?? "jezero-crater").toLowerCase();
+export function resolveSimulatorEnvironment(
+  regionId?: string | null
+): ResolvedSimulatorResult {
+  const normalized = (regionId ?? "jezero-crater").toLowerCase().trim();
 
-  if (normalized === "jezero-crater" || normalized.includes("jezero")) {
+  // 1. Jezero Crater
+  if (normalized === "jezero-crater" || normalized === "jezero") {
     return {
+      available: true,
+      availability: "AVAILABLE",
       environment: JEZERO_ENVIRONMENT,
-      isFallbackEnvironment: false,
       plannedEnvironment: null,
+      regionId: "jezero-crater",
+      regionName: JEZERO_ENVIRONMENT.displayName,
     };
   }
 
-  const planned =
-    PLANNED_SIMULATOR_ENVIRONMENTS.find(
-      (item) =>
-        item.id === (normalized as SimulatorEnvironmentId) ||
-        normalized.includes(item.id.split("-")[0])
-    ) ?? null;
+  // 2. Gale Crater
+  if (normalized === "gale-crater" || normalized === "gale") {
+    return {
+      available: true,
+      availability: "AVAILABLE",
+      environment: GALE_ENVIRONMENT,
+      plannedEnvironment: null,
+      regionId: "gale-crater",
+      regionName: GALE_ENVIRONMENT.displayName,
+    };
+  }
 
+  // 3. Valles Marineris
+  if (
+    normalized === "valles-marineris" ||
+    normalized === "valles" ||
+    normalized.includes("valles")
+  ) {
+    return {
+      available: true,
+      availability: "AVAILABLE",
+      environment: VALLES_ENVIRONMENT,
+      plannedEnvironment: null,
+      regionId: "valles-marineris",
+      regionName: VALLES_ENVIRONMENT.displayName,
+    };
+  }
+
+  // 4. Olympus Mons
+  if (
+    normalized === "olympus-mons" ||
+    normalized === "olympus" ||
+    normalized.includes("olympus")
+  ) {
+    return {
+      available: true,
+      availability: "AVAILABLE",
+      environment: OLYMPUS_ENVIRONMENT,
+      plannedEnvironment: null,
+      regionId: "olympus-mons",
+      regionName: OLYMPUS_ENVIRONMENT.displayName,
+    };
+  }
+
+  // 5. Unavailable / Other Regions (e.g. Nili Fossae, Syrtis Major, or unknown)
+  const region = getMarsRegionById(regionId);
   return {
-    environment: JEZERO_ENVIRONMENT,
-    isFallbackEnvironment: true,
-    plannedEnvironment: planned,
+    available: false,
+    availability: region?.simulatorAvailability ?? "UNAVAILABLE",
+    environment: null,
+    plannedEnvironment: null,
+    regionId: region?.id ?? (regionId || "unknown-region"),
+    regionName: region?.name ?? (regionId || "Unknown Region"),
+    reason: `No 3D surface simulation environment is currently available for ${region?.name ?? "this region"}. Scientific exploration is supported via 2D orbital map layers, evidence datasets, and hypothesis tracking.`,
   };
 }
