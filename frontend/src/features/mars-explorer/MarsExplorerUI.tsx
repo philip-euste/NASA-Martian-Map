@@ -325,6 +325,8 @@ export function JezeroExpeditionView() {
       name: targetName,
       regionId: activeRegion?.id ?? "jezero-crater",
       withinDem: withinJezeroDem ? "1" : "0",
+      playerHeight: "1.75",
+      suitWeight: "195",
     });
     return `/src/simulator/jezero_crater/scripts/jezero-simulator.html?${params.toString()}`;
   }, [
@@ -360,6 +362,13 @@ export function JezeroExpeditionView() {
       ) {
         setInitializing(false);
       }
+      if (
+        event.data &&
+        typeof event.data === "object" &&
+        event.data.type === "marswalk:exit"
+      ) {
+        setViewMode("map");
+      }
     }
 
     window.addEventListener("message", handleMessage);
@@ -383,6 +392,8 @@ export function JezeroExpeditionView() {
         requestedLatitude: targetCoordinates.latitude,
         requestedLongitude: targetCoordinates.longitude,
         withinDem: withinJezeroDem,
+        playerHeight: 1.75,
+        suitWeight: 195,
         targets: mission.scientificTargets.map((t) => ({
           id: t.id,
           name: t.name,

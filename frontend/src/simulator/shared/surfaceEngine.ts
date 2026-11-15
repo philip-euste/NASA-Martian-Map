@@ -117,6 +117,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
   const overlay = $("overlay");
   const startBtn = $<HTMLButtonElement>("start");
+  const exitBtn = document.getElementById("exit-sim") as HTMLButtonElement | null;
   const statusEl = $("status");
   const proximityEl = $("proximity-prompt");
   const hudPos = $("hud-pos");
@@ -238,8 +239,9 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
   function lonLatToColRow(lon: number, lat: number) {
     const p = M.proj;
+    const eastLon = normalizeEastLongitude(lon);
     return {
-      col: ((lon - p.westLonDeg) / (p.eastLonDeg - p.westLonDeg)) * M.cols - 0.5,
+      col: ((eastLon - p.westLonDeg) / (p.eastLonDeg - p.westLonDeg)) * M.cols - 0.5,
       row: ((p.northLatDeg - lat) / (p.northLatDeg - p.southLatDeg)) * M.rows - 0.5,
     };
   }
@@ -1697,6 +1699,12 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   startBtn.addEventListener("click", () => {
     externalModalOpen = false;
     controls.lock();
+  });
+
+  exitBtn?.addEventListener("click", () => {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "marswalk:exit", environmentId: envConfig.id }, window.location.origin);
+    }
   });
 
   renderer.domElement.addEventListener("click", () => {

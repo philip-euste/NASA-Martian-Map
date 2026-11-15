@@ -639,6 +639,7 @@ const REGION_ID_ALIASES: Record<string, string> = {
   "nili-fossae": "nili-fossae",
   syrtis: "syrtis-major",
   "syrtis-major": "syrtis-major",
+  "syrtis-major-planum": "syrtis-major",
 };
 
 export function getMarsRegionById(id?: string | null): MarsRegion | undefined {

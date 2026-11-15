@@ -821,7 +821,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
             focusCoordinates.longitude,
           ]}
           zoom={Math.max(mapZoom, 3)}
-          minZoom={1}
+          minZoom={2}
           maxZoom={12}
           zoomControl={false}
           attributionControl={false}
@@ -830,7 +830,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
             [-90, -180],
             [90, 180],
           ]}
-          maxBoundsViscosity={0.85}
+          maxBoundsViscosity={1.0}
           worldCopyJump={false}
           zoomAnimation={true}
           style={{

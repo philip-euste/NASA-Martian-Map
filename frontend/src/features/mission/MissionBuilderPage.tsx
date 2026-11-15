@@ -386,35 +386,55 @@ export default function MissionBuilderPage() {
               astronaut deploys from and returns to at the end of the EVA.
             </p>
 
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <span className="mx-eyebrow mr-1">Landing site presets:</span>
-              {EXPLORATION_SITES.map((site) => {
-                const active = mission.region?.id === site.id;
-                return (
-                  <button
-                    key={site.id}
-                    type="button"
-                    onClick={() => {
-                      setStartLat(String(site.latitude));
-                      setStartLon(String(site.longitude));
-                      setRegion(
-                        buildRegion(
-                          site.id,
-                          site.name,
-                          {
-                            latitude: site.latitude,
-                            longitude: site.longitude,
-                          },
-                          site.description
-                        )
-                      );
-                    }}
-                    className={`mx-chip ${active ? "mx-chip--active" : ""}`}
-                  >
-                    {site.name}
-                  </button>
-                );
-              })}
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <label htmlFor="landing-preset-select" className="mx-eyebrow shrink-0">
+                Landing site preset:
+              </label>
+              <select
+                id="landing-preset-select"
+                className="mx-input h-9 max-w-xs text-xs font-medium"
+                value={
+                  EXPLORATION_SITES.find(
+                    (s) =>
+                      Math.abs(Number(startLat) - s.latitude) < 0.001 &&
+                      Math.abs(Number(startLon) - s.longitude) < 0.001
+                  )?.id ?? "custom"
+                }
+                onChange={(e) => {
+                  const site = EXPLORATION_SITES.find((s) => s.id === e.target.value);
+                  if (site) {
+                    setStartLat(String(site.latitude));
+                    setStartLon(String(site.longitude));
+                    setRegion(
+                      buildRegion(
+                        site.id,
+                        site.name,
+                        {
+                          latitude: site.latitude,
+                          longitude: site.longitude,
+                        },
+                        site.description
+                      )
+                    );
+                  }
+                }}
+              >
+                <option value="custom">Custom Site Coordinates</option>
+                {EXPLORATION_SITES.map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.name} ({site.latitude}°, {site.longitude}°)
+                  </option>
+                ))}
+              </select>
+              {EXPLORATION_SITES.some(
+                (s) =>
+                  Math.abs(Number(startLat) - s.latitude) < 0.001 &&
+                  Math.abs(Number(startLon) - s.longitude) < 0.001
+              ) && (
+                <span className="rounded border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase text-amber-300">
+                  Preset Active
+                </span>
+              )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

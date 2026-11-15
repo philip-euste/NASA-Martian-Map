@@ -96,7 +96,7 @@ interface LocalJezeroManifest {
   };
 }
 
-interface LocalJezeroDemAsset {
+export interface LocalJezeroDemAsset {
   readonly manifest: LocalJezeroManifest;
   readonly overview: Uint16Array;
 }
@@ -124,7 +124,7 @@ async function fetchWithTimeout(
   }
 }
 
-async function loadLocalJezeroDem(): Promise<LocalJezeroDemAsset | null> {
+export async function loadLocalJezeroDem(): Promise<LocalJezeroDemAsset | null> {
   if (cachedLocalDemPromise) {
     return cachedLocalDemPromise;
   }
@@ -184,7 +184,7 @@ function isWithinLocalManifest(
   );
 }
 
-function sampleLocalJezeroElevation(
+export function sampleLocalJezeroElevation(
   asset: LocalJezeroDemAsset,
   coords: Coordinates
 ): DemElevation | null {
@@ -450,7 +450,7 @@ export class MarsDemProvider {
       const PRIMARY_SITE_ELEVATIONS = [
         { name: "Jezero Crater", latitude: 18.44, longitude: 77.45, radiusDeg: 2.5, elevation: -2540.0, productId: "MOLA_MEGDR_128PPD (Reference)" },
         { name: "Gale Crater", latitude: -5.37, longitude: 137.81, radiusDeg: 2.5, elevation: -4500.0, productId: "MOLA_MEGDR_128PPD (Reference)" },
-        { name: "Valles Marineris", latitude: -9.8, longitude: 283.6, radiusDeg: 8.0, elevation: -8500.0, productId: "MOLA_MEGDR_128PPD (Reference)" },
+        { name: "Valles Marineris", latitude: -9.8, longitude: -76.4, radiusDeg: 8.0, elevation: -8500.0, productId: "MOLA_MEGDR_128PPD (Reference)" },
         { name: "Olympus Mons", latitude: 18.65, longitude: -133.8, radiusDeg: 5.0, elevation: 21229.0, productId: "MOLA_MEGDR_128PPD (Reference)" },
       ];
 

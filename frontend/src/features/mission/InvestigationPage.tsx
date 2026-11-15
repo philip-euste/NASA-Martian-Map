@@ -554,9 +554,15 @@ export default function InvestigationPage() {
                   </div>
                   {mission.region && (
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className="rounded px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider border border-emerald-500/40 bg-emerald-500/20 text-emerald-400">
-                        3D Active
-                      </span>
+                      {getMarsRegionById(mission.region.id)?.simulatorAvailability === "AVAILABLE" ? (
+                        <span className="rounded border border-emerald-500/40 bg-emerald-500/20 px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                          3D Active
+                        </span>
+                      ) : (
+                        <span className="rounded border border-sky-500/40 bg-sky-500/20 px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-sky-400">
+                          2D Active
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>

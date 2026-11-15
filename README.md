@@ -1,162 +1,172 @@
 # Mars Explorer
 
-Mars Explorer is a browser-based starting point for exploring Mars surface maps and planning scientific investigations. The current frontend provides a welcome page and a Leaflet map using NASA Mars Trek layers, with shared mission state in React. Three.js and its React ecosystem are installed as the foundation for future 3D work; the current frontend does not yet render a 3D scene.
+Mars Explorer is an open-source, web-based planetary exploration, mission planning, and extravehicular activity (EVA) simulation platform. Built with React 19, TypeScript, Leaflet, Three.js, and FastAPI, Mars Explorer unifies multi-mission NASA and USGS planetary datasets into an operational, four-stage scientific mission workflow.
 
-The intended investigation workflow is:
+---
 
-**DISCOVER → INVESTIGATE → ANALYZE → PLAN → SIMULATE → REVIEW → REPORT**
+## Mission Workflow
 
-The current implementation focuses on discovery and map-based investigation. The later analysis, planning, simulation, review, and reporting stages describe the product direction and are not yet implemented as complete features.
+Mars Explorer bridges the gap between orbital remote sensing and human surface exploration through a structured 4-stage pipeline:
 
-## Technology stack
+```
+STAGE 01: INVESTIGATE  ──►  STAGE 02: PLAN  ──►  STAGE 03: EXPLORE  ──►  STAGE 04: REVIEW & REPORT
+(Evidence, CRISM & Weather)   (Mission Builder & Route)   (3D WebGL 0.38g EVA)    (4-Tier Provenance Dossier)
+```
 
-| Technology | Responsibility and current status |
-| --- | --- |
-| React | Frontend UI and shared mission state. |
-| TypeScript | Types and static checks for frontend code. |
-| Vite | Frontend development server and production bundler. |
-| Leaflet | Current 2D interactive Mars map. |
-| Three.js | 3D rendering library, installed for planned Mars visualization; no 3D scene is implemented yet. |
-| React Three Fiber | React renderer for Three.js, installed for planned 3D components; not yet used in the frontend source. |
-| Drei | Helpers and reusable components for React Three Fiber, installed but not yet used. |
-| Python | Optional runtime for the FastAPI backend in `backend/main.py`. No separate scientific data-processing pipeline is configured yet. |
-| Cloudflare R2 | Intended object storage for scientific assets; no R2 integration or credentials are configured. |
-| Vercel | Possible frontend hosting and deployment target; no Vercel configuration is present. |
-| GitHub | Source control, branches, and pull requests for team collaboration. |
+1. **Stage 01 · Investigate (`/mission/investigate`):** Formulate research questions, select NASA PDS datasets, inspect CRISM spectral mineralogy, analyze in-situ weather telemetry (Mars 2020 MEDA & MSL Curiosity REMS), and log orbital resolution knowledge gaps.
+2. **Stage 02 · Plan (`/mission/builder` & `/mission/route`):** Configure landing coordinates, astronaut biometrics, consumables, and equipment constraints. Plot candidate traverses with real-time elevation profiling, automated slope hazard detection ($\ge 12^\circ$ caution, $\ge 18^\circ$ hazard), and USGS SIM 3464 chronostratigraphic contact mapping.
+3. **Stage 03 · Explore (`/mission/simulate`):** Step onto the Martian surface in an interactive, first-person 3D WebGL EVA simulator with Apollo-derived bioenergetic suit telemetry scaled to Martian $0.38g$ gravity ($3.71\text{ m/s}^2$). Features WASD locomotion, partial gravity hops (`Space`), reconnaissance flight (`F`), interactive 2D DEM tactical navigation map (`M`), and proximity-based sample tube collection (`E`).
+4. **Stage 04 · Review & Report (`/mission/review` & `/mission/report`):** Audit mission objectives, visited targets, and cached sample tubes. Compile and export a flight-ready Expedition Dossier in Markdown or JSON enforced by a rigorous 4-tier scientific provenance audit.
 
-The frontend currently requests public NASA Mars Trek map data directly. The Python API in `backend/main.py` exposes layer metadata and NASA capabilities endpoints, but is not currently connected to the frontend.
+---
 
-The installed frontend 3D stack is Three.js `0.187.0`, React Three Fiber `9.8.2`, Drei `10.7.9`, and `@types/three` `0.187.0`, alongside React and React DOM `19.3.1`. These versions are compatible according to the installed packages' peer requirements.
+## Four-Region Scientific Implementation Matrix
+
+Mars Explorer features authentic 3D terrain simulation and data integration across four landmark Martian physiographic provinces:
+
+| Region Identifier | Region Display Name | Category | Coordinates | 3D Simulator Status | Primary Dataset Backing |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `jezero-crater` | Jezero Crater | Impact Crater / Lacustrine Delta | 18.44°N, 77.45°E | **AVAILABLE** | USGS/NASA CTX 20m DTM + 5m Orthomosaic; M2020 MEDA; USGS SIM 3464 GeoJSON; Perseverance EDR Images |
+| `gale-crater` | Gale Crater (Mount Sharp) | Impact Crater / Sedimentary Mound | -5.37°S, 137.81°E | **AVAILABLE** | NASA PDS MGS MOLA 128 ppd DEM; MSL Curiosity REMS In-Situ Telemetry (Sols 10 & 1600); 5.4 km Relief |
+| `valles-marineris` | Valles Marineris (Melas Chasma) | Equatorial Tectonic Rift Canyon | -9.80°S, 283.60°E | **AVAILABLE** | NASA PDS MGS MOLA 128 ppd DEM; MGS/MRO Orbital Context; 8.4 km Canyon Wall Relief |
+| `olympus-mons` | Olympus Mons (Summit Caldera) | Planetary Shield Volcano | 18.65°N, 226.20°E | **AVAILABLE** | NASA PDS MGS MOLA 128 ppd DEM; High-Altitude Thin Atmosphere Model; 10.7 km Caldera Relief |
+| `nili-fossae` | Nili Fossae (Watershed Context) | Graben System | 21.00°N, 75.00°E | **UNAVAILABLE** | Orbital Context Only (Zero Cross-Region Fallback) |
+| `syrtis-major` | Syrtis Major (Volcanic Plain) | Shield Volcano Plain | 8.40°N, 69.50°E | **UNAVAILABLE** | Orbital Context Only (Zero Cross-Region Fallback) |
+
+> **Strict Non-Fallback Invariant:** Each region resolves strictly to its own genuine datasets and simulation environment. Non-simulator regions (`nili-fossae`, `syrtis-major`) resolve strictly to `available: false` and render regional context without falling back to Jezero Crater.
+
+---
+
+## 4-Tier Scientific Provenance Hierarchy
+
+To maintain scientific validity, Mars Explorer strictly classifies every data point in the mission workflow:
+
+* **Tier 1 — NASA PDS Orbital Remote Sensing:** MRO HiRISE orthomosaics, CTX digital elevation models, MGS MOLA altimetry, Odyssey THEMIS thermal mosaics, and NASA Mars Trek WMTS tile services.
+* **Tier 2 — Peer-Reviewed Geological Mapping:** USGS Scientific Investigations Map 3464 (Sun & Stack, 2020) chronostratigraphic units and IAU planetary nomenclature gazetteer records.
+* **Tier 3 — In-Situ Rover Surface Ground Truth:** Mars 2020 *Perseverance* EDR raw image archive (Mastcam-Z, Navcam, SuperCam) and MSL *Curiosity* REMS environmental sensor records.
+* **Tier 4 — Simulated Crew EVA Records:** Marswalk astronaut traverse paths, bioenergetic consumable calculations, cached sample tube metadata, and user field notes.
+
+---
+
+## Technology Stack
+
+| Technology | Responsibility & Implementation Status |
+| :--- | :--- |
+| **React 19 & TypeScript** | Client-side application architecture, mission state machine, and route lifecycle. |
+| **Vite 8** | Development server and multi-page production bundler (`index.html` + 4 regional simulator HTML entrypoints). |
+| **Tailwind CSS v4** | Design system, responsive layout, glassmorphic HUD overlays, and Mars-themed UI components. |
+| **Leaflet & React-Leaflet** | 2D interactive planetary map, NASA Mars Trek WMTS layer caching, and coordinate projection. |
+| **Three.js & WebGL 2.0** | 3D interactive Mars globe, 16-bit DEM terrain mesh rendering, bilinear height evaluation, and first-person astronaut controls. |
+| **Cesium** | High-precision planetary ellipsoid and geospatial coordinate transformation utilities. |
+| **Python 3.10+ & FastAPI** | High-performance asynchronous microservice for USGS STAC catalog discovery, GDAL remote DEM chunk retrieval, and MEDA telemetry querying. |
+| **Rasterio & GDAL** | Extraction, windowed reading (`/vsicurl/`), and coordinate reprojection of remote planetary digital elevation models. |
+| **Supabase** | Optional cloud session caching and user authentication via Supabase GoTrue. |
+| **Cloudflare Pages** | Production edge hosting and global static delivery. |
+
+---
 
 ## Prerequisites
 
-- Node.js `^20.19.0` or `>=22.12.0` and npm `>=10`. Node.js 22 LTS or 24 is recommended.
-- Git.
-- VS Code (recommended).
-- Python 3.10 or newer only if you want to run the optional backend API.
+* **Node.js:** `^20.19.0` or `>=22.12.0` (Node.js 22 LTS recommended) and npm `>=10`.
+* **Git:** For source control and submodules.
+* **Python:** `3.10` or newer (only required for running the optional FastAPI backend).
+* **Browser:** Any modern browser with hardware-accelerated **WebGL 2.0** support.
 
-The supported Node.js range follows the installed Vite toolchain. Check versions with `node --version` and `npm --version`.
+---
 
-## Installation
+## Installation & Setup
+
+### 1. Frontend Setup
 
 ```sh
-git clone <repository-url>
-cd <repository-directory>
 cd frontend
 npm ci
 ```
 
-Replace `<repository-url>` with the URL supplied by your team; no repository URL is assumed here. `npm ci` installs the exact dependency tree recorded in `frontend/package-lock.json`.
-
-No environment variables are currently required to run the frontend. If local settings are introduced later, create a local `.env.local` file in `frontend/`; do not commit it.
-
-### Optional Python backend
-
-From the repository root, create and activate a virtual environment, then install the backend dependencies:
+### 2. Optional Backend Setup
 
 ```sh
+# From repository root:
 python -m venv .venv
-```
 
-PowerShell:
-
-```powershell
+# Windows (PowerShell):
 .\.venv\Scripts\Activate.ps1
-python -m pip install fastapi httpx "uvicorn[standard]"
-python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+
+# macOS / Linux:
+source .venv/bin/activate
+
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-On macOS or Linux, activate the environment with `source .venv/bin/activate` before running the install and start commands. The API is then available at `http://127.0.0.1:8000`. Running the frontend does not require the backend. The backend currently has no dependency manifest or lockfile, so these Python dependencies are not pinned.
+---
 
-## Running the project
+## Available Commands
 
-From `frontend/`:
-
-```sh
-npm run dev
-```
-
-Open [http://localhost:5173](http://localhost:5173). If that port is occupied, Vite may select and print another available port.
-
-## Available frontend commands
-
-Run these commands from `frontend/`:
+### Frontend (`frontend/`)
 
 | Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start the Vite development server. |
-| `npm run typecheck` | Run TypeScript checks without emitting files. |
-| `npm run build` | Type-check and create the production bundle in `frontend/dist/`. |
-| `npm run preview` | Serve the production bundle locally for verification. |
+| :--- | :--- |
+| `npm run dev` | Launch the Vite development server (default: `http://localhost:5173`). |
+| `npx tsc --noEmit` | Run full TypeScript static type checking without emitting files. |
+| `npm run build` | Compile TypeScript and bundle production assets in `frontend/dist/`. |
+| `npm run preview` | Locally preview the production build. |
+| `npm run cf:preview` | Preview Cloudflare Pages build locally using Miniflare / Wrangler. |
 
-There is no lint script or linter configuration in this repository yet.
+### Verification & Testing (Root Directory)
 
-## Project structure
+The project includes an automated test harness covering architecture invariants, scientific catalogs, PDS data integrity, and 3D simulation mechanics:
+
+```sh
+# Run the complete test suite (337 checks):
+node tests/verify_phase1_multiregion.mjs
+node tests/verify_phase2_catalog.mjs
+node tests/verify_phase2_3_integration.mjs
+node tests/verify_phase3_simulator.mjs
+```
+
+---
+
+## Project Structure
 
 ```text
 .
 ├── backend/
-│   └── main.py
+│   ├── data-processing/       # Acquisition, processing & validation scripts
+│   ├── datasets/              # Processed MEDA, REMS & rover imagery catalogs
+│   ├── routers/               # Regions & geological features API endpoints
+│   ├── services/              # Gazetteer boundary & geology query service
+│   ├── Dockerfile             # Container specification for backend service
+│   ├── main.py                # FastAPI application & layer capabilities proxy
+│   ├── requirements.txt       # Pinned backend dependencies
+│   └── terrain_dem.py         # USGS STAC search & remote MOLA/HiRISE DEM reader
 ├── frontend/
-│   ├── index.html
-│   ├── package.json
-│   ├── package-lock.json
-│   ├── tsconfig.json
-│   ├── vite.config.ts
-│   └── src/
-│       ├── app/routes/              # Application routes
-│       ├── components/map/          # Leaflet Mars map
-│       ├── data/                    # Map layer definitions
-│       ├── features/                # Welcome and planetary explorer pages
-│       ├── services/                # NASA Trek data provider
-│       ├── state/mission/            # Shared mission state
-│       ├── types/                   # Shared TypeScript types
-│       ├── App.tsx
-│       └── main.tsx
-├── .gitignore
-├── ARCHITECTURE.md
+│   ├── public/
+│   │   ├── _headers           # Cloudflare Pages edge headers
+│   │   ├── data/              # Packaged scientific GeoJSON, MEDA & REMS bundles
+│   │   ├── gale/              # Gale Crater 3D DEM tiles, manifest & overview
+│   │   ├── jezero/            # Jezero Crater 3D DEM tiles, manifest & overview
+│   │   ├── olympus/           # Olympus Mons 3D DEM tiles, manifest & overview
+│   │   └── valles/            # Valles Marineris 3D DEM tiles, manifest & overview
+│   ├── src/
+│   │   ├── app/routes/        # React Router v7 routes
+│   │   ├── components/        # Layout, Header, MarsMap, RouteMap, UI components
+│   │   ├── data/              # Regional registries, evidence datasets, map layers
+│   │   ├── features/
+│   │   │   ├── auth/          # Supabase authentication provider & views
+│   │   │   ├── mars-explorer/ # 3D globe & 2D explorer UI controllers
+│   │   │   ├── mission/       # 4-stage mission workflow pages & panels
+│   │   │   └── planetary-explorer/ # Explorer & location detail pages
+│   │   ├── services/          # Providers for DEM, REMS, MEDA, CRISM & Trek
+│   │   ├── simulator/         # Regional 3D WebGL environments & surface engine
+│   │   ├── state/mission/     # MissionContext and persistence state machine
+│   │   ├── three/             # Three.js Mars globe rendering
+│   │   └── types/             # Canonical TypeScript definitions
+│   ├── package.json           # Locked frontend dependencies
+│   ├── tsconfig.json          # TypeScript compiler configuration
+│   └── vite.config.ts         # Multi-page bundler configuration
+├── tests/                     # Automated verification test suites & reports
+├── ARCHITECTURE.md            # In-depth system architecture & data contracts
+├── LICENSE
 └── README.md
 ```
-
-`frontend/dist/`, `frontend/node_modules/`, and `.venv/` are generated or local-only directories; they are not source files. The Three.js, React Three Fiber, and Drei packages are installed, but a 3D scene/component has not yet been added.
-
-## Environment variables
-
-There are no required environment variables at present and no `.env.example` file yet. If local frontend settings become necessary, create `frontend/.env.local`. Vite exposes variables to browser code only when their names start with `VITE_`. Treat every `VITE_` value as public: **never put API keys, passwords, or other private credentials in a Vite variable**. Keep private credentials in server-side configuration, such as the backend or a deployment secret store. Local `.env` files are ignored by Git; do not commit them.
-
-## Production build
-
-From `frontend/`, run:
-
-```sh
-npm run typecheck
-npm run build
-npm run preview
-```
-
-The build command also performs a TypeScript check. Preview the generated production bundle at the local URL printed by Vite.
-
-## Team development workflow
-
-1. Clone the repository, enter its directory, and then enter `frontend/`.
-2. Install the locked dependencies with `npm ci`.
-3. If local environment settings are introduced, create `frontend/.env.local`; do not commit it.
-4. Start the frontend with `npm run dev`.
-5. From the repository root, create a focused branch, for example `git switch -c feature/map-layer-controls`.
-6. Run `npm run typecheck` and `npm run build` from `frontend/`, then commit your changes with a descriptive message.
-7. Push your branch with `git push -u origin feature/map-layer-controls`.
-8. Open a pull request on GitHub and request review.
-9. To update your local main branch, run `git switch main` and `git pull --ff-only origin main`. Rebase or merge the updated main branch into your feature branch as agreed by the team.
-
-Commit `frontend/package-lock.json` whenever dependency declarations change. It records the resolved versions so `npm ci` installs a consistent tree across machines. Do not commit `node_modules/`, which is generated locally, large, and platform-specific.
-
-## Troubleshooting
-
-- **Unsupported Node.js version:** Install Node.js 22.12 or newer (or 20.19 or newer), then reopen the terminal and confirm `node --version`.
-- **`npm ci` fails:** Run it from `frontend/`; confirm the package manifest and lockfile are both present and committed together. If dependencies changed, regenerate and commit the lockfile with npm rather than editing it manually.
-- **Missing package/import:** From `frontend/`, run `npm ci`; verify the imported package is declared in `package.json`.
-- **TypeScript errors:** Run `npm run typecheck` from `frontend/` and address the reported file and line before building.
-- **Vite will not start:** Confirm the terminal is in `frontend/`, dependencies are installed, and port 5173 is available. Use the URL Vite prints if it selects another port.
-- **Environment value is missing:** Confirm the local file is named `.env.local`, the variable uses the `VITE_` prefix if browser code needs it, and restart the dev server after changing it. Never place a private key in a `VITE_` variable.
-- **Production build fails:** Run `npm run typecheck` first, fix its errors, then retry `npm run build`. Check that the Node.js version is supported and the lockfile install completed successfully.
-- **Python API will not start:** Ensure Python 3.10+ is installed, the virtual environment is active, and `python -m pip install fastapi httpx "uvicorn[standard]"` completed successfully. The backend dependencies are not currently pinned in a manifest.

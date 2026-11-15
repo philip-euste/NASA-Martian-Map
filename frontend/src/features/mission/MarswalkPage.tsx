@@ -528,6 +528,8 @@ export default function MarswalkPage() {
       } else if (msg.type === "marswalk:open-notepad") {
         setActiveFieldworkTab("observation");
         setShowFieldworkDrawer(true);
+      } else if (msg.type === "marswalk:exit") {
+        navigate("/mission/plan");
       } else if (
         msg.type === "marswalk:return-to-base" ||
         msg.type === "marswalk:returned-to-base"
@@ -1801,25 +1803,27 @@ export default function MarswalkPage() {
                       </div>
                     )}
 
-                    {/* Phase 5: Perseverance Ground-Truth Outcrop Preview + Orbital CRISM/HiRISE Telemetry */}
-                    {activeEnv.id === "jezero-crater" && <div className="rounded-lg border border-cyan-500/35 bg-mx-surface/80 p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-1.5">
-                        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-cyan-300">
-                          <Camera size={12} />
-                          PERSEVERANCE GROUND-TRUTH OUTCROP PREVIEW
-                        </span>
-                        <span className="rounded border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[9px] text-cyan-200">
-                          Sol {activeGroundTruthSol} · {groundTruthImages.length}{" "}
-                          Frames
-                        </span>
-                      </div>
+                    {/* Phase 5: Perseverance Ground-Truth Outcrop Preview + Orbital CRISM/HiRISE Telemetry (Collapsible to keep HUD uncluttered) */}
+                    {activeEnv.id === "jezero-crater" && (
+                      <details className="group rounded-lg border border-cyan-500/35 bg-mx-surface/80 p-3">
+                        <summary className="flex cursor-pointer select-none items-center justify-between gap-1.5 list-none">
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-cyan-300">
+                            <Camera size={12} />
+                            Perseverance Ground Outcrops
+                          </span>
+                          <span className="rounded border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[9px] text-cyan-200">
+                            Sol {activeGroundTruthSol} · {groundTruthImages.length}{" "}
+                            Frames
+                          </span>
+                        </summary>
 
-                      <p className="m-0 mt-1 text-[11px] font-semibold text-white">
-                        {groundTruthCorrelation.zoneLabel}
-                      </p>
-                      <p className="m-0 mt-0.5 text-[10px] text-mx-muted">
-                        {groundTruthCorrelation.rationale}
-                      </p>
+                        <div className="mt-2.5 border-t border-cyan-500/20 pt-2">
+                          <p className="m-0 mt-1 text-[11px] font-semibold text-white">
+                            {groundTruthCorrelation.zoneLabel}
+                          </p>
+                          <p className="m-0 mt-0.5 text-[10px] text-mx-muted">
+                            {groundTruthCorrelation.rationale}
+                          </p>
 
                       {/* Sol Switcher (Sol 1 Landing, Sol 420 Delta, Sol 2024/2031 Séítah) */}
                       <div className="mt-2 flex flex-wrap items-center gap-1">
@@ -1950,7 +1954,9 @@ export default function MarswalkPage() {
                           {groundTruthCorrelation.orbitalLink}
                         </p>
                       </div>
-                    </div>}
+                    </div>
+                  </details>
+                )}
 
                     {/* Linked Orbital Datasets & Open Gaps Context */}
                     <div className="rounded-lg border border-mx-border bg-mx-surface/50 p-3">
@@ -2154,19 +2160,25 @@ export default function MarswalkPage() {
                           <Wrench size={12} className="text-mx-accent" />
                           Mission Equipment Loadout Check
                         </span>
-                        <button
-                          type="button"
-                          onClick={toggleRotaryDrillInLoadout}
-                          className={`rounded border px-2 py-0.5 text-[10px] font-semibold transition ${
-                            isRotaryDrillEquipped
-                              ? "border-emerald-500/45 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
-                              : "border-rose-500/45 bg-rose-500/15 text-rose-300 hover:bg-rose-500/25"
-                          }`}
-                        >
-                          {isRotaryDrillEquipped
-                            ? "✓ Rotary Core Drill Equipped"
-                            : "✕ Rotary Core Drill Unequipped"}
-                        </button>
+                        {mission.configuration?.equipment && mission.configuration.equipment.length === 0 ? (
+                          <span className="rounded border border-mx-border bg-mx-bg/60 px-2 py-0.5 text-[10px] font-semibold text-mx-muted" title="Mission configured with no tools in Stage 2">
+                            Loadout Locked (0 Tools)
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={toggleRotaryDrillInLoadout}
+                            className={`rounded border px-2 py-0.5 text-[10px] font-semibold transition ${
+                              isRotaryDrillEquipped
+                                ? "border-emerald-500/45 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
+                                : "border-rose-500/45 bg-rose-500/15 text-rose-300 hover:bg-rose-500/25"
+                            }`}
+                          >
+                            {isRotaryDrillEquipped
+                              ? "✓ Rotary Core Drill Equipped"
+                              : "✕ Rotary Core Drill Unequipped"}
+                          </button>
+                        )}
                       </div>
                       <p className="m-0 mt-1 text-[10px] text-mx-muted">
                         Active Loadout:{" "}

@@ -29,7 +29,11 @@ import {
 import { EXPLORATION_SITES } from "../../data/explorationSites";
 import { getMarsRegionById, isWithinRegionBounds } from "../../data/regions";
 import { isWithinJezeroDemBounds } from "../mars-explorer/marsExplorer.types";
-import { marsDemProvider } from "../../services/providers/marsDem";
+import {
+  marsDemProvider,
+  loadLocalJezeroDem,
+  sampleLocalJezeroElevation,
+} from "../../services/providers/marsDem";
 import { useMission } from "../../state/mission/MissionContext";
 import type { Coordinates, Route, Waypoint } from "../../types";
 import { identifyGeologicUnitAt } from "../../utils/jezeroStratigraphy";
@@ -220,9 +224,19 @@ export default function RoutePlannerPage() {
     };
 
     try {
+      const localAsset = isJezero ? await loadLocalJezeroDem() : null;
       const elevations: (number | null)[] = [];
       for (const wp of allWaypointsForProfile) {
         if (isJezero && isWithinJezeroDemBounds(wp.coordinates)) {
+          if (localAsset) {
+            const localSample = sampleLocalJezeroElevation(localAsset, wp.coordinates);
+            if (localSample) {
+              elevations.push(localSample.elevation);
+              demPointsSampled++;
+              usedLocalFallbackDem = true;
+              continue;
+            }
+          }
           try {
             const res = await marsDemProvider.getElevation(wp.coordinates);
             elevations.push(res.elevation);
@@ -256,6 +270,15 @@ export default function RoutePlannerPage() {
             if (!isWithinJezeroDemBounds(coordinates)) {
               corridorMissingSamples++;
               continue;
+            }
+            if (localAsset) {
+              const localSample = sampleLocalJezeroElevation(localAsset, coordinates);
+              if (localSample && Number.isFinite(localSample.elevation)) {
+                sampled.push({ coordinates, elevation: localSample.elevation, segment, step });
+                corridorSamples++;
+                usedLocalFallbackDem = true;
+                continue;
+              }
             }
             try {
               const result = await marsDemProvider.getElevation(coordinates);
@@ -698,13 +721,13 @@ export default function RoutePlannerPage() {
               </EmptyState>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left text-sm">
+                <table className="w-full min-w-[760px] border-collapse text-left text-sm">
                   <thead>
                     <tr className="border-b border-mx-border text-[11px] font-mono uppercase tracking-wider text-mx-dim">
                       <th className="py-3 pr-4">Route</th>
-                      <th className="px-3 py-3">Targets</th>
-                      <th className="px-3 py-3">Total Distance</th>
-                      <th className="px-3 py-3">Return Leg</th>
+                      <th className="px-3 py-3 whitespace-nowrap">Targets</th>
+                      <th className="px-3 py-3 whitespace-nowrap">Total Distance</th>
+                      <th className="px-3 py-3 whitespace-nowrap">Return Leg</th>
                       <th className="px-3 py-3">Elevation (+ / −)</th>
                       <th className="px-3 py-3">Measurement Source</th>
                       <th className="py-3 pl-3 text-right">Action</th>
@@ -755,15 +778,15 @@ export default function RoutePlannerPage() {
                               {route.estimatedDurationHours ?? "—"} h walk
                             </span>
                           </td>
-                          <td className="mx-mono px-3 py-3.5 text-mx-muted">
+                          <td className="mx-mono px-3 py-3.5 text-mx-muted whitespace-nowrap">
                             {route.reachedTargetIds.length} /{" "}
                             {mission.scientificTargets.length}
                           </td>
-                          <td className="mx-mono px-3 py-3.5 text-mx-text">
+                          <td className="mx-mono px-3 py-3.5 text-mx-text whitespace-nowrap">
                             {formatDistance(route.distanceMeters) ??
                               "Calculated on save"}
                           </td>
-                          <td className="mx-mono px-3 py-3.5 text-mx-muted">
+                          <td className="mx-mono px-3 py-3.5 text-mx-muted whitespace-nowrap">
                             {route.returnRouteIncluded
                               ? `Included (${
                                   formatDistance(route.returnDistanceMeters) ??
@@ -771,7 +794,7 @@ export default function RoutePlannerPage() {
                                 })`
                               : "One-way"}
                           </td>
-                          <td className="mx-mono px-3 py-3.5 text-mx-dim">
+                          <td className="mx-mono px-3 py-3.5 text-mx-dim whitespace-nowrap">
                             {elevText}
                           </td>
                           <td className="px-3 py-3.5 text-xs text-mx-dim">

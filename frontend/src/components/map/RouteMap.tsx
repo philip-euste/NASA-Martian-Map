@@ -145,7 +145,7 @@ export default function RouteMap({
   const { mission } = useMission();
   const selectedStudyRegionId = mission.region?.id ?? null;
 
-  const [layerId, setLayerId] = useState<MapLayerId>("mars_global_mola");
+  const [layerId, setLayerId] = useState<MapLayerId>("mars_viking_global");
   const [tileConfig, setTileConfig] = useState<TileLayerConfig | null>(null);
   const [layerError, setLayerError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);

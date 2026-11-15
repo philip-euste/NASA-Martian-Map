@@ -238,7 +238,7 @@ export default function PerseveranceImageryPanel({
       aria-labelledby="perseverance-imagery-heading"
     >
       <SectionHeading
-        eyebrow="Phase 2 · T-2.3 · Surface Imagery Catalog (Catalog #3)"
+        eyebrow="Perseverance Rover Ground Imagery"
         title="Perseverance Rover Surface Imagery (Mastcam-Z, Navcam & SuperCam RMI)"
         icon={<Camera size={18} />}
         action={

@@ -93,7 +93,7 @@ export default function MarsExplorer() {
 
           <MarsExplorerControls />
 
-          <div className="absolute left-4 top-[176px] z-[1200] flex flex-col gap-2 sm:left-6">
+          <div className="absolute bottom-24 left-4 z-[1200] flex flex-col gap-2 sm:left-6">
             <div
               className="flex flex-col gap-2"
               role="toolbar"
