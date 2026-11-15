@@ -1,4 +1,5 @@
 
+import logging
 from functools import lru_cache
 from threading import RLock
 
@@ -59,10 +60,18 @@ DATASET_LOCK = RLock()
 from urllib.parse import urlparse
 
 ALLOWED_REMOTE_DOMAINS = (
-    "amazonaws.com",
+    "execute-api.us-west-2.amazonaws.com",
+    "s3-us-west-2.amazonaws.com",
+    "s3.us-west-2.amazonaws.com",
+    "astrogeo-ard.s3-us-west-2.amazonaws.com",
+    "asc-planetarynames-data.s3.us-west-2.amazonaws.com",
+    "pds-geosciences.wustl.edu",
     "wustl.edu",
-    "nasa.gov",
+    "trek.nasa.gov",
+    "services.arcgis.com",
+    "planetarynames.wr.usgs.gov",
     "usgs.gov",
+    "nasa.gov",
 )
 
 def is_allowed_remote_url(url: str) -> bool:
@@ -84,9 +93,8 @@ def open_remote_dataset(url: str):
         with rasterio.Env(**REMOTE_ENV_OPTIONS):
             return rasterio.open(f"/vsicurl/{url}")
     except Exception as error:
-        raise RuntimeError(
-            f"Unable to open remote elevation dataset: {error}"
-        ) from error
+        logging.error("Unable to open remote elevation dataset: %s", error)
+        raise RuntimeError("Unable to open remote elevation dataset.") from error
 
 
 def get_band_scale_offset(dataset):

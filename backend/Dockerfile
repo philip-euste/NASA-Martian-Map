@@ -18,4 +18,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 COPY . .
 
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]

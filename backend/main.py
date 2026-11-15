@@ -1,6 +1,7 @@
 
 import csv
 import json
+import logging
 import re
 import xml.etree.ElementTree as ET
 
@@ -54,11 +55,21 @@ app.add_middleware(
         "https://nasa-martian-map.pages.dev",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    return response
 
 # Register endpoints
 app.include_router(terrain_dem_router)
@@ -167,9 +178,10 @@ def find_meda_report(sensor, sol):
             report = json.load(report_file)
 
     except (OSError, json.JSONDecodeError) as error:
+        logging.error("Unable to read MEDA report: %s", error)
         raise HTTPException(
             status_code=500,
-            detail=f"Unable to read MEDA report: {error}",
+            detail="Unable to read MEDA report.",
         )
 
     if report.get("validation") != "passed":
@@ -300,10 +312,10 @@ async def get_nasa_capabilities(layer_id: str):
         }
 
     except httpx.HTTPError as error:
-
+        logging.error("NASA service request failed: %s", error)
         raise HTTPException(
             status_code=502,
-            detail=f"NASA service request failed: {error}",
+            detail="NASA service request failed.",
         )
 
 
@@ -400,10 +412,10 @@ async def get_layer_info(layer_id: str):
         }
 
     except httpx.HTTPError as error:
-
+        logging.error("NASA request failed: %s", error)
         raise HTTPException(
             status_code=502,
-            detail=f"NASA request failed: {error}",
+            detail="NASA request failed.",
         )
 
     except ET.ParseError:
@@ -544,10 +556,10 @@ def get_meda_observations(
             )
 
     except OSError as error:
-
+        logging.error("Unable to read MEDA observations: %s", error)
         raise HTTPException(
             status_code=500,
-            detail=f"Unable to read MEDA observations: {error}",
+            detail="Unable to read MEDA observations.",
         )
 
     total_records = report.get(
@@ -611,9 +623,10 @@ def get_perseverance_surface_images(
         with open(ROVER_IMAGERY_FILE, "r", encoding="utf-8") as f:
             catalog = json.load(f)
     except Exception as e:
+        logging.error("Unable to load Perseverance surface imagery: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Unable to load Perseverance surface imagery: {e}",
+            detail="Unable to load Perseverance surface imagery.",
         )
 
     items = catalog.get("items", [])

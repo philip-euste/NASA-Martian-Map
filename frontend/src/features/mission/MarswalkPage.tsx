@@ -417,7 +417,7 @@ export default function MarswalkPage() {
         equipment: mission.configuration?.equipment ?? [],
         targets: beaconList,
       },
-      "*"
+      window.location.origin
     );
   };
 
@@ -427,6 +427,15 @@ export default function MarswalkPage() {
 
     function handleMessage(event: MessageEvent) {
       if (iframeRef.current && event.source !== iframeRef.current.contentWindow) {
+        return;
+      }
+      if (
+        event.origin &&
+        event.origin !== window.location.origin &&
+        event.origin !== "https://nasa-martian-map.pages.dev" &&
+        !event.origin.endsWith(".nasa-martian-map.pages.dev") &&
+        !/^http:\/\/(localhost|127\.0\.0\.1):(5173|4173|3000)$/.test(event.origin)
+      ) {
         return;
       }
       if (!event.data || typeof event.data !== "object") return;

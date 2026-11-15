@@ -155,7 +155,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         type: "jezero-simulation-error",
         environmentId: envConfig.id,
         message: `WebGL renderer initialization failed: ${message}`,
-      }, "*");
+      }, window.location.origin);
     }
     return;
   }
@@ -438,7 +438,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       if (!b.isBase && !b.visited && dist <= 45) {
         b.visited = true;
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: "marswalk:visit-target", targetId: b.id, name: b.name }, "*");
+          window.parent.postMessage({ type: "marswalk:visit-target", targetId: b.id, name: b.name }, window.location.origin);
         }
       }
     }
@@ -447,10 +447,39 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
     if (closest && closest.distMeters <= 85) {
       proximityEl.classList.remove("hidden");
+      proximityEl.textContent = "";
       if (closest.beacon.isBase) {
-        proximityEl.innerHTML = `<strong>${closest.beacon.name}</strong> (${Math.round(closest.distMeters)} m) · Press <strong>[R]</strong> to Complete EVA Return`;
+        const strongTitle = document.createElement("strong");
+        strongTitle.textContent = closest.beacon.name;
+        proximityEl.appendChild(strongTitle);
+
+        proximityEl.append(` (${Math.round(closest.distMeters)} m) · Press `);
+
+        const rKey = document.createElement("strong");
+        rKey.textContent = "[R]";
+        proximityEl.appendChild(rKey);
+
+        proximityEl.append(" to Complete EVA Return");
       } else {
-        proximityEl.innerHTML = `Approaching <strong>${closest.beacon.name}</strong> (${Math.round(closest.distMeters)} m) · <strong>[E]</strong> Fieldwork · <strong>[N]</strong> Notepad`;
+        proximityEl.append("Approaching ");
+
+        const strongTitle = document.createElement("strong");
+        strongTitle.textContent = closest.beacon.name;
+        proximityEl.appendChild(strongTitle);
+
+        proximityEl.append(` (${Math.round(closest.distMeters)} m) · `);
+
+        const eKey = document.createElement("strong");
+        eKey.textContent = "[E]";
+        proximityEl.appendChild(eKey);
+
+        proximityEl.append(" Fieldwork · ");
+
+        const nKey = document.createElement("strong");
+        nKey.textContent = "[N]";
+        proximityEl.appendChild(nKey);
+
+        proximityEl.append(" Notepad");
       }
     } else {
       proximityEl.classList.add("hidden");
@@ -857,10 +886,10 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     surfaceOverlayMaterial = null;
     for (const tile of tiles) syncOverlayTile(tile);
     if (!layer || !M) {
-      window.parent?.postMessage({ type: "marswalk:overlay-status", layer, state: "ready", message: layer ? "Overlay will load when terrain is ready." : "No comparative overlay" }, "*");
+      window.parent?.postMessage({ type: "marswalk:overlay-status", layer, state: "ready", message: layer ? "Overlay will load when terrain is ready." : "No comparative overlay" }, window.location.origin);
       return;
     }
-    window.parent?.postMessage({ type: "marswalk:overlay-status", layer, state: "loading", message: `Loading ${MAP_LAYERS[layer].name} overlay…` }, "*");
+    window.parent?.postMessage({ type: "marswalk:overlay-status", layer, state: "loading", message: `Loading ${MAP_LAYERS[layer].name} overlay…` }, window.location.origin);
     void ensureMapLayerMaterial(layer).then((base) => {
       if (token !== overlayToken || !surfaceOverlayLayer) return;
       const texture = (base as THREE.MeshLambertMaterial).map;
@@ -874,10 +903,10 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         polygonOffsetFactor: -1,
       });
       for (const tile of tiles) syncOverlayTile(tile);
-      window.parent?.postMessage({ type: "marswalk:overlay-status", layer, state: "ready", message: `${MAP_LAYERS[layer].name} overlay · ${wmtsInfo.get(layer) ?? "regional mosaic"}` }, "*");
+      window.parent?.postMessage({ type: "marswalk:overlay-status", layer, state: "ready", message: `${MAP_LAYERS[layer].name} overlay · ${wmtsInfo.get(layer) ?? "regional mosaic"}` }, window.location.origin);
     }).catch((error: unknown) => {
       if (token !== overlayToken) return;
-      window.parent?.postMessage({ type: "marswalk:overlay-status", layer, state: "error", message: error instanceof Error ? error.message : String(error) }, "*");
+      window.parent?.postMessage({ type: "marswalk:overlay-status", layer, state: "error", message: error instanceof Error ? error.message : String(error) }, window.location.origin);
     });
   }
 
@@ -893,7 +922,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
     if (layerStatusEl) layerStatusEl.textContent = text;
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: "marswalk:layer-status", layer, state, message: text }, "*");
+      window.parent.postMessage({ type: "marswalk:layer-status", layer, state, message: text }, window.location.origin);
     }
   }
 
@@ -1298,7 +1327,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         distanceMeters: Math.round(nearestBeacon.distMeters),
         isBase: Boolean(nearestBeacon.beacon.isBase),
       } : null,
-    }, "*");
+    }, window.location.origin);
   }
 
   let mapSel: { col: number; row: number } | null = null;
@@ -1607,13 +1636,13 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       overlay.classList.add("hidden");
       closeMap();
       controls.unlock();
-      window.parent.postMessage({ type: "marswalk:open-notepad" }, "*");
+      window.parent.postMessage({ type: "marswalk:open-notepad" }, window.location.origin);
       return;
     }
 
     if (e.code === "Escape" && externalModalOpen) {
       externalModalOpen = false;
-      window.parent.postMessage({ type: "marswalk:close-modal" }, "*");
+      window.parent.postMessage({ type: "marswalk:close-modal" }, window.location.origin);
       controls.lock();
       e.preventDefault();
       return;
@@ -1622,7 +1651,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     if (e.code === "KeyE" && M && !e.repeat) {
       if (externalModalOpen) {
         externalModalOpen = false;
-        window.parent.postMessage({ type: "marswalk:close-modal" }, "*");
+        window.parent.postMessage({ type: "marswalk:close-modal" }, window.location.origin);
         controls.lock();
         return;
       }
@@ -1640,7 +1669,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
           longitude: Number(lon.toFixed(5)),
           targetId: nearestBeacon && !nearestBeacon.beacon.isBase ? nearestBeacon.beacon.id : undefined,
           targetName: nearestBeacon && !nearestBeacon.beacon.isBase ? nearestBeacon.beacon.name : undefined,
-        }, "*");
+        }, window.location.origin);
       }
     }
 
@@ -1658,7 +1687,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
           type: "marswalk:return-to-base",
           totalTraverseMeters: Math.round(player.totalTraverseMeters),
           elapsedTimeSeconds: Math.round(player.elapsedSeconds),
-        }, "*");
+        }, window.location.origin);
       }
     }
   });
@@ -1778,6 +1807,15 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   }
 
   window.addEventListener("message", (event: MessageEvent<ExpeditionTargetMessage>) => {
+    if (
+      event.origin &&
+      event.origin !== window.location.origin &&
+      event.origin !== "https://nasa-martian-map.pages.dev" &&
+      !event.origin.endsWith(".nasa-martian-map.pages.dev") &&
+      !/^http:\/\/(localhost|127\.0\.0\.1):(5173|4173|3000)$/.test(event.origin)
+    ) {
+      return;
+    }
     const data = event.data;
     if (!data || typeof data.type !== "string") return;
 
@@ -1915,7 +1953,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
           type: "jezero-simulation-error",
           environmentId: envConfig.id,
           message: `Unable to load ${envConfig.displayName} 3D terrain elevation data (${CONFIG.dataUrl}manifest.json or ${CONFIG.dataUrl}overview.u16).`,
-        }, "*");
+        }, window.location.origin);
       }
       return;
     }
@@ -1976,7 +2014,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     startBtn.disabled = false;
 
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: "jezero-simulation-ready", environmentId: envConfig.id }, "*");
+      window.parent.postMessage({ type: "jezero-simulation-ready", environmentId: envConfig.id }, window.location.origin);
       emitTelemetrySync();
     }
   }

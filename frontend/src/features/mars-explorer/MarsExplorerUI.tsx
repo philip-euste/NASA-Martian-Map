@@ -345,6 +345,15 @@ export function JezeroExpeditionView() {
 
     function handleMessage(event: MessageEvent) {
       if (
+        event.origin &&
+        event.origin !== window.location.origin &&
+        event.origin !== "https://nasa-martian-map.pages.dev" &&
+        !event.origin.endsWith(".nasa-martian-map.pages.dev") &&
+        !/^http:\/\/(localhost|127\.0\.0\.1):(5173|4173|3000)$/.test(event.origin)
+      ) {
+        return;
+      }
+      if (
         event.data &&
         typeof event.data === "object" &&
         event.data.type === "jezero-simulation-ready"
@@ -382,7 +391,7 @@ export function JezeroExpeditionView() {
           kind: "target",
         })),
       },
-      "*"
+      window.location.origin
     );
   }, [
     activeRegion?.id,
