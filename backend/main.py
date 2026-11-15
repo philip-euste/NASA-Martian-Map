@@ -12,8 +12,8 @@ import httpx
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from .terrain_dem import router as terrain_dem_router
-from .routers.regions import router as regions_router
+from terrain_dem import router as terrain_dem_router
+from routers.regions import router as regions_router
 
 
 # =========================================================

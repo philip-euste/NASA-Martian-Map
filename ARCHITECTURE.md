@@ -91,8 +91,8 @@ NASAMartianMap
     |   │   │   |── RouteStratigraphyProfile.tsx
     |   │   │   └── workflow.ts
     |   │   ├── planetary-explorer
-    |   │   │   |── LocationPage.tsx
-    |   │   │   └── ExplorerPage.tsx
+    |   │   │   |── LocationPage.tsx - Displays Martian exploration site details, imagery, elevation, scientific significance, mission targets, and observations.
+    |   │   │   └── ExplorerPage.tsx - Initializes the Mars explorer, synchronizes URL parameters, and manages globe, map, and Jezero views.
     |   │   └── welcome
     |   |       |── Welcomeassets
     |   │       |── WelcomePage.css - Styles the landing page hero, background imagery, typography, introductory text, and responsive layouts.
