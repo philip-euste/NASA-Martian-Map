@@ -20,7 +20,13 @@ import {
   formatCoordinates,
   formatDistance,
 } from "../../components/ui";
-import { resolveDatasetMetadata } from "../../data/evidenceDatasets";
+import {
+  CRISM_MTRDR_BUNDLE_ID,
+  CRISM_REFERENCE_DATASET_ID,
+  CRISM_REFERENCE_SOURCE,
+  resolveDatasetMetadata,
+} from "../../data/evidenceDatasets";
+import { getMarsRegionById } from "../../data/regions";
 import { useMission } from "../../state/mission/MissionContext";
 import type { ExpeditionReport } from "../../types";
 import {
@@ -32,6 +38,11 @@ import { createId, toMutable } from "./missionHelpers";
 
 export default function ExpeditionReportPage() {
   const { mission, updateMission } = useMission();
+
+  const activeRegion = mission.region
+    ? getMarsRegionById(mission.region.id)
+    : null;
+  const isJezero = !activeRegion || activeRegion.id === "jezero-crater";
 
   const [reportTitle, setReportTitle] = useState(
     `${mission.name} — Scientific Expedition Report`
@@ -68,7 +79,7 @@ export default function ExpeditionReportPage() {
     }
     if (simulatedSamples.length > 0 || mission.simulation.isActive) {
       items.add(
-        "Marswalk EVA traverse telemetry, suit life-support metrics, and cached sample canisters are simulated educational models anchored to USGS/NASA CTX & HiRISE Jezero DEM terrain."
+        `Marswalk EVA traverse telemetry, suit life-support metrics, and cached sample canisters are simulated educational models anchored to USGS/NASA CTX & HiRISE ${activeRegion?.name ?? "Jezero"} DEM terrain.`
       );
     }
     return Array.from(items);
@@ -132,11 +143,29 @@ export default function ExpeditionReportPage() {
     mission.reports[0] ??
     null;
 
+  const datasetAttribution = (activeReport?.datasetIds ?? []).map((id) => {
+    const metadata = resolveDatasetMetadata(id, mission.region?.id);
+    if (id === CRISM_REFERENCE_DATASET_ID) {
+      return {
+        id,
+        name: metadata.name,
+        source: `${CRISM_REFERENCE_SOURCE} · NASA PDS MTRDR archive ${CRISM_MTRDR_BUNDLE_ID}`,
+      };
+    }
+    const dataset = mission.selectedDatasets.find((item) => item.id === id);
+    return {
+      id,
+      name: dataset?.name ?? metadata.name,
+      source: dataset?.source || metadata.instrumentAndMission,
+    };
+  });
+
   const activeRoute = activeReport?.selectedRouteId
     ? mission.candidateRoutes.find((r) => r.id === activeReport.selectedRouteId)
     : mission.candidateRoutes[0];
 
   const stratigraphicProfile = useMemo(() => {
+    if (!isJezero) return null;
     const waypoints =
       activeRoute && activeRoute.waypoints.length >= 2
         ? activeRoute.waypoints
@@ -156,6 +185,7 @@ export default function ExpeditionReportPage() {
       mission.configuration?.terrainPreferences.preferredSlopeDegrees ?? 15
     );
   }, [
+    isJezero,
     activeRoute,
     mission.configuration?.terrainPreferences.preferredSlopeDegrees,
     mission.scientificTargets,
@@ -164,6 +194,10 @@ export default function ExpeditionReportPage() {
 
   function handleExportMarkdown(): void {
     if (!activeReport) return;
+    const samplePrefix = isJezero
+      ? "JZ-EVA"
+      : `${activeRegion?.id.slice(0, 3).toUpperCase() ?? "MAR"}-EVA`;
+
     const lines: string[] = [
       `# ${activeReport.title}`,
       `**Report ID:** \`${activeReport.id}\` | **Generated:** ${new Date(activeReport.generatedAt).toISOString()}`,
@@ -174,19 +208,22 @@ export default function ExpeditionReportPage() {
       mission.question ? `\n**Research Question:** ${mission.question}` : "",
       "",
       "## 2. 4-Tier Scientific Provenance Audit",
-      "- **Tier 1 (NASA_PDS_ORBITAL):** NASA PDS Orbital & Mars Trek WMTS Products (MRO HiRISE, CRISM VNIR, MGS MOLA/TES, Odyssey THEMIS)",
-      "- **Tier 2 (USGS_SIM3464_MAP):** USGS Scientific Investigations Map 3464 (Sun & Stack, 2020) Jezero Crater Chronostratigraphic Units",
-      "- **Tier 3 (PERSEVERANCE_EDR_SURFACE):** Mars 2020 Perseverance Rover EDR Surface Imagery (Mastcam-Z, Navcam, SuperCam RMI)",
-      "- **Tier 4 (SIMULATED_EVA_ACTIVITY):** Simulated Marswalk Astronaut EVA Traverse, Suit Telemetry & Cached Sample Tubes (`JZ-EVA-XX`)",
+      isJezero
+        ? "- **Tier 1 (NASA_PDS_ORBITAL):** NASA PDS Orbital & Mars Trek WMTS Products (MRO HiRISE, MGS MOLA/TES, Odyssey THEMIS)"
+        : `- **Tier 1 (NASA_PDS_ORBITAL):** NASA PDS Orbital Products (${activeRegion?.elevationDatasets?.[0]?.name ?? "Global MOLA"}, global multispectral and THEMIS mosaics)`,
+      isJezero
+        ? "- **Tier 2 (USGS_SIM3464_MAP):** USGS Scientific Investigations Map 3464 (Sun & Stack, 2020) Jezero Crater Chronostratigraphic Units"
+        : `- **Tier 2 (REGIONAL_GEOLOGY_MAP):** ${activeRegion?.geologicalDatasets?.[0]?.citation ?? "Regional geological mapping under preparation; global USGS / Viking-MOLA chronostratigraphy referenced"}`,
+      isJezero
+        ? "- **Tier 3 (PERSEVERANCE_EDR_SURFACE):** Mars 2020 Perseverance Rover EDR Surface Imagery (Mastcam-Z, Navcam, SuperCam RMI)"
+        : activeRegion?.rover
+          ? `- **Tier 3 (${activeRegion.rover.roverName.toUpperCase()}_SURFACE):** ${activeRegion.rover.missionName} ${activeRegion.rover.roverName} surface exploration archive`
+          : "- **Tier 3 (ORBITAL_EVIDENCE_ONLY):** No surface rover assets at this location; orbital remote sensing provides primary evidence",
+      "- **Tier 4 (SIMULATED_EVA_ACTIVITY):** Simulated Marswalk Astronaut EVA Traverse, Suit Telemetry & Cached Sample Tubes",
       "",
-      `## 3. NASA Datasets (${activeReport.datasetIds.length}) & Recorded Observations (${activeReport.observationIds.length})`,
-      "### NASA Orbital Datasets",
-      ...(activeReport.datasetIds.length > 0
-        ? activeReport.datasetIds.map((id) => {
-            const ds = mission.selectedDatasets.find((d) => d.id === id);
-            const meta = resolveDatasetMetadata(id);
-            return `- **${ds?.name ?? meta.name}** (${ds?.source ?? meta.instrumentAndMission})`;
-          })
+      `## 3. Mission Datasets and References (${activeReport.datasetIds.length}) & Recorded Observations (${activeReport.observationIds.length})`,
+      ...(datasetAttribution.length > 0
+        ? datasetAttribution.map(({ name, source }) => `- **${name}** (${source})`)
         : ["- None recorded."]),
       "",
       "### User-Recorded Observations & Attached Rover Ground Truth",
@@ -195,13 +232,13 @@ export default function ExpeditionReportPage() {
             const obs = mission.selectedObservations.find((o) => o.id === id);
             if (!obs) return `- ${id}`;
             const roverStr = obs.surfaceImage
-              ? ` | Attached Perseverance Ground Truth: Sol ${obs.surfaceImage.sol} ${obs.surfaceImage.instrument} (Site ${obs.surfaceImage.site ?? "—"}, Drive ${obs.surfaceImage.drive ?? "—"})`
+              ? ` | Attached Ground Truth: Sol ${obs.surfaceImage.sol} ${obs.surfaceImage.instrument} (Site ${obs.surfaceImage.site ?? "—"}, Drive ${obs.surfaceImage.drive ?? "—"})`
               : "";
             return `- **${obs.name}** (${obs.source})${roverStr}${obs.description ? ` — ${obs.description}` : ""}`;
           })
         : ["- None recorded."]),
       "",
-      "## 4. Traverse Stratigraphy (USGS SIM 3464) & Simulated EVA Fieldwork",
+      `## 4. Traverse Stratigraphy (${isJezero ? "USGS SIM 3464" : activeRegion?.name ?? "Regional"}) & Simulated EVA Fieldwork`,
       activeRoute
         ? `- **Planned Route:** ${activeRoute.name} (${formatDistance(activeRoute.distanceMeters)}, ${activeRoute.waypoints.length} waypoints)`
         : "- **Planned Route:** None confirmed",
@@ -217,10 +254,12 @@ export default function ExpeditionReportPage() {
       ...(simulatedSamples.length > 0
         ? simulatedSamples.map((s, idx) => {
             const serial =
-              s.tubeId ?? `JZ-EVA-${String(idx + 1).padStart(2, "0")}`;
+              s.tubeId ?? `${samplePrefix}-${String(idx + 1).padStart(2, "0")}`;
             const unit =
               s.geologicUnitCode ??
-              identifyGeologicUnitAt(s.coordinates).unit_code;
+              (isJezero
+                ? identifyGeologicUnitAt(s.coordinates).unit_code
+                : "REG-SURF");
             return `- **[${serial}] ${s.name}** (${s.sampleType} | Unit: \`${unit}\` | Provenance: \`${s.provenanceTier ?? "SIMULATED_EVA_ACTIVITY"}\`) — ${s.geologicalContext}`;
           })
         : ["- None cached."]),
@@ -255,13 +294,25 @@ export default function ExpeditionReportPage() {
 
   function handleExportJson(): void {
     if (!activeReport) return;
+    const samplePrefix = isJezero
+      ? "JZ-EVA"
+      : `${activeRegion?.id.slice(0, 3).toUpperCase() ?? "MAR"}-EVA`;
+
     const payload = {
       dossierSchemaVersion: "NASA-SpaceApps-2026-MartianMap-v1.0",
       exportedAt: new Date().toISOString(),
       provenanceClassification: {
         tier1_orbital: "NASA_PDS_ORBITAL",
-        tier2_geologicMap: "USGS_SIM3464_MAP",
-        tier3_roverSurface: "PERSEVERANCE_EDR_SURFACE",
+        tier2_geologicMap: isJezero
+          ? "USGS_SIM3464_MAP"
+          : activeRegion?.geologicalDatasets?.length
+            ? "REGIONAL_GEOLOGY_MAP"
+            : "MOLA_GLOBAL_GEOLOGY",
+        tier3_roverSurface: isJezero
+          ? "PERSEVERANCE_EDR_SURFACE"
+          : activeRegion?.rover?.roverName
+            ? `${activeRegion.rover.roverName.toUpperCase()}_EDR_SURFACE`
+            : "ORBITAL_EVIDENCE_ONLY",
         tier4_simulatedEva: "SIMULATED_EVA_ACTIVITY",
       },
       report: activeReport,
@@ -282,9 +333,14 @@ export default function ExpeditionReportPage() {
         : null,
       simulatedSamples: simulatedSamples.map((s, idx) => ({
         ...s,
-        tubeId: s.tubeId ?? `JZ-EVA-${String(idx + 1).padStart(2, "0")}`,
+        tubeId:
+          s.tubeId ??
+          `${samplePrefix}-${String(idx + 1).padStart(2, "0")}`,
         geologicUnitCode:
-          s.geologicUnitCode ?? identifyGeologicUnitAt(s.coordinates).unit_code,
+          s.geologicUnitCode ??
+          (isJezero
+            ? identifyGeologicUnitAt(s.coordinates).unit_code
+            : "REG-SURF"),
         provenanceTier: s.provenanceTier ?? "SIMULATED_EVA_ACTIVITY",
       })),
     };
@@ -545,27 +601,38 @@ export default function ExpeditionReportPage() {
                       TIER 1 · NASA_PDS_ORBITAL
                     </span>
                     <p className="m-0 mt-1 text-[11px] text-mx-muted">
-                      MRO HiRISE DTM (`DTEEC_048842_1985`), CRISM Targeted VNIR
-                      (`FRT00005C5E`), MGS MOLA/TES, and Odyssey THEMIS.
+                      {isJezero
+                        ? "MRO HiRISE DTM (`DTEEC_048842_1985`), MGS MOLA/TES, and Odyssey THEMIS."
+                        : `${activeRegion?.name ?? "Regional"} orbital products: ${activeRegion?.elevationDatasets?.[0]?.name ?? "Global MOLA"}, global multispectral and THEMIS mosaics.`}
                     </p>
                   </div>
                   <div className="rounded border border-cyan-500/30 bg-cyan-950/15 p-2.5">
                     <span className="font-mono text-[10px] font-bold text-cyan-300">
-                      TIER 2 · USGS_SIM3464_MAP
+                      {isJezero
+                        ? "TIER 2 · USGS_SIM3464_MAP"
+                        : "TIER 2 · REGIONAL_GEOLOGY_MAP"}
                     </span>
                     <p className="m-0 mt-1 text-[11px] text-mx-muted">
-                      USGS Scientific Investigations Map 3464 (Sun &amp; Stack,
-                      2020) Jezero chronostratigraphic formations.
+                      {isJezero
+                        ? "USGS Scientific Investigations Map 3464 (Sun & Stack, 2020) Jezero chronostratigraphic formations."
+                        : activeRegion?.geologicalDatasets?.[0]?.citation ??
+                          "Regional geological mapping under preparation; global USGS / Viking-MOLA chronostratigraphy referenced."}
                     </p>
                   </div>
                   <div className="rounded border border-emerald-500/30 bg-emerald-950/15 p-2.5">
                     <span className="font-mono text-[10px] font-bold text-emerald-300">
-                      TIER 3 · PERSEVERANCE_EDR_SURFACE
+                      {isJezero
+                        ? "TIER 3 · PERSEVERANCE_EDR_SURFACE"
+                        : activeRegion?.rover
+                          ? `TIER 3 · ${activeRegion.rover.roverName.toUpperCase()}_SURFACE`
+                          : "TIER 3 · ORBITAL_EVIDENCE_ONLY"}
                     </span>
                     <p className="m-0 mt-1 text-[11px] text-mx-muted">
-                      Mars 2020 Perseverance Rover EDR catalog (108 verified
-                      frames across Sol 1, Sol 420, Sol 2024, Sol 2031 in Rover
-                      Site/Drive frame).
+                      {isJezero
+                        ? "Mars 2020 Perseverance Rover EDR catalog (108 verified frames across Sol 1, Sol 420, Sol 2024, Sol 2031 in Rover Site/Drive frame)."
+                        : activeRegion?.rover
+                          ? `${activeRegion.rover.missionName} ${activeRegion.rover.roverName} surface exploration archive.`
+                          : "No surface rover assets at this location; orbital remote sensing provides primary evidence."}
                     </p>
                   </div>
                   <div className="rounded border border-amber-500/30 bg-amber-950/15 p-2.5">
@@ -574,42 +641,32 @@ export default function ExpeditionReportPage() {
                     </span>
                     <p className="m-0 mt-1 text-[11px] text-mx-muted">
                       Simulated Marswalk 3D traverse, suit vitals, and cached
-                      sample tubes (`JZ-EVA-01`…) explicitly segregated from
-                      flight data.
+                      sample tubes explicitly segregated from flight data.
                     </p>
                   </div>
                 </div>
               </section>
 
-              {/* 2. Actual NASA Datasets & User-Recorded Observations */}
+              {/* 2. Mission datasets, references, and user-recorded observations */}
               <section className="mt-6 border-b border-mx-border pb-6">
                 <h3 className="mx-heading m-0 text-base">
-                  2. Actual NASA Datasets ({activeReport.datasetIds.length}) &amp;
+                  2. Mission Datasets and References ({activeReport.datasetIds.length}) &amp;
                   User-Recorded Observations ({activeReport.observationIds.length})
                 </h3>
                 <div className="mt-3 grid gap-4 sm:grid-cols-2">
                   <div className="rounded-lg border border-sky-500/25 bg-sky-950/10 p-3">
                     <span className="mx-field__label text-sky-300">
-                      Actual NASA-Derived Datasets
+                      Dataset Attribution
                     </span>
                     {activeReport.datasetIds.length === 0 ? (
                       <p className="mx-body m-0 mt-1 text-xs">None recorded.</p>
                     ) : (
                       <ul className="m-0 mt-1.5 list-disc space-y-1 pl-4 text-xs text-mx-text">
-                        {activeReport.datasetIds.map((id) => {
-                          const ds = mission.selectedDatasets.find(
-                            (d) => d.id === id
-                          );
-                          const fallbackMeta = resolveDatasetMetadata(id);
-                          return (
-                            <li key={id}>
-                              <strong>{ds?.name ?? fallbackMeta.name}</strong>
-                              {ds?.source
-                                ? ` (${ds.source})`
-                                : ` (${fallbackMeta.instrumentAndMission})`}
-                            </li>
-                          );
-                        })}
+                        {datasetAttribution.map(({ id, name, source }) => (
+                          <li key={id} className="break-words">
+                            <strong>{name}</strong> ({source})
+                          </li>
+                        ))}
                       </ul>
                     )}
                   </div>
@@ -662,8 +719,9 @@ export default function ExpeditionReportPage() {
               <section className="mt-6 border-b border-mx-border pb-6">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="mx-heading m-0 text-base">
-                    3. Traverse Stratigraphy (USGS SIM 3464) &amp; Simulated
-                    Marswalk EVA Fieldwork
+                    3. Traverse Stratigraphy (
+                    {isJezero ? "USGS SIM 3464" : activeRegion?.name ?? "Regional"}
+                    ) &amp; Simulated Marswalk EVA Fieldwork
                   </h3>
                   <span className="mx-badge border-amber-500/40 text-amber-300 text-[10px]">
                     SIMULATED EVA &amp; ROUTE MODEL

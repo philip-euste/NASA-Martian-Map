@@ -3,7 +3,7 @@
 // Computes spherical Mars distances (R = 3,389.5 km), queries real HiRISE DEM
 // waypoint elevations when available, and clearly distinguishes NASA-derived
 // measurements from geometric estimates without fabricating safety claims.
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -27,6 +27,7 @@ import {
   formatDistance,
 } from "../../components/ui";
 import { EXPLORATION_SITES } from "../../data/explorationSites";
+import { getMarsRegionById, isWithinRegionBounds } from "../../data/regions";
 import { isWithinJezeroDemBounds } from "../mars-explorer/marsExplorer.types";
 import { marsDemProvider } from "../../services/providers/marsDem";
 import { useMission } from "../../state/mission/MissionContext";
@@ -39,11 +40,28 @@ import {
   calculateRouteDistanceMeters,
   createId,
   toMutable,
+  auditCrossRegionItems,
 } from "./missionHelpers";
 
 export default function RoutePlannerPage() {
   const { mission, updateMission } = useMission();
   const navigate = useNavigate();
+
+  const activeRegion = mission.region
+    ? getMarsRegionById(mission.region.id)
+    : null;
+  const isJezero = !activeRegion || activeRegion.id === "jezero-crater";
+
+  const crossRegionAudit = useMemo(
+    () =>
+      auditCrossRegionItems(
+        activeRegion,
+        mission.scientificTargets,
+        mission.candidateRoutes
+      ),
+    [activeRegion, mission.scientificTargets, mission.candidateRoutes]
+  );
+  const [crossRegionDismissed, setCrossRegionDismissed] = useState(false);
 
   const startingLocation =
     mission.configuration?.startingLocation ??
@@ -181,10 +199,19 @@ export default function RoutePlannerPage() {
       ? [...draftWaypoints, draftWaypoints[0]]
       : [...draftWaypoints];
 
+    const isWpInBounds = (coords: Coordinates) => {
+      if (isJezero) {
+        return isWithinJezeroDemBounds(coords);
+      }
+      return activeRegion?.geographicBounds
+        ? isWithinRegionBounds(coords, activeRegion.geographicBounds)
+        : false;
+    };
+
     try {
       const elevations: (number | null)[] = [];
       for (const wp of allWaypointsForProfile) {
-        if (isWithinJezeroDemBounds(wp.coordinates)) {
+        if (isJezero && isWithinJezeroDemBounds(wp.coordinates)) {
           try {
             const res = await marsDemProvider.getElevation(wp.coordinates);
             elevations.push(res.elevation);
@@ -238,11 +265,11 @@ export default function RoutePlannerPage() {
       setSamplingDem(false);
     }
 
-    const insideJezeroCount = draftWaypoints.filter((wp) =>
-      isWithinJezeroDemBounds(wp.coordinates)
+    const insideRegionCount = draftWaypoints.filter((wp) =>
+      isWpInBounds(wp.coordinates)
     ).length;
     const coverageRatio = Math.round(
-      (insideJezeroCount / draftWaypoints.length) * 100
+      (insideRegionCount / draftWaypoints.length) * 100
     );
 
     // Estimate walking duration at ~2.2 km/h nominal EVA traverse rate
@@ -265,8 +292,8 @@ export default function RoutePlannerPage() {
       measurementSource:
         demPointsSampled >= 2
           ? usedLocalFallbackDem
-            ? "Jezero CTX DEM (Local) + Spherical Geometry"
-            : "HiRISE DEM + Spherical Geometry"
+            ? `${activeRegion?.name ?? "Jezero"} CTX DEM (Local) + Spherical Geometry`
+            : `${activeRegion?.elevationDatasets?.[0]?.name ?? "HiRISE DEM"} + Spherical Geometry`
           : "Spherical Geometry (Orbital Estimate)",
       terrainMetrics: {
         averageSlopeDegrees: avgSlopeDeg,
@@ -286,7 +313,7 @@ export default function RoutePlannerPage() {
               ]
             : [
                 "Horizontal distance computed via spherical Mars geometry (R = 3,389.5 km).",
-                "HiRISE DEM elevation profile unavailable (API offline or outside Jezero DTM footprint); vertical relief is unverified.",
+                `${activeRegion?.name ?? "Regional"} DEM elevation profile unavailable (API offline or outside local DTM footprint); vertical relief is unverified.`,
               ],
         assumptions: [
           "Nominal EVA walking speed of ~2.2 km/h excluding contact science station stops.",
@@ -359,6 +386,127 @@ export default function RoutePlannerPage() {
         </>
       }
     >
+      {/* Non-blocking Cross-Region Mission Item Warning */}
+      {crossRegionAudit.hasCrossRegionItems && !crossRegionDismissed && (
+        <div
+          role="region"
+          aria-label="Cross-region mission target notice"
+          className="mb-6 rounded-lg border border-amber-500/40 bg-amber-950/30 p-4 text-xs text-amber-200 shadow-lg"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle
+              className="mt-0.5 h-4 w-4 shrink-0 text-amber-400"
+              aria-hidden="true"
+            />
+            <div className="flex-1 space-y-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono font-semibold uppercase tracking-wider text-amber-300">
+                  Cross-Region Mission Notice · Regional Boundaries
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[11px] text-amber-400/90">
+                    {crossRegionAudit.targetsCount} target
+                    {crossRegionAudit.targetsCount === 1 ? "" : "s"} ·{" "}
+                    {crossRegionAudit.waypointsCount} route waypoint
+                    {crossRegionAudit.waypointsCount === 1 ? "" : "s"} affected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCrossRegionDismissed(true)}
+                    className="ml-2 font-mono text-[10px] text-amber-300/80 underline hover:text-amber-100"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+
+              <p className="m-0 leading-relaxed text-amber-100/90">
+                {crossRegionAudit.targetsCount > 0 &&
+                crossRegionAudit.waypointsCount > 0 ? (
+                  <>
+                    <strong>
+                      {crossRegionAudit.targetsCount} saved scientific target
+                      {crossRegionAudit.targetsCount === 1 ? "" : "s"}
+                    </strong>{" "}
+                    and{" "}
+                    <strong>
+                      {crossRegionAudit.waypointsCount} candidate route waypoint
+                      {crossRegionAudit.waypointsCount === 1 ? "" : "s"}
+                    </strong>{" "}
+                    are located outside the geographic bounds of{" "}
+                    <strong>{crossRegionAudit.activeRegionName}</strong>.
+                  </>
+                ) : crossRegionAudit.targetsCount > 0 ? (
+                  <>
+                    <strong>
+                      {crossRegionAudit.targetsCount} saved scientific target
+                      {crossRegionAudit.targetsCount === 1 ? "" : "s"}
+                    </strong>{" "}
+                    {crossRegionAudit.targetsCount === 1 ? "is" : "are"} located
+                    outside the geographic bounds of{" "}
+                    <strong>{crossRegionAudit.activeRegionName}</strong>.
+                  </>
+                ) : (
+                  <>
+                    <strong>
+                      {crossRegionAudit.waypointsCount} candidate route waypoint
+                      {crossRegionAudit.waypointsCount === 1 ? "" : "s"}
+                    </strong>{" "}
+                    {crossRegionAudit.waypointsCount === 1 ? "is" : "are"} located
+                    outside the geographic bounds of{" "}
+                    <strong>{crossRegionAudit.activeRegionName}</strong>.
+                  </>
+                )}
+                {crossRegionAudit.attributedRegionNames.length > 0 && (
+                  <span>
+                    {" "}
+                    Attributed to:{" "}
+                    <strong>
+                      {crossRegionAudit.attributedRegionNames.join(", ")}
+                    </strong>
+                    .
+                  </span>
+                )}
+                {crossRegionAudit.unattributedCount > 0 && (
+                  <span>
+                    {" "}
+                    ({crossRegionAudit.unattributedCount} coordinate
+                    {crossRegionAudit.unattributedCount === 1 ? "" : "s"} lie outside
+                    all registered primary regions).
+                  </span>
+                )}
+              </p>
+
+              <p className="m-0 text-[11px] text-amber-200/80">
+                All saved coordinates, observations, and traverse records remain
+                safely preserved in your mission dossier. You can continue
+                planning candidate routes and plotting waypoints in{" "}
+                {crossRegionAudit.activeRegionName} without disruption.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {crossRegionAudit.hasCrossRegionItems && crossRegionDismissed && (
+        <div className="mb-4 flex items-center justify-between rounded border border-amber-500/20 bg-amber-950/20 px-3 py-1.5 text-xs text-amber-300/80">
+          <span className="flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+            <span>
+              {crossRegionAudit.totalOutOfBoundsCount} mission items outside{" "}
+              {crossRegionAudit.activeRegionName} bounds
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setCrossRegionDismissed(false)}
+            className="text-[11px] underline hover:text-amber-100"
+          >
+            Show notice
+          </button>
+        </div>
+      )}
+
       <div className="grid gap-8 lg:grid-cols-12">
         {/* Left 8 cols: Large regional map + Route Comparison Table */}
         <div className="flex flex-col gap-8 lg:col-span-8">
@@ -372,6 +520,7 @@ export default function RoutePlannerPage() {
               activeRouteId={mission.selectedRouteId}
               draftWaypoints={draftWaypoints}
               onAddWaypoint={addWaypoint}
+              regionId={mission.region?.id}
             />
           </div>
 
@@ -396,7 +545,10 @@ export default function RoutePlannerPage() {
                 ? routeName.trim() || "Draft Route"
                 : (selectedRoute?.name ?? "Draft Route")
             }
-            onLoadReferenceTraverse={loadJezeroStratigraphicReferenceTraverse}
+            onLoadReferenceTraverse={
+              isJezero ? loadJezeroStratigraphicReferenceTraverse : undefined
+            }
+            regionId={mission.region?.id}
           />
 
           {/* Route comparison panel */}
@@ -475,6 +627,21 @@ export default function RoutePlannerPage() {
                                   Confirmed
                                 </span>
                               )}
+                              {activeRegion &&
+                                route.waypoints.some(
+                                  (wp) =>
+                                    !isWithinRegionBounds(
+                                      wp.coordinates,
+                                      activeRegion.geographicBounds
+                                    )
+                                ) && (
+                                  <span
+                                    className="mx-badge ml-2 border-amber-500/40 text-amber-300"
+                                    title="Route contains waypoints outside active regional bounds"
+                                  >
+                                    Cross-Region
+                                  </span>
+                                )}
                             </div>
                             <span className="mx-mono text-[11px] font-normal text-mx-dim">
                               {route.waypoints.length} waypoints · ~
@@ -592,19 +759,44 @@ export default function RoutePlannerPage() {
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {mission.scientificTargets.map((target) => (
-                      <button
-                        key={target.id}
-                        type="button"
-                        onClick={() =>
-                          addWaypoint(target.coordinates, target)
-                        }
-                        className="mx-chip"
-                      >
-                        <Plus size={11} aria-hidden="true" />
-                        {target.name}
-                      </button>
-                    ))}
+                    {mission.scientificTargets.map((target) => {
+                      const isOutOfActiveBounds = Boolean(
+                        activeRegion &&
+                          !isWithinRegionBounds(
+                            target.coordinates,
+                            activeRegion.geographicBounds
+                          )
+                      );
+                      return (
+                        <button
+                          key={target.id}
+                          type="button"
+                          onClick={() =>
+                            addWaypoint(target.coordinates, target)
+                          }
+                          className={`mx-chip ${
+                            isOutOfActiveBounds
+                              ? "border-amber-500/40 text-amber-200"
+                              : ""
+                          }`}
+                          title={
+                            isOutOfActiveBounds
+                              ? `Note: Target coordinates are outside ${
+                                  activeRegion?.name ?? "active region"
+                                } boundaries.`
+                              : undefined
+                          }
+                        >
+                          <Plus size={11} aria-hidden="true" />
+                          {target.name}
+                          {isOutOfActiveBounds && (
+                            <span className="ml-1 text-[10px] text-amber-400">
+                              (cross-region)
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -650,7 +842,9 @@ export default function RoutePlannerPage() {
                 ) : (
                   <ol className="m-0 flex max-h-52 list-none flex-col gap-2 overflow-auto p-0">
                     {draftWaypoints.map((wp, idx) => {
-                      const wpUnit = identifyGeologicUnitAt(wp.coordinates);
+                      const wpUnit = isJezero
+                        ? identifyGeologicUnitAt(wp.coordinates)
+                        : null;
                       return (
                         <li
                           key={wp.id}
@@ -664,23 +858,25 @@ export default function RoutePlannerPage() {
                               <strong className="text-mx-text">
                                 {wp.name ?? `Waypoint ${idx + 1}`}
                               </strong>
-                              <span
-                                className="rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold"
-                                style={{
-                                  backgroundColor: `${wpUnit.color}22`,
-                                  color: wpUnit.color,
-                                  border: `1px solid ${wpUnit.color}55`,
-                                }}
-                              >
-                                {wpUnit.unit_code}
-                              </span>
+                              {wpUnit && (
+                                <span
+                                  className="rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold"
+                                  style={{
+                                    backgroundColor: `${wpUnit.color}22`,
+                                    color: wpUnit.color,
+                                    border: `1px solid ${wpUnit.color}55`,
+                                  }}
+                                >
+                                  {wpUnit.unit_code}
+                                </span>
+                              )}
                             </div>
                             <span className="mx-mono mt-0.5 block text-[11px] text-mx-dim">
                               {formatCoordinates(
                                 wp.coordinates.latitude,
                                 wp.coordinates.longitude
-                              )}{" "}
-                              · {wpUnit.unit_name}
+                              )}
+                              {wpUnit ? ` · ${wpUnit.unit_name}` : ""}
                             </span>
                           </div>
                           <button
@@ -754,7 +950,7 @@ export default function RoutePlannerPage() {
                     fallback="Unverified (DEM offline)"
                   />
                   <DataField
-                    label="Jezero DEM Coverage"
+                    label={`${activeRegion?.name ?? "Regional"} DEM Coverage`}
                     value={
                       selectedRoute.terrainMetrics?.dataCoverage !== undefined
                         ? `${selectedRoute.terrainMetrics.dataCoverage}% of waypoints`

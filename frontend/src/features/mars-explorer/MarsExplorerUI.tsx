@@ -26,6 +26,9 @@ import {
   isWithinJezeroDemBounds,
 } from "./marsExplorer.types";
 import { useMarsExplorer } from "./useMarsExplorer";
+import { getSiteById } from "../../data/explorationSites";
+import { getMarsRegionById } from "../../data/regions";
+import { resolveSimulatorEnvironment } from "../../simulator/environments/catalog";
 
 export function MarsExplorerLocationPanel({
   mode,
@@ -272,7 +275,7 @@ export function MarsExplorerLocationPanel({
 
 export function JezeroExpeditionView() {
   const { mission } = useMission();
-  const { selectedLocation, setViewMode } = useMarsExplorer();
+  const { selectedLocation, setViewMode, selectSite } = useMarsExplorer();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [initializing, setInitializing] = useState(true);
 
@@ -292,19 +295,24 @@ export function JezeroExpeditionView() {
 
   const targetName =
     activeRegion?.name ?? selectedLocation?.name ?? "Jezero Crater";
-  const withinJezeroDem =
-    activeRegion?.id === "jezero-crater" ||
-    selectedLocation?.site?.id === "jezero-crater" ||
-    isWithinJezeroDemBounds(targetCoordinates);
+  const targetRegionId =
+    activeRegion?.id ?? selectedLocation?.site?.id ?? selectedLocation?.key;
 
-  const simulatorCoords = withinJezeroDem
-    ? targetCoordinates
-    : JEZERO_DEFAULT_COORDINATES;
+  const resolved = useMemo(
+    () => resolveSimulatorEnvironment(targetRegionId),
+    [targetRegionId]
+  );
+
+  const withinJezeroDem =
+    resolved.available &&
+    (targetRegionId === "jezero-crater" ||
+      isWithinJezeroDemBounds(targetCoordinates));
 
   const simulatorSrc = useMemo(() => {
+    if (!resolved.available) return "";
     const params = new URLSearchParams({
-      lat: simulatorCoords.latitude.toFixed(5),
-      lon: simulatorCoords.longitude.toFixed(5),
+      lat: targetCoordinates.latitude.toFixed(5),
+      lon: targetCoordinates.longitude.toFixed(5),
       name: targetName,
       regionId: activeRegion?.id ?? "jezero-crater",
       withinDem: withinJezeroDem ? "1" : "0",
@@ -312,13 +320,15 @@ export function JezeroExpeditionView() {
     return `/src/simulator/jezero_crater/scripts/jezero-simulator.html?${params.toString()}`;
   }, [
     activeRegion?.id,
-    simulatorCoords.latitude,
-    simulatorCoords.longitude,
+    resolved.available,
+    targetCoordinates.latitude,
+    targetCoordinates.longitude,
     targetName,
     withinJezeroDem,
   ]);
 
   useEffect(() => {
+    if (!resolved.available) return;
     setInitializing(true);
     const timeout = window.setTimeout(() => {
       setInitializing(false);
@@ -339,9 +349,10 @@ export function JezeroExpeditionView() {
       window.clearTimeout(timeout);
       window.removeEventListener("message", handleMessage);
     };
-  }, [simulatorSrc]);
+  }, [resolved.available, simulatorSrc]);
 
   useEffect(() => {
+    if (!resolved.available) return;
     const win = iframeRef.current?.contentWindow;
     if (!win) return;
     win.postMessage(
@@ -349,8 +360,8 @@ export function JezeroExpeditionView() {
         type: "mars-explorer:expedition",
         name: targetName,
         regionId: activeRegion?.id ?? "jezero-crater",
-        latitude: simulatorCoords.latitude,
-        longitude: simulatorCoords.longitude,
+        latitude: targetCoordinates.latitude,
+        longitude: targetCoordinates.longitude,
         requestedLatitude: targetCoordinates.latitude,
         requestedLongitude: targetCoordinates.longitude,
         withinDem: withinJezeroDem,
@@ -367,56 +378,94 @@ export function JezeroExpeditionView() {
   }, [
     activeRegion?.id,
     mission.scientificTargets,
-    simulatorCoords.latitude,
-    simulatorCoords.longitude,
+    resolved.available,
     targetCoordinates.latitude,
     targetCoordinates.longitude,
     targetName,
     withinJezeroDem,
   ]);
 
-  return (
-    <div className="relative h-full w-full overflow-hidden bg-[#120b08]">
-      {!withinJezeroDem && (
-        <div
-          className="absolute left-1/2 top-20 z-[1150] flex w-[min(640px,calc(100vw-32px))] -translate-x-1/2 flex-wrap items-center justify-between gap-3 rounded-lg border border-mx-border-strong bg-mx-bg/95 px-4 py-2.5 text-xs shadow-lg backdrop-blur"
-          role="status"
-        >
-          <div className="flex items-center gap-2.5 text-mx-text">
-            <AlertTriangle size={15} className="shrink-0 text-mx-accent" />
-            <span>
-              <strong>{targetName}</strong> (
+  // If 3D surface simulation is not available for this region, render clean availability card without loading Jezero
+  if (!resolved.available) {
+    return (
+      <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#0c0806] p-6 text-center">
+        <div className="mx-panel w-full max-w-xl border border-mx-border-strong bg-mx-bg/95 p-6 text-left shadow-2xl sm:p-8">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-mx-border pb-4">
+            <div>
+              <span className="mx-eyebrow mx-eyebrow--accent">
+                MARS EXPLORER · 3D SURFACE SIMULATOR STATUS
+              </span>
+              <h2 className="mx-heading m-0 mt-1 text-2xl font-bold">
+                {targetName}
+              </h2>
+            </div>
+            <span
+              className={`mx-badge px-2.5 py-1 font-mono text-xs uppercase tracking-wider ${
+                resolved.availability === "PLANNED"
+                  ? "border-amber-500/50 bg-amber-500/15 text-amber-200"
+                  : "border-slate-500/50 bg-slate-500/15 text-slate-300"
+              }`}
+            >
+              3D Simulator {resolved.availability}
+            </span>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-4 font-mono text-xs text-mx-muted">
+            <span className="inline-flex items-center gap-1.5 text-mx-text">
+              <MapPin size={13} className="text-mx-accent" />
+              Target Coordinates:{" "}
               {formatCoordinates(
                 targetCoordinates.latitude,
                 targetCoordinates.longitude
               )}
-              ) is saved as your active expedition region. High-resolution 3D
-              surface walk DEM tiles cover Jezero Crater; simulation anchored at
-              Jezero landing coordinates.
             </span>
+            <span>•</span>
+            <span>Vertical Reference: MOLA Areoid</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <p className="mt-4 text-sm leading-relaxed text-mx-text">
+            {resolved.reason}
+          </p>
+
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-mx-border pt-4">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="mx-btn mx-btn--secondary mx-btn--sm"
+                onClick={() => setViewMode("map")}
+              >
+                <MapIcon size={13} />
+                2D Regional Map
+              </button>
+              <button
+                type="button"
+                className="mx-btn mx-btn--secondary mx-btn--sm"
+                onClick={() => setViewMode("globe")}
+              >
+                <Globe size={13} />
+                3D Globe
+              </button>
+            </div>
+
             <button
               type="button"
-              className="mx-btn mx-btn--secondary mx-btn--sm"
-              onClick={() => setViewMode("map")}
+              className="mx-btn mx-btn--secondary mx-btn--sm border-emerald-500/40 text-emerald-300 hover:border-emerald-400"
+              onClick={() => {
+                const jezeroSite = getSiteById("jezero-crater");
+                if (jezeroSite) selectSite(jezeroSite, { focus: true });
+                setViewMode("jezero");
+              }}
             >
-              <Compass size={13} aria-hidden="true" />
-              View on 2D Map
+              Switch to Jezero 3D Surface
             </button>
-
-            <Link
-              to="/mission/investigate"
-              className="mx-btn mx-btn--primary mx-btn--sm no-underline"
-            >
-              <FlaskConical size={13} aria-hidden="true" />
-              Mission Workspace
-            </Link>
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
+  return (
+    <div className="relative h-full w-full overflow-hidden bg-[#120b08]">
       {initializing && (
         <div
           className="pointer-events-none absolute inset-0 z-[1120] flex flex-col items-center justify-center gap-3 bg-[#0c0806]/80 backdrop-blur-sm transition-opacity"

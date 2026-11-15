@@ -23,7 +23,11 @@ import {
 import { ImagePending, formatCoordinates } from "../../components/ui";
 import type { SurfaceImageryCatalogItem } from "../../data/evidenceDatasets";
 import { perseveranceImageryProvider } from "../../services/providers/perseveranceImageryProvider";
-import { resolveSimulatorEnvironment } from "../../simulator/jezero_crater/catalog";
+import { getMarsRegionById } from "../../data/regions";
+import {
+  JEZERO_ENVIRONMENT,
+  resolveSimulatorEnvironment,
+} from "../../simulator/environments/catalog";
 import { isWithinBounds } from "../../simulator/shared/environment";
 import HelmetHud, {
   type CompassMarkerItem,
@@ -156,15 +160,16 @@ export default function MarswalkPage() {
     mission,
     updateMission,
     updateSimulation,
+    setRegion,
   } = useMission();
 
-  const {
-    environment: activeEnv,
-    isFallbackEnvironment,
-  } = useMemo(
+  const resolvedSimulator = useMemo(
     () => resolveSimulatorEnvironment(mission.region?.id),
     [mission.region?.id]
   );
+  const isSimulatorAvailable =
+    resolvedSimulator.available && resolvedSimulator.environment !== null;
+  const activeEnv = resolvedSimulator.environment ?? JEZERO_ENVIRONMENT;
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [initializing, setInitializing] = useState(true);
@@ -230,44 +235,53 @@ export default function MarswalkPage() {
   );
 
   const baseCoordinates = useMemo(() => {
-    if (
-      mission.configuration?.startingLocation &&
-      isWithinBounds(activeEnv.bounds, mission.configuration.startingLocation)
-    ) {
-      return mission.configuration.startingLocation;
+    if (isSimulatorAvailable && resolvedSimulator.environment) {
+      const simEnv = resolvedSimulator.environment;
+      if (
+        mission.configuration?.startingLocation &&
+        isWithinBounds(simEnv.bounds, mission.configuration.startingLocation)
+      ) {
+        return mission.configuration.startingLocation;
+      }
+      if (
+        mission.region?.coordinates &&
+        isWithinBounds(simEnv.bounds, mission.region.coordinates)
+      ) {
+        return mission.region.coordinates;
+      }
+      return {
+        latitude: simEnv.defaultBase.latitude,
+        longitude: simEnv.defaultBase.longitude,
+      };
     }
-    if (
-      mission.region?.coordinates &&
-      isWithinBounds(activeEnv.bounds, mission.region.coordinates)
-    ) {
-      return mission.region.coordinates;
-    }
-    return {
-      latitude: activeEnv.defaultBase.latitude,
-      longitude: activeEnv.defaultBase.longitude,
-    };
+    return (
+      mission.configuration?.startingLocation ??
+      mission.region?.coordinates ?? { latitude: 18.4447, longitude: 77.4508 }
+    );
   }, [
-    activeEnv.bounds,
-    activeEnv.defaultBase.latitude,
-    activeEnv.defaultBase.longitude,
+    isSimulatorAvailable,
+    resolvedSimulator.environment,
     mission.configuration?.startingLocation,
     mission.region?.coordinates,
   ]);
 
   const withinEnvironmentDem = useMemo(() => {
-    if (!mission.region) return true;
+    if (!activeEnv || !mission.region) return true;
     return (
       mission.region.id === activeEnv.id ||
       isWithinBounds(activeEnv.bounds, mission.region.coordinates)
     );
-  }, [activeEnv.bounds, activeEnv.id, mission.region]);
+  }, [activeEnv, mission.region]);
 
   const targetName =
     explorationMode === "free"
-      ? `${activeEnv.displayName} Open-World Surface`
-      : mission.region?.name ?? activeEnv.displayName;
+      ? activeEnv
+        ? `${activeEnv.displayName} Open-World Surface`
+        : mission.region?.name ?? "Mars Surface"
+      : mission.region?.name ?? activeEnv?.displayName ?? "Mars Surface";
 
   const simulatorSrc = useMemo(() => {
+    if (!activeEnv) return "";
     const params = new URLSearchParams({
       lat: baseCoordinates.latitude.toFixed(5),
       lon: baseCoordinates.longitude.toFixed(5),
@@ -277,8 +291,7 @@ export default function MarswalkPage() {
     });
     return `${activeEnv.simulatorEntryUrl}?${params.toString()}`;
   }, [
-    activeEnv.id,
-    activeEnv.simulatorEntryUrl,
+    activeEnv,
     baseCoordinates.latitude,
     baseCoordinates.longitude,
     mission.region?.id,
@@ -622,7 +635,7 @@ export default function MarswalkPage() {
         coordinates: t.coordinates,
         isMissionTarget: true,
       })),
-      ...activeEnv.fieldSites.map((s) => ({
+      ...activeEnv.fieldSites.map((s: { id: string; name: string; latitude: number; longitude: number }) => ({
         id: s.id,
         name: s.name,
         coordinates: { latitude: s.latitude, longitude: s.longitude },
@@ -716,7 +729,7 @@ export default function MarswalkPage() {
         rationale:
           "Correlated with Perseverance Sol 420 Mastcam-Z & SuperCam RMI telephoto captures of fine-grained delta scarp laminations.",
         orbitalLink:
-          "MRO CRISM FRT00005C5E (2.296 µm Fe/Mg smectite clay absorption, D2300 = 0.042) + HiRISE 25 cm rhythmic bedding.",
+          "CRISM archive reference FRT00005C5E and HiRISE 25 cm imagery. The bundled smectite reference profile has unverified extraction provenance.",
       };
     }
 
@@ -746,7 +759,7 @@ export default function MarswalkPage() {
       rationale:
         "Correlated with Perseverance Sol 2024 / Sol 2031 Mastcam-Z captures of fractured olivine-rich crater floor bedrock.",
       orbitalLink:
-        "MRO CRISM FRT0000B204 (1.05 µm Fe²⁺ olivine crystal-field absorption, OLINDEX3 = 0.065).",
+        "Bundled Séítah olivine reference profile. The referenced observation FRT0000B204 and the profile extraction remain unverified.",
     };
   }, [
     activeEnv.defaultBase.latitude,
@@ -1053,7 +1066,7 @@ export default function MarswalkPage() {
       "belva-crater": "Belva Impact",
     };
 
-    activeEnv.fieldSites.slice(1).forEach((site) => {
+    activeEnv.fieldSites.slice(1).forEach((site: { id: string; name: string; latitude: number; longitude: number }) => {
       const dup = mission.scientificTargets.some(
         (t) =>
           Math.hypot(
@@ -1107,8 +1120,16 @@ export default function MarswalkPage() {
     <MissionLayout
       fullscreenCanvas
       stage="Stage 03 · Explore"
-      title={`Marswalk 3D Surface Simulator · ${activeEnv.displayName}`}
-      subtitle={`Traverse the ${activeEnv.terrain.credit} under Mars partial gravity (3.71 m/s²).`}
+      title={
+        isSimulatorAvailable
+          ? `Marswalk 3D Surface Simulator · ${activeEnv.displayName}`
+          : `3D Surface Exploration · ${resolvedSimulator.regionName}`
+      }
+      subtitle={
+        isSimulatorAvailable
+          ? `Traverse the ${activeEnv.terrain.credit} under Mars partial gravity (3.71 m/s²).`
+          : `3D surface simulation environment is in preparation for ${resolvedSimulator.regionName}. Scientific exploration remains available via orbital and 2D mapping tools.`
+      }
       actions={
         <>
           <Link
@@ -1128,132 +1149,239 @@ export default function MarswalkPage() {
         </>
       }
     >
-      {/* Fullscreen 3D Visor Viewport */}
+      {/* Fullscreen 3D Visor Viewport OR Non-Available Simulator Workstation */}
       <div className="relative h-full w-full overflow-hidden bg-[#0c0806]">
-        {initializing && (
-          <div
-            className="pointer-events-none absolute inset-0 z-[40] flex flex-col items-center justify-center gap-3 bg-[#0c0806]/85 backdrop-blur-sm"
-            role="status"
-          >
-            <Loader2 size={28} className="animate-spin text-mx-accent" />
-            <div className="text-center">
-              <p className="mx-eyebrow mx-eyebrow--accent m-0">
-                Initializing 3D Mars Surface Engine (g = 3.71 m/s²)
-              </p>
-              <p className="mx-mono m-0 mt-1 text-xs text-mx-muted">
-                {targetName} ·{" "}
-                {formatCoordinates(
-                  baseCoordinates.latitude,
-                  baseCoordinates.longitude
-                )}
-              </p>
+        {!isSimulatorAvailable || !activeEnv ? (
+          <div className="mx-scroll flex h-full w-full flex-col items-center justify-center overflow-y-auto p-6 text-center">
+            <div className="mx-panel w-full max-w-2xl border border-mx-border-strong bg-mx-bg/95 p-6 text-left shadow-2xl sm:p-8">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-mx-border pb-4">
+                <div>
+                  <span className="mx-eyebrow mx-eyebrow--accent">
+                    STAGE 03 · 3D SURFACE EXPLORATION STATUS
+                  </span>
+                  <h2 className="mx-heading m-0 mt-1 text-2xl font-bold">
+                    {resolvedSimulator.regionName}
+                  </h2>
+                </div>
+                <span
+                  className={`mx-badge px-2.5 py-1 font-mono text-xs uppercase tracking-wider ${
+                    resolvedSimulator.availability === "PLANNED"
+                      ? "border-amber-500/50 bg-amber-500/15 text-amber-200"
+                      : "border-slate-500/50 bg-slate-500/15 text-slate-300"
+                  }`}
+                >
+                  3D Simulator {resolvedSimulator.availability}
+                </span>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-4 font-mono text-xs text-mx-muted">
+                <span className="inline-flex items-center gap-1.5 text-mx-text">
+                  <MapPin size={13} className="text-mx-accent" />
+                  Target Coordinates:{" "}
+                  {formatCoordinates(
+                    baseCoordinates.latitude,
+                    baseCoordinates.longitude
+                  )}
+                </span>
+                <span>•</span>
+                <span>Vertical Reference: MOLA Areoid</span>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-mx-border bg-mx-surface/60 p-4 text-sm leading-relaxed text-mx-text">
+                {resolvedSimulator.reason}
+              </div>
+
+              {resolvedSimulator.plannedEnvironment?.requiredAssets && (
+                <div className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-950/20 p-4">
+                  <span className="block font-mono text-[11px] font-semibold uppercase tracking-wider text-cyan-300">
+                    Required 3D Simulation Assets (Compilation In Progress)
+                  </span>
+                  <ul className="mt-2 list-disc space-y-1.5 pl-5 text-xs text-cyan-100/80">
+                    {resolvedSimulator.plannedEnvironment.requiredAssets.map(
+                      (asset, i) => (
+                        <li key={i}>{asset}</li>
+                      )
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              <div className="mt-6 rounded-lg border border-mx-border bg-mx-surface/30 p-3.5 text-xs text-mx-muted">
+                <strong className="text-mx-text">
+                  Active Scientific Capabilities:
+                </strong>{" "}
+                You can continue investigating orbital datasets, verifying
+                spectral and thermal measurements, analyzing knowledge gaps,
+                planning candidate routes, and compiling your research dossier.
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-mx-border pt-4">
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    to="/mission/investigate"
+                    className="mx-btn mx-btn--secondary mx-btn--sm"
+                  >
+                    <ArrowLeft size={13} />
+                    Investigation Workspace
+                  </Link>
+                  <Link
+                    to="/mission/builder"
+                    className="mx-btn mx-btn--secondary mx-btn--sm"
+                  >
+                    Mission Builder
+                  </Link>
+                  <Link
+                    to="/mission/review"
+                    className="mx-btn mx-btn--primary mx-btn--sm"
+                  >
+                    Proceed to Review
+                    <ArrowRight size={13} />
+                  </Link>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const jezero = getMarsRegionById("jezero-crater");
+                    if (jezero) setRegion(jezero);
+                  }}
+                  className="mx-btn mx-btn--secondary mx-btn--sm border-emerald-500/40 text-emerald-300 hover:border-emerald-400"
+                >
+                  Switch to Jezero Crater for Live 3D EVA
+                </button>
+              </div>
             </div>
           </div>
+        ) : (
+          <>
+            {initializing && (
+              <div
+                className="pointer-events-none absolute inset-0 z-[40] flex flex-col items-center justify-center gap-3 bg-[#0c0806]/85 backdrop-blur-sm"
+                role="status"
+              >
+                <Loader2 size={28} className="animate-spin text-mx-accent" />
+                <div className="text-center">
+                  <p className="mx-eyebrow mx-eyebrow--accent m-0">
+                    Initializing 3D Mars Surface Engine (g = 3.71 m/s²)
+                  </p>
+                  <p className="mx-mono m-0 mt-1 text-xs text-mx-muted">
+                    {targetName} ·{" "}
+                    {formatCoordinates(
+                      baseCoordinates.latitude,
+                      baseCoordinates.longitude
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <iframe
+              ref={iframeRef}
+              key={simulatorSrc}
+              title="Marswalk 3D Surface Exploration Simulator"
+              src={simulatorSrc}
+              onLoad={() => setInitializing(false)}
+              className="h-full w-full border-0"
+              allow="fullscreen; pointer-lock"
+            />
+
+            {/* Subtle Astronaut Helmet Visor Frame Vignette */}
+            <div
+              className="pointer-events-none absolute inset-0 z-[10] shadow-[inset_0_0_90px_rgba(8,6,7,0.68)]"
+              aria-hidden="true"
+            />
+
+            {/* Standardized Shared Astronaut Helmet HUD */}
+            <HelmetHud
+              environment={activeEnv}
+              isFallbackEnvironment={false}
+              requestedRegionName={mission.region?.name ?? null}
+              explorationMode={explorationMode}
+              currentPos={currentPos}
+              baseCoordinates={baseCoordinates}
+              liveElevationM={liveElevationM}
+              liveSlopeDeg={liveSlopeDeg}
+              liveHeadingDeg={liveHeadingDeg}
+              liveFlyMode={liveFlyMode}
+              liveMapOpen={liveMapOpen}
+              anyModalOpen={anyModalOpen}
+              totalTraverseMeters={mission.simulation.totalTraverseMeters ?? 0}
+              distanceFromBaseMeters={
+                mission.simulation.distanceFromBaseMeters ?? 0
+              }
+              elapsedTimeSeconds={mission.simulation.elapsedTimeSeconds}
+              visitedCount={visitedCount}
+              totalTargets={totalTargets}
+              visitedTargetIds={mission.simulation.visitedTargetIds}
+              scientificTargets={mission.scientificTargets}
+              selectedTargetId={selectedTargetId}
+              currentGeologicUnit={currentGeologicUnit}
+              compassMarkers={compassMarkers}
+              primaryGuideMarker={primaryGuideMarker}
+              baseMarker={baseMarker}
+              nearestBeacon={nearestBeacon}
+              isApproachingBeacon={isApproachingBeacon}
+              activeGroundTruthSol={activeGroundTruthSol}
+              suit={suit}
+              envConditions={env}
+              isRotaryDrillEquipped={isRotaryDrillEquipped}
+              equippedToolsCount={equippedTools.length}
+              observationsCount={mission.selectedObservations.length}
+              samplesCount={collectedSamples.length}
+              feedbackBanner={feedbackBanner}
+              simulatorError={simulatorError}
+              onDismissFeedback={() => setFeedbackBanner(null)}
+              onRetrySimulator={() => {
+                setSimulatorError(null);
+                setInitializing(true);
+                iframeRef.current?.contentWindow?.location.reload();
+              }}
+              onSelectMode={(mode) => updateSimulation({ mode })}
+              onSelectTarget={(id) => setSelectedTargetId(id)}
+              onTeleportTo={handleTeleportTo}
+              onToggleFieldwork={() => {
+                setShowContingencyDrawer(false);
+                setShowSuitCheckModal(false);
+                setShowReturnModal(false);
+                setShowFieldworkDrawer((prev) => !prev);
+              }}
+              onOpenBeaconFieldwork={() => {
+                if (nearestBeacon?.isMissionTarget) {
+                  setSelectedTargetId(nearestBeacon.id);
+                }
+                setActiveFieldworkTab("target");
+                setShowContingencyDrawer(false);
+                setShowSuitCheckModal(false);
+                setShowReturnModal(false);
+                setShowFieldworkDrawer(true);
+              }}
+              onToggleMap={handleToggleIframeMap}
+              onToggleFlight={handleToggleIframeFlight}
+              onOpenSuitCheck={() => {
+                setShowFieldworkDrawer(false);
+                setShowContingencyDrawer(false);
+                setShowReturnModal(false);
+                setShowSuitCheckModal(true);
+              }}
+              onOpenContingency={() => {
+                setShowFieldworkDrawer(false);
+                setShowSuitCheckModal(false);
+                setShowReturnModal(false);
+                setShowContingencyDrawer((prev) => !prev);
+              }}
+              onTriggerReturn={() => {
+                setShowFieldworkDrawer(false);
+                setShowContingencyDrawer(false);
+                setShowSuitCheckModal(false);
+                updateSimulation({
+                  returnedToBase: true,
+                  completedAt: new Date().toISOString(),
+                });
+                setShowReturnModal(true);
+              }}
+            />
+          </>
         )}
-
-        <iframe
-          ref={iframeRef}
-          key={simulatorSrc}
-          title="Marswalk 3D Surface Exploration Simulator"
-          src={simulatorSrc}
-          onLoad={() => setInitializing(false)}
-          className="h-full w-full border-0"
-          allow="fullscreen; pointer-lock"
-        />
-
-        {/* Subtle Astronaut Helmet Visor Frame Vignette */}
-        <div
-          className="pointer-events-none absolute inset-0 z-[10] shadow-[inset_0_0_90px_rgba(8,6,7,0.68)]"
-          aria-hidden="true"
-        />
-
-        {/* Standardized Shared Astronaut Helmet HUD */}
-        <HelmetHud
-          environment={activeEnv}
-          isFallbackEnvironment={isFallbackEnvironment}
-          requestedRegionName={mission.region?.name ?? null}
-          explorationMode={explorationMode}
-          currentPos={currentPos}
-          baseCoordinates={baseCoordinates}
-          liveElevationM={liveElevationM}
-          liveSlopeDeg={liveSlopeDeg}
-          liveHeadingDeg={liveHeadingDeg}
-          liveFlyMode={liveFlyMode}
-          liveMapOpen={liveMapOpen}
-          anyModalOpen={anyModalOpen}
-          totalTraverseMeters={mission.simulation.totalTraverseMeters ?? 0}
-          distanceFromBaseMeters={mission.simulation.distanceFromBaseMeters ?? 0}
-          elapsedTimeSeconds={mission.simulation.elapsedTimeSeconds}
-          visitedCount={visitedCount}
-          totalTargets={totalTargets}
-          visitedTargetIds={mission.simulation.visitedTargetIds}
-          scientificTargets={mission.scientificTargets}
-          selectedTargetId={selectedTargetId}
-          currentGeologicUnit={currentGeologicUnit}
-          compassMarkers={compassMarkers}
-          primaryGuideMarker={primaryGuideMarker}
-          baseMarker={baseMarker}
-          nearestBeacon={nearestBeacon}
-          isApproachingBeacon={isApproachingBeacon}
-          activeGroundTruthSol={activeGroundTruthSol}
-          suit={suit}
-          envConditions={env}
-          isRotaryDrillEquipped={isRotaryDrillEquipped}
-          equippedToolsCount={equippedTools.length}
-          observationsCount={mission.selectedObservations.length}
-          samplesCount={collectedSamples.length}
-          feedbackBanner={feedbackBanner}
-          simulatorError={simulatorError}
-          onDismissFeedback={() => setFeedbackBanner(null)}
-          onRetrySimulator={() => {
-            setSimulatorError(null);
-            setInitializing(true);
-            iframeRef.current?.contentWindow?.location.reload();
-          }}
-          onSelectMode={(mode) => updateSimulation({ mode })}
-          onSelectTarget={(id) => setSelectedTargetId(id)}
-          onTeleportTo={handleTeleportTo}
-          onToggleFieldwork={() => {
-            setShowContingencyDrawer(false);
-            setShowSuitCheckModal(false);
-            setShowReturnModal(false);
-            setShowFieldworkDrawer((prev) => !prev);
-          }}
-          onOpenBeaconFieldwork={() => {
-            if (nearestBeacon?.isMissionTarget) {
-              setSelectedTargetId(nearestBeacon.id);
-            }
-            setActiveFieldworkTab("target");
-            setShowContingencyDrawer(false);
-            setShowSuitCheckModal(false);
-            setShowReturnModal(false);
-            setShowFieldworkDrawer(true);
-          }}
-          onToggleMap={handleToggleIframeMap}
-          onToggleFlight={handleToggleIframeFlight}
-          onOpenSuitCheck={() => {
-            setShowFieldworkDrawer(false);
-            setShowContingencyDrawer(false);
-            setShowReturnModal(false);
-            setShowSuitCheckModal(true);
-          }}
-          onOpenContingency={() => {
-            setShowFieldworkDrawer(false);
-            setShowSuitCheckModal(false);
-            setShowReturnModal(false);
-            setShowContingencyDrawer((prev) => !prev);
-          }}
-          onTriggerReturn={() => {
-            setShowFieldworkDrawer(false);
-            setShowContingencyDrawer(false);
-            setShowSuitCheckModal(false);
-            updateSimulation({
-              returnedToBase: true,
-              completedAt: new Date().toISOString(),
-            });
-            setShowReturnModal(true);
-          }}
-        />
 
         {/* ================================================================
             CENTERED MODAL: IN-SITU FIELDWORK STATION [E]

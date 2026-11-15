@@ -1,0 +1,34 @@
+{
+  "name": "Valles Marineris (Melas Chasma)",
+  "source": {
+    "dem": "MGS MOLA 128 ppd Topography (MEGT00N270HB.IMG)",
+    "ortho": "MOLA Derived Topographic Photometric Hillshade (Not Optical Imagery)",
+    "credit": "NASA / PDS Geosciences Node / MGS MOLA Science Team (Smith et al., 2003)"
+  },
+  "cols": 513,
+  "rows": 513,
+  "tileSize": 256,
+  "tilesX": 2,
+  "tilesY": 2,
+  "cellX": 490.55,
+  "cellZ": 405.2,
+  "heightMin": -4203.88,
+  "heightMax": 4159.13,
+  "heightScale": 0.127611,
+  "overview": {
+    "step": 2,
+    "cols": 257,
+    "rows": 257
+  },
+  "textureSize": 256,
+  "textures": "1111",
+  "mapImage": "overview.jpg",
+  "proj": {
+    "westLonDeg": 281.5,
+    "eastLonDeg": 285.8,
+    "northLatDeg": -8,
+    "southLatDeg": -11.5,
+    "radius": 3396190,
+    "latCenterDeg": -9.8
+  }
+}

@@ -21,6 +21,7 @@ import {
   type TileMatrixLevel,
 } from "../../services/dataProviders";
 import { EXPLORATION_SITES, getSiteById } from "../../data/explorationSites";
+import { getMarsRegionById } from "../../data/regions";
 import type { Coordinates } from "../../types";
 import {
   loadCachedTileImage,
@@ -736,6 +737,24 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
         setGeologyGeoJson(featureCollection);
       } catch (error: unknown) {
         if (controller.signal.aborted) return;
+
+        // Try local static fallback for Jezero SIM-3464 if API is unreachable
+        if (selectedStudyRegionId === "jezero") {
+          try {
+            const fallbackResp = await fetch("/data/jezero_geology_sim3464.geojson", { signal: controller.signal });
+            if (fallbackResp.ok) {
+              const fallbackPayload = await fallbackResp.json();
+              const fc = getGeologyFeatureCollection(fallbackPayload);
+              if (fc) {
+                setGeologyGeoJson(fc);
+                setGeologyError(null);
+                return;
+              }
+            }
+          } catch {
+            // Ignore fallback error and report original error
+          }
+        }
 
         setGeologyGeoJson(null);
 

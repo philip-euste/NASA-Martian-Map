@@ -28,7 +28,12 @@ import {
   formatCoordinates,
 } from "../../components/ui";
 import { marsDemProvider } from "../../services/providers/marsDem";
-import { resolveDatasetMetadata } from "../../data/evidenceDatasets";
+import {
+  CRISM_REFERENCE_DATASET_ID,
+  CRISM_REFERENCE_SOURCE,
+  resolveDatasetMetadata,
+} from "../../data/evidenceDatasets";
+import { getMarsRegionById } from "../../data/regions";
 import { useMission } from "../../state/mission/MissionContext";
 import type { DerivedAnalysis, ScientificInterpretation } from "../../types";
 import MissionLayout from "./MissionLayout";
@@ -67,6 +72,9 @@ export default function EvidenceInspectorPage() {
     mission.selectedObservations.find((o) => o.id === selectedObsId) ??
     mission.selectedObservations[0] ??
     null;
+  const observationRegionId = activeObservation?.regionId ?? mission.region?.id;
+
+  const isJezero = !mission.region || mission.region.id === "jezero-crater";
 
   const relatedDataset = activeObservation
     ? mission.selectedDatasets.find(
@@ -511,7 +519,8 @@ export default function EvidenceInspectorPage() {
                   <div className="flex flex-col justify-between md:col-span-7">
                     {(() => {
                       const dsMeta = resolveDatasetMetadata(
-                        activeObservation.datasetId
+                        activeObservation.datasetId,
+                        observationRegionId
                       );
                       return (
                         <div className="grid grid-cols-2 gap-4 rounded-lg border border-mx-border bg-mx-bg p-4">
@@ -524,7 +533,7 @@ export default function EvidenceInspectorPage() {
                             value={dsMeta.instrumentAndMission}
                           />
                           <DataField
-                            label="Observation Date (UTC)"
+                            label={activeObservation.source === CRISM_REFERENCE_SOURCE ? "Record Date (UTC)" : "Observation Date (UTC)"}
                             value={activeObservation.observationDate}
                           />
                           <DataField
@@ -548,7 +557,7 @@ export default function EvidenceInspectorPage() {
                             className="col-span-2"
                           />
                           <DataField
-                            label="Actual Measurement / Method"
+                            label={activeObservation.datasetId === CRISM_REFERENCE_DATASET_ID ? "Reference Profile / Method" : "Actual Measurement / Method"}
                             value={
                               activeObservation.provenance?.processingMethod ??
                               dsMeta.measurementProvided
@@ -604,60 +613,76 @@ export default function EvidenceInspectorPage() {
                       No explicit limitations recorded for this observation.
                     </p>
                   )}
+                  {(() => {
+                    const dsMeta = resolveDatasetMetadata(
+                      activeObservation.datasetId,
+                      observationRegionId
+                    );
+                    return dsMeta.activeRegionalCaveat ? (
+                      <div className="mt-3 rounded border border-amber-500/40 bg-amber-950/40 p-2.5 text-xs text-amber-200">
+                        <strong className="text-amber-300">
+                          Regional Caveat ({getMarsRegionById(observationRegionId)?.name ?? observationRegionId ?? "Selected Region"}):
+                        </strong>{" "}
+                        {dsMeta.activeRegionalCaveat}
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
 
-                {/* T-2.3: Attach or Inspect Perseverance Surface Imagery */}
-                <div className="mt-4 border-t border-mx-border pt-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs text-mx-muted">
-                      {activeObservation.surfaceImage
-                        ? `Linked Rover Photograph: ${activeObservation.surfaceImage.imageId} (${activeObservation.surfaceImage.instrument}, Sol ${activeObservation.surfaceImage.sol})`
-                        : "Have supporting Perseverance surface imagery (Mastcam-Z, Navcam, or SuperCam RMI) for this observation?"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowRoverGallery((prev) => !prev)}
-                      className="mx-btn mx-btn--secondary mx-btn--sm"
-                    >
-                      {showRoverGallery
-                        ? "Hide Perseverance Imagery Catalog"
-                        : activeObservation.surfaceImage
-                          ? "Change / Inspect Rover Image"
-                          : "Browse & Attach Rover Image"}
-                    </button>
-                  </div>
-
-                  {showRoverGallery && (
-                    <div className="mt-4">
-                      <PerseveranceImageryPanel
-                        activeObservationName={activeObservation.name}
-                        onAttachToObservation={(surfaceImage) => {
-                          setCutoutImgFailed(false);
-                          const updatedObs = toMutable(
-                            mission.selectedObservations
-                          ).map((obs) => {
-                            if (obs.id !== activeObservation.id) return obs;
-                            return {
-                              ...obs,
-                              surfaceImage,
-                            };
-                          });
-                          updateMission({
-                            selectedObservations: updatedObs,
-                          });
-                        }}
-                      />
+                {/* T-2.3: Attach or Inspect Perseverance Surface Imagery - Jezero Only */}
+                {isJezero && (
+                  <div className="mt-4 border-t border-mx-border pt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs text-mx-muted">
+                        {activeObservation.surfaceImage
+                          ? `Linked Rover Photograph: ${activeObservation.surfaceImage.imageId} (${activeObservation.surfaceImage.instrument}, Sol ${activeObservation.surfaceImage.sol})`
+                          : "Have supporting Perseverance surface imagery (Mastcam-Z, Navcam, or SuperCam RMI) for this observation?"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowRoverGallery((prev) => !prev)}
+                        className="mx-btn mx-btn--secondary mx-btn--sm"
+                      >
+                        {showRoverGallery
+                          ? "Hide Perseverance Imagery Catalog"
+                          : activeObservation.surfaceImage
+                            ? "Change / Inspect Rover Image"
+                            : "Browse & Attach Rover Image"}
+                      </button>
                     </div>
-                  )}
-                </div>
+
+                    {showRoverGallery && (
+                      <div className="mt-4">
+                        <PerseveranceImageryPanel
+                          activeObservationName={activeObservation.name}
+                          onAttachToObservation={(surfaceImage) => {
+                            setCutoutImgFailed(false);
+                            const updatedObs = toMutable(
+                              mission.selectedObservations
+                            ).map((obs) => {
+                              if (obs.id !== activeObservation.id) return obs;
+                              return {
+                                ...obs,
+                                surfaceImage,
+                              };
+                            });
+                            updateMission({
+                              selectedObservations: updatedObs,
+                            });
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </section>
 
-              {/* 2. Derived Measurements */}
-              {activeObservation.datasetId === "crism_jezero_vnir" && (
+              {/* 2. Derived Measurements - Jezero Instruments */}
+              {isJezero && activeObservation.datasetId === "crism_jezero_vnir" && (
                 <CrismSpectralPanel />
               )}
 
-              {activeObservation.datasetId === "m2020_meda_env" && (
+              {isJezero && activeObservation.datasetId === "m2020_meda_env" && (
                 <MedaEnvironmentalPanel
                   onLogDerivedMeasurement={(params) => {
                     const analysis: DerivedAnalysis = {

@@ -19,6 +19,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { formatCoordinates, formatDistance } from "../../components/ui";
+import { getMarsRegionById } from "../../data/regions";
 import { isWithinJezeroDemBounds } from "../mars-explorer/marsExplorer.types";
 import { marsDemProvider } from "../../services/providers/marsDem";
 import type { Waypoint } from "../../types";
@@ -33,6 +34,7 @@ interface RouteStratigraphyProfileProps {
   preferredSlopeDegrees?: number;
   routeTitle?: string;
   onLoadReferenceTraverse?: () => void;
+  regionId?: string;
 }
 
 export default function RouteStratigraphyProfile({
@@ -41,7 +43,11 @@ export default function RouteStratigraphyProfile({
   preferredSlopeDegrees = 15,
   routeTitle = "Active Draft Traverse",
   onLoadReferenceTraverse,
+  regionId,
 }: RouteStratigraphyProfileProps) {
+  const activeRegion = regionId ? getMarsRegionById(regionId) : null;
+  const isJezero = !regionId || regionId === "jezero-crater";
+
   const [geoJsonFeatures, setGeoJsonFeatures] = useState<
     JezeroGeoJsonFeature[] | undefined
   >(undefined);
@@ -51,8 +57,12 @@ export default function RouteStratigraphyProfile({
   const [sampling, setSampling] = useState(false);
   const [resampleVersion, setResampleVersion] = useState(0);
 
-  // Load `/data/jezero_geology_sim3464.geojson` for live polygon verification
+  // Load `/data/jezero_geology_sim3464.geojson` for live polygon verification (Jezero only)
   useEffect(() => {
+    if (!isJezero) {
+      setGeoJsonFeatures([]);
+      return;
+    }
     let cancelled = false;
     fetch("/data/jezero_geology_sim3464.geojson")
       .then((res) => res.json())
@@ -67,11 +77,11 @@ export default function RouteStratigraphyProfile({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isJezero]);
 
   // Automatically sample elevations along waypoints via marsDemProvider
   useEffect(() => {
-    if (waypoints.length === 0) return;
+    if (waypoints.length === 0 || !isJezero) return;
     let cancelled = false;
     setSampling(true);
 
@@ -156,21 +166,23 @@ export default function RouteStratigraphyProfile({
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-mx-border pb-4">
         <div>
           <span className="mx-eyebrow mx-eyebrow--accent">
-            Curiosity Mount Sharp Traverse Model · USGS SIM 3464 Stratigraphy
+            {isJezero
+              ? "Curiosity Mount Sharp Traverse Model · USGS SIM 3464 Stratigraphy"
+              : `Traverse Profile · ${activeRegion?.name ?? "Regional"} Exploration`}
           </span>
           <h2 className="mx-heading m-0 mt-1 flex items-center gap-2 text-xl">
             <Mountain size={18} className="text-mx-accent" />
             Stratigraphic Cross-Section &amp; Traverse Hazard Profile
           </h2>
           <p className="mx-body m-0 mt-1 text-xs text-mx-muted">
-            Correlates waypoint elevations (HiRISE / CTX DEM) with USGS Jezero
-            chronostratigraphic units, contact crossings, slope limits (&gt;
-            {preferredSlopeDegrees}°), and THEMIS thermal inertia sand hazards.
+            {isJezero
+              ? `Correlates waypoint elevations (HiRISE / CTX DEM) with USGS Jezero chronostratigraphic units, contact crossings, slope limits (>${preferredSlopeDegrees}°), and THEMIS thermal inertia sand hazards.`
+              : `Waypoint elevation cross-section, spherical distance analysis, and slope evaluation for ${activeRegion?.name ?? "this region"}. Regional stratigraphic unit polygons are in preparation.`}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {onLoadReferenceTraverse && (
+          {onLoadReferenceTraverse && isJezero && (
             <button
               type="button"
               onClick={onLoadReferenceTraverse}
@@ -197,14 +209,32 @@ export default function RouteStratigraphyProfile({
         </div>
       </div>
 
+      {!isJezero && (
+        <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs text-mx-text">
+          <div className="flex items-center gap-2 font-semibold text-amber-300">
+            <AlertTriangle size={15} />
+            <span>Regional Geological Unit Polygons In Preparation</span>
+          </div>
+          <p className="mt-1 mb-0 text-mx-muted">
+            USGS SIM 3464 chronostratigraphic unit classifications (Māaz, Séítah, Delta Topset, Marginal Carbonate) are Jezero-specific. Geological formation polygon integration for {activeRegion?.name ?? "this region"} is scheduled for a future phase. Waypoint elevation profiles and spherical distance geometry remain fully operational.
+          </p>
+        </div>
+      )}
+
       {analysis.nodes.length < 2 ? (
         <div className="mt-4 rounded-lg border border-dashed border-mx-border-strong bg-mx-bg p-5 text-center text-xs text-mx-muted">
-          Plot at least 2 waypoints on the map above (or click{" "}
-          <strong className="text-mx-text">
-            Load Jezero Stratigraphic Traverse
-          </strong>
-          ) to generate the Curiosity-style geological cross-section and hazard
-          profile.
+          Plot at least 2 waypoints on the map above
+          {isJezero && (
+            <>
+              {" "}
+              (or click{" "}
+              <strong className="text-mx-text">
+                Load Jezero Stratigraphic Traverse
+              </strong>
+              )
+            </>
+          )}{" "}
+          to generate the geological cross-section and hazard profile.
         </div>
       ) : (
         <>
