@@ -868,7 +868,7 @@ export default function ExpeditionReportPage() {
                     {activeReport.fieldNotes.map((note) => (
                       <li
                         key={note.id}
-                        className="rounded border border-mx-border bg-mx-bg p-3 text-xs"
+                        className="rounded border border-mx-border bg-mx-bg p-3 text-xs min-w-0 overflow-hidden"
                       >
                         <span className="mx-mono text-mx-accent">
                           {formatCoordinates(
@@ -876,7 +876,7 @@ export default function ExpeditionReportPage() {
                             note.coordinates.longitude
                           )}
                         </span>
-                        <p className="m-0 mt-1 text-mx-text">{note.content}</p>
+                        <p className="m-0 mt-1 text-mx-text break-words [overflow-wrap:anywhere]">{note.content}</p>
                       </li>
                     ))}
                   </ul>

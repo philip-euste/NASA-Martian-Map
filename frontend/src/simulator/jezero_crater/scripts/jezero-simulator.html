@@ -113,10 +113,10 @@
       }
 
       .overlay-card {
-        width: min(440px, 100%);
+        width: min(360px, 100%);
         max-height: 100%;
         overflow-y: auto;
-        padding: 22px 24px;
+        padding: 16px 18px;
         border: 1px solid #45404a;
         border-radius: 10px;
         background: rgba(22, 20, 24, 0.95);
@@ -134,7 +134,7 @@
 
       h1 {
         margin: 8px 0;
-        font-size: 22px;
+        font-size: 20px;
         letter-spacing: -0.02em;
       }
 
@@ -158,6 +158,8 @@
         min-height: 40px;
       }
 
+      .control-guide { margin-top: 10px; border-top: 1px solid #38434a; color: #c9dce0; font-size: 11px; }
+      .control-guide summary { padding: 9px 0 2px; cursor: pointer; font-weight: 600; }
       .controls {
         margin-top: 14px;
         padding-top: 12px;
@@ -400,6 +402,11 @@
       }
 
       @media (max-width: 600px) {
+        #overlay { align-items: flex-start; padding: 175px 12px 255px; }
+        .overlay-card { padding: 12px 14px; }
+        .overlay-card h1 { font-size: 18px; }
+        .overlay-card .description { font-size: 11px; line-height: 1.45; }
+        #start { min-height: 36px; margin-top: 10px; }
         #hud {
           bottom: 10px;
           left: 10px;
@@ -416,9 +423,7 @@
           max-width: 200px;
         }
 
-        .overlay-card {
-          padding: 18px;
-        }
+        .overlay-card { padding: 12px 14px; }
 
         .map-modal-card {
           width: 96vw;
@@ -466,7 +471,7 @@
           Engage Pointer Lock &amp; Walk Surface
         </button>
 
-        <div class="controls">
+        <details class="control-guide"><summary>Movement &amp; tool shortcuts</summary><div class="controls">
           <span><strong>WASD / Arrows</strong> — Walk</span>
           <span><strong>Mouse</strong> — Look around</span>
           <span><strong>Shift</strong> — EVA Stride</span>
@@ -476,7 +481,7 @@
           <span><strong>M</strong> — Terrain Map / Teleport</span>
           <span><strong>F</strong> — Toggle Recon Flight</span>
           <span><strong>L</strong> — Cycle Surface Layer</span>
-        </div>
+        </div></details>
       </div>
     </div>
 

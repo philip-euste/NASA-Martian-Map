@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from terrain_dem import router as terrain_dem_router
 from routers.regions import router as regions_router
+from routers.geological_features import router as geological_features_router
 
 
 # =========================================================
@@ -62,6 +63,7 @@ app.add_middleware(
 # Register endpoints
 app.include_router(terrain_dem_router)
 app.include_router(regions_router)
+app.include_router(geological_features_router)
 
 
 # =========================================================

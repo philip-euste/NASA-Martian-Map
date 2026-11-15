@@ -14,6 +14,7 @@ import {
   getSiteById,
   type ExplorationSite,
 } from "../../data/explorationSites";
+import { loadGeologicalFeatures, type GeologicalFeature } from "../../data/geologicalFeatures";
 import { MAP_LAYERS, type MapLayerId } from "../../data/mapLayers";
 import {
   getDataProvider,
@@ -94,6 +95,7 @@ export function MarsExplorerProvider({
 
   const [viewMode, setViewModeState] =
     useState<ExplorerViewMode>(initialViewMode);
+  const [showGlobeLocations, setShowGlobeLocations] = useState(true);
 
   const [transitionState, setTransitionState] =
     useState<TransitionState>({
@@ -103,7 +105,7 @@ export function MarsExplorerProvider({
     });
 
   const transitionCooldownUntil = useRef(0);
-  const transitionRafRef = useRef<number | null>(null);
+  const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [selectedLayerId, setSelectedLayerIdState] =
     useState<MapLayerId>("mars_viking_global");
@@ -170,6 +172,18 @@ export function MarsExplorerProvider({
     useState<SavedLocation[]>(loadInitialSavedLocations);
   const [locationNameDraft, setLocationNameDraft] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [geologicalFeatures, setGeologicalFeatures] = useState<GeologicalFeature[]>([]);
+  const [geologicalLoading, setGeologicalLoading] = useState(true);
+  const [geologicalError, setGeologicalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadGeologicalFeatures()
+      .then((features) => { if (!cancelled) setGeologicalFeatures(features); })
+      .catch((error: unknown) => { if (!cancelled) setGeologicalError(error instanceof Error ? error.message : "Geological catalog unavailable"); })
+      .finally(() => { if (!cancelled) setGeologicalLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   const [selectedLocation, setSelectedLocation] =
     useState<SelectedExplorerLocation | null>(() => {
@@ -340,8 +354,8 @@ export function MarsExplorerProvider({
 
   useEffect(() => {
     return () => {
-      if (transitionRafRef.current !== null) {
-        cancelAnimationFrame(transitionRafRef.current);
+      if (transitionTimerRef.current !== null) {
+        clearTimeout(transitionTimerRef.current);
       }
     };
   }, []);
@@ -414,6 +428,31 @@ export function MarsExplorerProvider({
       }
     },
     []
+  );
+
+  const selectGeologicalFeature = useCallback(
+    (feature: GeologicalFeature, options?: { focus?: boolean }) => {
+      const valid = normalizeCoordinates(feature);
+      if (!valid) return;
+      setSelectedLocation({
+        kind: "geological",
+        key: `geological:${feature.id}`,
+        name: feature.name,
+        ...valid,
+        description: feature.description || `${feature.classification} named by the IAU.${feature.diameterKm > 0 ? ` Gazetteer diameter: ${feature.diameterKm.toFixed(1)} km.` : ""}`,
+        terrainType: feature.classification,
+        regionLabel: feature.quadrangle ? `${feature.quadrangle} quadrangle` : "Mars",
+        geologicalFeature: feature,
+      });
+      setLocationNameDraft("");
+      setStatusMessage("");
+      if (options?.focus !== false) {
+        setFocusCoordinates(valid);
+        setMapZoom((current) => Math.max(current, 4));
+        setGlobeDistance((current) => Math.min(Math.max(current, 1.9), 2.5));
+        setFocusRequestVersion((version) => version + 1);
+      }
+    }, []
   );
 
   const goToSavedLocation = useCallback(
@@ -623,8 +662,8 @@ export function MarsExplorerProvider({
       transitionCooldownUntil.current =
         now + TRANSITION_COOLDOWN_MS;
 
-      if (transitionRafRef.current !== null) {
-        cancelAnimationFrame(transitionRafRef.current);
+      if (transitionTimerRef.current !== null) {
+        clearTimeout(transitionTimerRef.current);
       }
 
       const validFocus = nextFocus
@@ -651,29 +690,10 @@ export function MarsExplorerProvider({
       });
       setViewModeState(targetMode);
 
-      const start = performance.now();
-
-      const step = (timestamp: number) => {
-        const elapsed = timestamp - start;
-        const progress = Math.min(
-          1,
-          elapsed / TRANSITION_DURATION_MS
-        );
-
-        setTransitionState({
-          active: progress < 1,
-          direction: progress < 1 ? direction : null,
-          progress,
-        });
-
-        if (progress < 1) {
-          transitionRafRef.current = requestAnimationFrame(step);
-        } else {
-          transitionRafRef.current = null;
-        }
-      };
-
-      transitionRafRef.current = requestAnimationFrame(step);
+      transitionTimerRef.current = setTimeout(() => {
+        setTransitionState({ active: false, direction: null, progress: 1 });
+        transitionTimerRef.current = null;
+      }, TRANSITION_DURATION_MS);
     },
     []
   );
@@ -1024,6 +1044,8 @@ export function MarsExplorerProvider({
     () => ({
       viewMode,
       setViewMode,
+      showGlobeLocations,
+      setShowGlobeLocations,
       transitionState,
 
       selectedLayerId,
@@ -1059,6 +1081,10 @@ export function MarsExplorerProvider({
 
       selectedLocation,
       selectSite,
+      geologicalFeatures,
+      geologicalLoading,
+      geologicalError,
+      selectGeologicalFeature,
       selectCustomCoordinates,
       goToSavedLocation,
       clearSelection,
@@ -1142,6 +1168,10 @@ export function MarsExplorerProvider({
       searchResults,
       selectCustomCoordinates,
       selectSite,
+      geologicalFeatures,
+      geologicalLoading,
+      geologicalError,
+      selectGeologicalFeature,
       selectedLayerId,
       selectedLocation,
       selectedStudyRegionId,
@@ -1166,6 +1196,7 @@ export function MarsExplorerProvider({
       updateCameraFocus,
       viewMode,
       geologyOpacity,
+      showGlobeLocations,
     ]
   );
 

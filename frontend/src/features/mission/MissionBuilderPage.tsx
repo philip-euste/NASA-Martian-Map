@@ -251,12 +251,25 @@ export default function MissionBuilderPage() {
     >
       <form
         onSubmit={handleSubmitAndContinue}
-        className="grid gap-8 lg:grid-cols-12"
+        className="mx-mission-builder grid gap-6 lg:grid-cols-12 lg:gap-8"
       >
+        <nav className="mx-mission-builder__steps lg:col-span-12" aria-label="Mission builder sections">
+          {[
+            ["mission-objective-section", "01", "Objective", "Purpose and duration"],
+            ["mission-start-section", "02", "Starting point", "Region and habitat"],
+            ["mission-targets-section", "03", "Targets", "Science destinations"],
+            ["mission-advanced-section", "04", "Parameters", "Equipment and constraints"],
+          ].map(([id, number, label, detail]) => (
+            <a key={id} href={`#${id}`} className="mx-mission-builder__step">
+              <span className="mx-mission-builder__step-number">{number}</span>
+              <span><strong>{label}</strong><small>{detail}</small></span>
+            </a>
+          ))}
+        </nav>
         {/* Left 7 cols: Essential Setup first, then Progressive Disclosure for Advanced Options */}
-        <div className="flex flex-col gap-8 lg:col-span-7">
+        <div className="flex flex-col gap-6 lg:col-span-8">
           {/* 1. Basic Mission Identity & Objective */}
-          <section className="mx-panel p-6" aria-label="Mission objective">
+          <section id="mission-objective-section" className="mx-panel p-5 sm:p-6" aria-label="Mission objective">
             <SectionHeading
               eyebrow="Step 01 · Core Mission Definition"
               title="Expedition Identity & Objective"
@@ -298,7 +311,12 @@ export default function MissionBuilderPage() {
               </p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="mx-mission-builder__subsection">
+              <div className="mb-4">
+                <h3 className="mx-heading m-0 text-sm">Time &amp; traverse assumptions</h3>
+                <p className="mx-hint m-0 mt-1">Editable planning inputs. Route duration and oxygen are estimates.</p>
+              </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div>
                 <label htmlFor="duration-sols" className="mx-label">
                   Expedition Duration (Martian Sols)
@@ -343,7 +361,8 @@ export default function MissionBuilderPage() {
                 <p className="mx-hint">Used for a straight-line planning estimate; slope, stops, and terrain resistance are not modeled.</p>
               </div>
             </div>
-            <div className="mt-4 rounded-lg border border-mx-border bg-mx-bg p-3">
+            </div>
+            <div className="mx-mission-builder__subsection mt-4">
               <h3 className="mx-label">Optional astronaut planning inputs</h3>
               <p className="mx-hint">User-entered values only; these do not model suit physiology. Oxygen reserve is estimated from the entered rate and nominal traverse time.</p>
               <div className="grid gap-3 sm:grid-cols-3">
@@ -355,7 +374,7 @@ export default function MissionBuilderPage() {
           </section>
 
           {/* 2. Region & Starting Habitat / Landing Location */}
-          <section className="mx-panel p-6" aria-label="Starting location">
+          <section id="mission-start-section" className="mx-panel p-5 sm:p-6" aria-label="Starting location">
             <SectionHeading
               eyebrow="Step 02 · Insertion & Habitat Base"
               title="Region & Starting Coordinates"
@@ -398,7 +417,7 @@ export default function MissionBuilderPage() {
               })}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="start-lat" className="mx-label">
                   Starting latitude (°)
@@ -455,7 +474,7 @@ export default function MissionBuilderPage() {
           </section>
 
           {/* 3. Assigned Scientific Targets */}
-          <section className="mx-panel p-6" aria-label="Target selection">
+          <section id="mission-targets-section" className="mx-panel p-5 sm:p-6" aria-label="Target selection">
             <SectionHeading
               eyebrow={`Step 03 · Assigned Targets (${selectedTargetIds.length} / ${mission.scientificTargets.length})`}
               title="Scientific Targets Included in Expedition"
@@ -530,12 +549,12 @@ export default function MissionBuilderPage() {
           </section>
 
           {/* 4. Progressive Disclosure: Advanced Equipment, Terrain & Constraints */}
-          <section className="mx-panel p-6" aria-label="Advanced mission parameters">
+          <section id="mission-advanced-section" className="mx-panel p-5 sm:p-6" aria-label="Advanced mission parameters">
             <button
               type="button"
               onClick={() => setShowAdvanced((prev) => !prev)}
               aria-expanded={showAdvanced}
-              className="flex w-full items-center justify-between text-left"
+            className="flex w-full flex-wrap items-center justify-between gap-4 text-left"
             >
               <div>
                 <span className="mx-eyebrow mx-eyebrow--accent">
@@ -713,10 +732,10 @@ export default function MissionBuilderPage() {
           </section>
         </div>
 
-        {/* Right 5 cols: Sticky Mission Summary Card & Actions */}
-        <div className="lg:col-span-5">
+        {/* Live summary stays alongside editable inputs on wide screens. */}
+        <div className="lg:col-span-4">
           <aside
-            className="mx-panel sticky top-6 p-6"
+            className="mx-panel mx-mission-builder__summary p-5 sm:p-6 lg:sticky lg:top-44"
             aria-label="Mission summary"
           >
             <span className="mx-eyebrow mx-eyebrow--accent">
@@ -726,8 +745,9 @@ export default function MissionBuilderPage() {
             <p className="mx-body m-0 mt-2 text-[13px]">
               {mission.objective || "No primary objective entered yet."}
             </p>
+            <p className="mx-mission-builder__summary-note">Live summary · save to apply these settings to the route planner</p>
 
-            <div className="my-5 grid grid-cols-2 gap-4 border-y border-mx-border py-4">
+            <div className="mx-mission-builder__summary-grid">
               <DataField
                 label="Study Region"
                 value={mission.region?.name}

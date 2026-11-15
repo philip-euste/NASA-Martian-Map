@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import AppLayout from "../../components/layout/AppLayout";
 import { getSiteById } from "../../data/explorationSites";
@@ -18,16 +18,20 @@ function parseViewParam(value: string | null): ExplorerViewMode {
 function ExplorerUrlSync() {
   const [searchParams] = useSearchParams();
   const { setViewMode, selectSite } = useMarsExplorer();
+  const lastAppliedView = useRef<string | null>(null);
+  const lastAppliedSite = useRef<string | null>(null);
 
   useEffect(() => {
     const requestedView = searchParams.get("view");
     const requestedSite = searchParams.get("site");
 
-    if (requestedView) {
+    if (requestedView && requestedView !== lastAppliedView.current) {
+      lastAppliedView.current = requestedView;
       setViewMode(parseViewParam(requestedView));
     }
 
-    if (requestedSite) {
+    if (requestedSite && requestedSite !== lastAppliedSite.current) {
+      lastAppliedSite.current = requestedSite;
       const site = getSiteById(requestedSite);
       if (site) {
         selectSite(site, { focus: true });

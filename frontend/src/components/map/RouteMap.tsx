@@ -61,13 +61,14 @@ interface RouteMapProps {
 interface StudyRegion {
   readonly id: string;
   readonly name: string;
+  readonly fallbackUrl: string;
 }
 
 const SUPPORTED_STUDY_REGIONS: readonly StudyRegion[] = [
-  { id: "jezero", name: "Jezero Crater" },
-  { id: "gale", name: "Gale Crater" },
-  { id: "valles-marineris", name: "Valles Marineris" },
-  { id: "olympus-mons", name: "Olympus Mons" },
+  { id: "jezero", name: "Jezero Crater", fallbackUrl: "/data/boundaries/jezero.geojson" },
+  { id: "gale", name: "Gale Crater", fallbackUrl: "/data/boundaries/gale.geojson" },
+  { id: "valles-marineris", name: "Valles Marineris", fallbackUrl: "/data/boundaries/valles-marineris.geojson" },
+  { id: "olympus-mons", name: "Olympus Mons", fallbackUrl: "/data/boundaries/olympus-mons.geojson" },
 ];
 
 function CenterUpdater({
@@ -218,6 +219,28 @@ export default function RouteMap({
           } catch (error) {
             if (controller.signal.aborted) {
               return null;
+            }
+
+            try {
+              const fallbackRes = await fetch(region.fallbackUrl, {
+                signal: controller.signal,
+              });
+              if (fallbackRes.ok) {
+                const fallbackPayload = (await fallbackRes.json()) as Feature;
+                if (
+                  fallbackPayload &&
+                  fallbackPayload.type === "Feature" &&
+                  fallbackPayload.geometry
+                ) {
+                  return {
+                    id: region.id,
+                    feature: fallbackPayload,
+                    error: null,
+                  };
+                }
+              }
+            } catch {
+              if (controller.signal.aborted) return null;
             }
 
             return {
@@ -540,12 +563,12 @@ export default function RouteMap({
               offset={[0, -10]}
               className="mx-site-label is-active"
             >
-              Start (
-              {formatCoordinates(
-                startingLocation.latitude,
-                startingLocation.longitude
-              )}
-              )
+              <span>
+                Start ({formatCoordinates(
+                  startingLocation.latitude,
+                  startingLocation.longitude
+                )})
+              </span>
             </Tooltip>
           </CircleMarker>
         )}

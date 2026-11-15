@@ -21,6 +21,7 @@ import {
   type TileMatrixLevel,
 } from "../../services/dataProviders";
 import { EXPLORATION_SITES, getSiteById } from "../../data/explorationSites";
+import { featureColor, featureSymbol, visibleGeologicalFeatures } from "../../data/geologicalFeatures";
 import { getMarsRegionById } from "../../data/regions";
 import type { Coordinates } from "../../types";
 import {
@@ -35,6 +36,7 @@ import {
 import MarsExplorerControls from "../../features/mars-explorer/MarsExplorerControls";
 import { MarsExplorerLocationPanel } from "../../features/mars-explorer/MarsExplorerUI";
 import { formatCoordinates } from "../ui";
+
 
 import "./MarsMap.css";
 import { apiUrl } from "../../lib/api";
@@ -538,6 +540,10 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
     navigationActionVersion,
     selectedLocation,
     selectSite,
+    geologicalFeatures,
+    geologicalLoading,
+    geologicalError,
+    selectGeologicalFeature,
     selectCustomCoordinates,
     savedLocations,
     goToSavedLocation,
@@ -559,6 +565,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
 
   const [boundaryLoading, setBoundaryLoading] = useState(false);
   const [geologyLoading, setGeologyLoading] = useState(false);
+  const [hoveredGeologicalId, setHoveredGeologicalId] = useState<string | null>(null);
 
   const [boundaryError, setBoundaryError] = useState<string | null>(null);
   const [geologyError, setGeologyError] = useState<string | null>(null);
@@ -979,6 +986,17 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
             );
           })}
 
+          {/* Official USGS/IAU named features. Labels appear as map detail increases. */}
+          {visibleGeologicalFeatures(geologicalFeatures, mapZoom >= 6 ? "close" : mapZoom >= 4 ? "regional" : "overview").map((feature) => {
+            const active = selectedLocation?.geologicalFeature?.id === feature.id;
+            const expanded = active || hoveredGeologicalId === feature.id || (mapZoom >= 6 && feature.diameterKm > 200);
+            return <CircleMarker key={feature.id} center={[feature.latitude, feature.longitude]} radius={active ? 8 : 6} bubblingMouseEvents={false} pathOptions={{ color: featureColor(feature.classification), weight: 2, fillColor: "#09131a", fillOpacity: 0.9 }} eventHandlers={{ click: () => selectGeologicalFeature(feature, { focus: true }), mouseover: () => setHoveredGeologicalId(feature.id), mouseout: () => setHoveredGeologicalId(null) }}>
+              <Tooltip permanent direction="top" offset={[0, -5]} className={`mx-site-label mx-geological-label ${active ? "is-active" : ""}`}>
+                <span className="mx-geological-glyph">{featureSymbol(feature.classification)}</span>{expanded && <span className="mx-geological-name"> {feature.name} · {feature.classification}</span>}
+              </Tooltip>
+            </CircleMarker>;
+          })}
+
           {/* Saved locations */}
           {savedLocations.map((location) => {
             const active =
@@ -1052,6 +1070,8 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
 
         {/* Map status messages */}
         <div className="mx-map-status">
+          {geologicalLoading && <p className="mx-chip">Loading named geological features…</p>}
+          {geologicalError && <p className="mx-chip">Geological features unavailable: {geologicalError}</p>}
           {layerLoading && (
             <p className="mx-chip">Loading map layer...</p>
           )}

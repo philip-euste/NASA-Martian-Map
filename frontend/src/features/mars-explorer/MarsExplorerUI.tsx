@@ -52,6 +52,8 @@ export function MarsExplorerLocationPanel({
     openSelectedInMap,
     openSelectedInGlobe,
   } = useMarsExplorer();
+  const [panelImageFailed, setPanelImageFailed] = useState(false);
+  useEffect(() => { setPanelImageFailed(false); }, [selectedLocation?.key]);
 
   if (!selectedLocation) {
     return null;
@@ -66,6 +68,8 @@ export function MarsExplorerLocationPanel({
   const eyebrowLabel =
     selectedLocation.kind === "site"
       ? "Selected location"
+      : selectedLocation.kind === "geological"
+        ? "IAU named geological feature · map only"
       : selectedLocation.kind === "saved"
         ? "Saved custom location"
         : "Selected surface point";
@@ -89,18 +93,20 @@ export function MarsExplorerLocationPanel({
       </div>
 
       {site &&
-        (site.images[0] ? (
+        (site.images[0] && !panelImageFailed ? (
           <img
             src={site.images[0].src}
             alt={site.images[0].caption}
+            onError={() => setPanelImageFailed(true)}
             className="mb-3.5 aspect-[16/9] w-full rounded-md object-cover"
           />
         ) : (
           <ImagePending
             className="mb-3.5 aspect-[16/9]"
-            detail="Site imagery to be supplied by the team."
+            detail="Verified local NASA image unavailable."
           />
         ))}
+      {selectedLocation.geologicalFeature && <ImagePending className="mb-3.5 aspect-[16/9]" label="No verified feature image" detail="The USGS Gazetteer provides coordinates and names, but no image for this selected feature." />}
 
       <div className="flex items-start justify-between gap-3">
         <h3 className="mx-heading m-0 text-2xl">{displayName}</h3>
@@ -161,6 +167,9 @@ export function MarsExplorerLocationPanel({
       <p className="mx-body m-0 mt-3.5 text-[13px]">
         {selectedLocation.description}
       </p>
+      {selectedLocation.geologicalFeature && <p className="mx-mono m-0 mt-2 text-[11px] text-mx-muted">
+        {selectedLocation.regionLabel} · <a href={selectedLocation.geologicalFeature.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-mx-accent hover:underline">USGS Gazetteer record</a>
+      </p>}
 
       <div className="mt-4 flex gap-2">
         <label htmlFor={`mars-location-name-${mode}`} className="sr-only">
@@ -214,7 +223,7 @@ export function MarsExplorerLocationPanel({
           </button>
         )}
 
-        <button
+        {selectedLocation.kind !== "geological" && <button
           type="button"
           className="mx-btn mx-btn--secondary mx-btn--block"
           onClick={startExpeditionAtSelectedLocation}
@@ -230,7 +239,7 @@ export function MarsExplorerLocationPanel({
               Set as Expedition
             </>
           )}
-        </button>
+        </button>}
 
         <button
           type="button"

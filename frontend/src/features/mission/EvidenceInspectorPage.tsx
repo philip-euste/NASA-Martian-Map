@@ -571,11 +571,11 @@ export default function EvidenceInspectorPage() {
                     })()}
 
                     {activeObservation.description && (
-                      <div className="mt-4 rounded-lg border border-mx-border bg-mx-bg p-3.5">
+                      <div className="mt-4 rounded-lg border border-mx-border bg-mx-bg p-3.5 min-w-0 overflow-hidden">
                         <span className="mx-field__label">
                           Observation Notes
                         </span>
-                        <p className="mx-body m-0 mt-1 text-[13px] text-mx-text">
+                        <p className="mx-body m-0 mt-1 text-[13px] text-mx-text break-all [overflow-wrap:anywhere]">
                           {activeObservation.description}
                         </p>
                       </div>
@@ -1017,17 +1017,17 @@ export default function EvidenceInspectorPage() {
                     {relatedInterpretations.map((interp) => (
                       <div
                         key={interp.id}
-                        className="flex items-start justify-between gap-3 rounded-lg border border-mx-border bg-mx-bg p-3.5"
+                        className="flex items-start justify-between gap-3 rounded-lg border border-mx-border bg-mx-bg p-3.5 min-w-0 overflow-hidden"
                       >
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <span className="mx-badge mx-badge--accent">
                             Author: {interp.generatedBy} (User Interpretation)
                           </span>
-                          <p className="m-0 mt-2 text-sm text-mx-text">
+                          <p className="m-0 mt-2 text-sm text-mx-text break-words [overflow-wrap:anywhere]">
                             {interp.description}
                           </p>
                           {interp.limitations.length > 0 && (
-                            <p className="mx-body m-0 mt-1.5 text-xs">
+                            <p className="mx-body m-0 mt-1.5 text-xs break-words [overflow-wrap:anywhere]">
                               Caveat: {interp.limitations.join("; ")}
                             </p>
                           )}

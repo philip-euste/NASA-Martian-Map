@@ -180,6 +180,7 @@ export default function MarswalkPage() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [surfaceOverlayLayer, setSurfaceOverlayLayer] = useState<MapLayerId | "">("");
+  const [surfaceSettingsOpen, setSurfaceSettingsOpen] = useState(false);
   const [surfaceOverlayOpacity, setSurfaceOverlayOpacity] = useState(0.55);
   const [surfaceOverlayStatus, setSurfaceOverlayStatus] = useState("");
   const [simulatorError, setSimulatorError] = useState<string | null>(null);
@@ -1320,8 +1321,13 @@ export default function MarswalkPage() {
               allow="fullscreen; pointer-lock"
             />
 
-            <div className="absolute right-3 top-16 z-[30] w-64 rounded-lg border border-mx-border bg-mx-bg/95 p-3 shadow-xl backdrop-blur">
-              <label htmlFor="marswalk-surface-overlay" className="mx-label">Comparative surface overlay</label>
+            <div className="marswalk-settings absolute right-3 top-40 z-[30]">
+              <button type="button" className="marswalk-settings-trigger" aria-expanded={surfaceSettingsOpen} aria-controls="marswalk-surface-settings" onClick={() => setSurfaceSettingsOpen((open) => !open)}>
+                <Layers size={15} aria-hidden="true" /> Surface settings
+              </button>
+              {surfaceSettingsOpen && <div id="marswalk-surface-settings" className="marswalk-settings-panel">
+                <div className="marswalk-settings-heading"><strong>Surface settings</strong><button type="button" aria-label="Close surface settings" onClick={() => setSurfaceSettingsOpen(false)}><X size={15} /></button></div>
+              <label htmlFor="marswalk-surface-overlay" className="mx-label">Comparative layer</label>
               <select id="marswalk-surface-overlay" className="mx-input mt-1 text-xs" value={surfaceOverlayLayer} onChange={(event) => setSurfaceOverlayLayer(event.target.value as MapLayerId | "")}>
                 <option value="">None</option>
                 {Object.values(MAP_LAYERS).map((layer) => <option key={layer.id} value={layer.id}>{layer.name}</option>)}
@@ -1329,6 +1335,8 @@ export default function MarswalkPage() {
               {surfaceOverlayLayer && <label className="mt-2 block text-[11px] text-mx-muted" htmlFor="marswalk-overlay-opacity">Blend opacity · {Math.round(surfaceOverlayOpacity * 100)}%</label>}
               {surfaceOverlayLayer && <input id="marswalk-overlay-opacity" className="mx-range mt-1" type="range" min="0.1" max="0.9" step="0.05" value={surfaceOverlayOpacity} onChange={(event) => setSurfaceOverlayOpacity(Number(event.target.value))} />}
               {surfaceOverlayStatus && <p className="m-0 mt-1 text-[10px] text-mx-muted" role="status">{surfaceOverlayStatus}</p>}
+              <p className="marswalk-settings-hint">Press L to cycle the native terrain view.</p>
+              </div>}
             </div>
 
             {/* Subtle Astronaut Helmet Visor Frame Vignette */}

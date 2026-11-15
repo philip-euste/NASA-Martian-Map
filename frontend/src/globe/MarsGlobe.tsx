@@ -13,6 +13,8 @@ import {
 } from "@react-three/fiber";
 import {
   Line,
+  Billboard,
+  Text,
   OrbitControls,
   Stars,
 } from "@react-three/drei";
@@ -31,6 +33,7 @@ import {
   EXPLORATION_SITES,
   getSiteByName,
 } from "../data/explorationSites";
+import { featureColor, featureSymbol, visibleGeologicalFeatures, type GeologicalFeature } from "../data/geologicalFeatures";
 import { useOptionalMarsExplorer } from "../features/mars-explorer/useMarsExplorer";
 import { MarsExplorerLocationPanel } from "../features/mars-explorer/MarsExplorerUI";
 import {
@@ -424,6 +427,33 @@ function PointMarker({
   );
 }
 
+function GeologicalMarker({ feature, selected, showLabel, onSelect }: {
+  feature: GeologicalFeature;
+  selected: boolean;
+  showLabel: boolean;
+  onSelect: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const symbol = featureSymbol(feature.classification);
+  const color = featureColor(feature.classification);
+  const position = coordinatesToVector(feature.latitude, feature.longitude, 1.017);
+  return <group position={position}>
+    <mesh renderOrder={6} onClick={(event) => { event.stopPropagation(); onSelect(); }} onPointerOver={(event) => { event.stopPropagation(); setHovered(true); document.body.style.cursor = "pointer"; }} onPointerOut={() => { setHovered(false); document.body.style.cursor = ""; }}>
+      {symbol === "▲" ? <coneGeometry args={[selected ? 0.024 : 0.017, selected ? 0.042 : 0.028, 5]} /> :
+       symbol === "◎" ? <torusGeometry args={[selected ? 0.018 : 0.013, 0.004, 5, 12]} /> :
+       symbol === "▰" ? <boxGeometry args={[0.028, 0.013, 0.012]} /> :
+       symbol === "⌄" ? <octahedronGeometry args={[selected ? 0.024 : 0.017]} /> :
+       <sphereGeometry args={[selected ? 0.02 : 0.014, 8, 8]} />}
+      <meshBasicMaterial color={selected ? "#ffffff" : color} depthTest />
+    </mesh>
+    {(showLabel || selected || hovered) && <Billboard follow position={[0, 0.045, 0]}>
+      <Text fontSize={selected ? 0.031 : 0.023} color="#ffffff" outlineWidth={0.004} outlineColor="#071013" anchorX="center" anchorY="middle" maxWidth={0.32}>
+        {feature.name}{selected || hovered ? ` · ${feature.classification}` : ""}
+      </Text>
+    </Billboard>}
+  </group>;
+}
+
 function GlobeScene({
   selectedLayerId,
   selectedLayerName,
@@ -436,6 +466,10 @@ function GlobeScene({
   navigationActionVersion,
   initialDistance,
   sites,
+  showLocations,
+  geologicalFeatures,
+  selectedFeatureId,
+  onSelectGeologicalFeature,
   savedLocations,
   selectedPoint,
   selectedKind,
@@ -460,9 +494,13 @@ function GlobeScene({
   navigationActionVersion: number;
   initialDistance: number;
   sites: Location[];
+  showLocations: boolean;
+  geologicalFeatures: GeologicalFeature[];
+  selectedFeatureId: string | null;
+  onSelectGeologicalFeature: (feature: GeologicalFeature) => void;
   savedLocations: SavedLocation[];
   selectedPoint: Coordinates | null;
-  selectedKind: "site" | "saved" | "custom" | null;
+  selectedKind: "site" | "saved" | "custom" | "geological" | null;
   selectedSiteName: string | null;
   selectedSavedId: number | null;
   selectedStudyRegionId: string | null;
@@ -771,6 +809,13 @@ function GlobeScene({
     );
   });
 
+  const displayedFeatures = useMemo(() => {
+    const detail = initialDistance < 2.1 ? "close" : initialDistance < 2.8 ? "regional" : "overview";
+    const visible = visibleGeologicalFeatures(geologicalFeatures, detail);
+    const selected = geologicalFeatures.find((feature) => feature.id === selectedFeatureId);
+    return selected && !visible.some((feature) => feature.id === selected.id) ? [...visible, selected] : visible;
+  }, [geologicalFeatures, initialDistance, selectedFeatureId]);
+
   return (
     <>
       <MarsSurface
@@ -802,7 +847,7 @@ function GlobeScene({
         );
       })}
 
-      {sites.map((location) => {
+      {showLocations && sites.map((location) => {
         const isSelected =
           selectedKind === "site" &&
           selectedSiteName === location.name;
@@ -818,7 +863,9 @@ function GlobeScene({
         );
       })}
 
-      {savedLocations.map((location) => {
+      {showLocations && displayedFeatures.map((feature, index) => <GeologicalMarker key={feature.id} feature={feature} selected={selectedFeatureId === feature.id} showLabel={initialDistance < 2.2 && index < 16} onSelect={() => onSelectGeologicalFeature(feature)} />)}
+
+      {showLocations && savedLocations.map((location) => {
         const isSelected =
           selectedKind === "saved" &&
           selectedSavedId === location.id;
@@ -967,6 +1014,10 @@ export default function MarsGlobe({
     },
     []
   );
+
+  const handleSelectGeologicalFeature = useCallback((feature: GeologicalFeature) => {
+    sharedRef.current?.selectGeologicalFeature(feature, { focus: true });
+  }, []);
 
   const handleSelectSurfacePoint = useCallback(
     (coordinates: Coordinates) => {
@@ -1170,6 +1221,10 @@ export default function MarsGlobe({
               shared?.globeDistance ?? DEFAULT_GLOBE_DISTANCE
             }
             sites={LOCATIONS}
+            showLocations={shared?.showGlobeLocations ?? true}
+            geologicalFeatures={shared?.geologicalFeatures ?? []}
+            selectedFeatureId={shared?.selectedLocation?.geologicalFeature?.id ?? null}
+            onSelectGeologicalFeature={handleSelectGeologicalFeature}
             savedLocations={savedLocations}
             selectedPoint={selectedPoint}
             selectedKind={selectedKind}

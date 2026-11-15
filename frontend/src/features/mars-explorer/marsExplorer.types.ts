@@ -1,4 +1,5 @@
 import type { ExplorationSite } from "../../data/explorationSites";
+import type { GeologicalFeature } from "../../data/geologicalFeatures";
 import type { MapLayerId } from "../../data/mapLayers";
 import type { TileLayerConfig } from "../../services/dataProviders";
 import type { DemElevation } from "../../services/providers/marsDem";
@@ -54,7 +55,7 @@ export interface SavedLocation extends Coordinates {
   description?: string;
 }
 
-export type SelectedLocationKind = "site" | "saved" | "custom";
+export type SelectedLocationKind = "site" | "saved" | "custom" | "geological";
 
 export interface SelectedExplorerLocation extends Coordinates {
   kind: SelectedLocationKind;
@@ -64,6 +65,7 @@ export interface SelectedExplorerLocation extends Coordinates {
   terrainType?: string;
   regionLabel?: string;
   site?: ExplorationSite;
+  geologicalFeature?: GeologicalFeature;
   savedId?: number;
 }
 
@@ -80,6 +82,8 @@ export interface SearchResults {
 
 export interface MarsExplorerContextValue {
   viewMode: ExplorerViewMode;
+  showGlobeLocations: boolean;
+  setShowGlobeLocations: (show: boolean) => void;
   setViewMode: (mode: ExplorerViewMode) => void;
   transitionState: TransitionState;
 
@@ -121,6 +125,10 @@ export interface MarsExplorerContextValue {
 
   selectedLocation: SelectedExplorerLocation | null;
   selectSite: (site: ExplorationSite, options?: { focus?: boolean }) => void;
+  geologicalFeatures: GeologicalFeature[];
+  geologicalLoading: boolean;
+  geologicalError: string | null;
+  selectGeologicalFeature: (feature: GeologicalFeature, options?: { focus?: boolean }) => void;
   selectCustomCoordinates: (coordinates: Coordinates, options?: { focus?: boolean }) => void;
   goToSavedLocation: (location: SavedLocation, options?: { focus?: boolean }) => void;
   clearSelection: () => void;

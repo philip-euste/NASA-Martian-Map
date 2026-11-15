@@ -400,20 +400,20 @@ export default function RoutePlannerPage() {
         <div
           role="region"
           aria-label="Cross-region mission target notice"
-          className="mb-6 rounded-lg border border-amber-500/40 bg-amber-950/30 p-4 text-xs text-amber-200 shadow-lg"
+          className="mb-6 rounded-lg border border-amber-500/40 bg-amber-950/30 p-4 text-xs text-amber-200 shadow-lg min-w-0 overflow-hidden"
         >
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-3 min-w-0">
             <AlertTriangle
               className="mt-0.5 h-4 w-4 shrink-0 text-amber-400"
               aria-hidden="true"
             />
-            <div className="flex-1 space-y-1.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono font-semibold uppercase tracking-wider text-amber-300">
+            <div className="flex-1 space-y-1.5 min-w-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                <span className="font-mono font-semibold uppercase tracking-wider text-amber-300 break-words [overflow-wrap:anywhere]">
                   Cross-Region Mission Notice · Regional Boundaries
                 </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] text-amber-400/90">
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-mono text-[11px] text-amber-400/90 whitespace-nowrap">
                     {crossRegionAudit.targetsCount} target
                     {crossRegionAudit.targetsCount === 1 ? "" : "s"} ·{" "}
                     {crossRegionAudit.waypointsCount} route waypoint
@@ -429,7 +429,7 @@ export default function RoutePlannerPage() {
                 </div>
               </div>
 
-              <p className="m-0 leading-relaxed text-amber-100/90">
+              <p className="m-0 leading-relaxed text-amber-100/90 break-words [overflow-wrap:anywhere]">
                 {crossRegionAudit.targetsCount > 0 &&
                 crossRegionAudit.waypointsCount > 0 ? (
                   <>
@@ -857,19 +857,19 @@ export default function RoutePlannerPage() {
                       return (
                         <li
                           key={wp.id}
-                          className="flex items-center justify-between gap-2 rounded border border-mx-border bg-mx-bg px-3 py-2 text-xs"
+                          className="flex items-center justify-between gap-2 rounded border border-mx-border bg-mx-bg px-3 py-2 text-xs min-w-0 overflow-hidden"
                         >
-                          <div>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="mx-mono text-mx-accent">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                              <span className="mx-mono text-mx-accent shrink-0">
                                 {String(idx + 1).padStart(2, "0")}
                               </span>
-                              <strong className="text-mx-text">
+                              <strong className="text-mx-text truncate">
                                 {wp.name ?? `Waypoint ${idx + 1}`}
                               </strong>
                               {wpUnit && (
                                 <span
-                                  className="rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold"
+                                  className="rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold shrink-0"
                                   style={{
                                     backgroundColor: `${wpUnit.color}22`,
                                     color: wpUnit.color,
@@ -880,7 +880,7 @@ export default function RoutePlannerPage() {
                                 </span>
                               )}
                             </div>
-                            <span className="mx-mono mt-0.5 block text-[11px] text-mx-dim">
+                            <span className="mx-mono mt-0.5 block text-[11px] text-mx-dim break-words [overflow-wrap:anywhere]">
                               {formatCoordinates(
                                 wp.coordinates.latitude,
                                 wp.coordinates.longitude
@@ -891,7 +891,7 @@ export default function RoutePlannerPage() {
                           <button
                             type="button"
                             onClick={() => removeDraftWaypoint(wp.id)}
-                            className="text-mx-muted hover:text-mx-text"
+                            className="text-mx-muted hover:text-mx-text shrink-0"
                             aria-label={`Remove ${wp.name ?? "waypoint"}`}
                           >
                             <Trash2 size={13} />

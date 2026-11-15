@@ -44,6 +44,8 @@ export default function LocationPage() {
   const { mission, setRegion, updateMission } = useMission();
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
   const [elevation, setElevation] = useState<DemElevation | null>(null);
   const [elevationLoading, setElevationLoading] = useState(false);
   const [elevationError, setElevationError] = useState<string | null>(null);
@@ -52,6 +54,11 @@ export default function LocationPage() {
   useEffect(() => {
     setActiveImageIndex(0);
   }, [siteId]);
+
+  useEffect(() => {
+    setImageLoaded(false);
+    setImageFailed(false);
+  }, [siteId, activeImageIndex]);
 
   // Retrieve elevation from the FastAPI DEM endpoint.
   useEffect(() => {
@@ -225,17 +232,22 @@ export default function LocationPage() {
           {/* Location imagery */}
           <section className="lg:col-span-7" aria-label="Location imagery">
             <div className="relative overflow-hidden rounded-[10px] border border-mx-border bg-mx-panel">
-              {activeImage ? (
-                <img
-                  src={activeImage.src}
-                  alt={activeImage.caption}
-                  className="aspect-[16/10] w-full object-cover"
-                />
+              {activeImage && !imageFailed ? (
+                <div className="relative aspect-[16/10]">
+                  {!imageLoaded && <div className="absolute inset-0 flex items-center justify-center text-sm text-mx-muted" role="status">Loading location imagery…</div>}
+                  <img
+                    src={activeImage.src}
+                    alt={activeImage.caption}
+                    onLoad={() => setImageLoaded(true)}
+                    onError={() => setImageFailed(true)}
+                    className="h-full w-full object-contain"
+                  />
+                </div>
               ) : (
                 <ImagePending
                   className="aspect-[16/10] border-0"
-                  label={`${selectedSite.name} — Surface & Orbital Imagery Pending`}
-                  detail={`Supply licensed NASA/JPL photographs in public/images/locations/${selectedSite.id}/ to populate this gallery.`}
+                  label={`${selectedSite.name} — imagery unavailable`}
+                  detail="The verified local NASA image could not be loaded."
                 />
               )}
 
@@ -290,9 +302,7 @@ export default function LocationPage() {
               </div>
             )}
 
-            <p className="mx-eyebrow mt-3 text-mx-dim">
-              {selectedSite.name} · Surface &amp; orbital views · NASA / JPL
-            </p>
+            {activeImage && <p className="mx-eyebrow mt-3 text-mx-dim">{activeImage.title} · {activeImage.credit} · <a href={activeImage.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-mx-accent hover:underline">NASA source</a></p>}
           </section>
 
           {/* Location information */}
@@ -536,17 +546,17 @@ export default function LocationPage() {
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {siteObservations.map((obs) => (
-                <div key={obs.id} className="mx-panel p-4">
-                  <span className="mx-eyebrow mx-eyebrow--accent">
+                <div key={obs.id} className="mx-panel p-4 min-w-0 overflow-hidden">
+                  <span className="mx-eyebrow mx-eyebrow--accent block truncate">
                     {obs.source}
                   </span>
 
-                  <h3 className="mx-heading m-0 mt-1 text-base">
+                  <h3 className="mx-heading m-0 mt-1 text-base break-words [overflow-wrap:anywhere]">
                     {obs.name}
                   </h3>
 
                   {obs.description && (
-                    <p className="mx-body m-0 mt-1.5 text-[13px]">
+                    <p className="mx-body m-0 mt-1.5 text-[13px] break-all [overflow-wrap:anywhere] [word-break:break-all]">
                       {obs.description}
                     </p>
                   )}

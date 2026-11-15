@@ -1,7 +1,7 @@
 // frontend/src/features/mission/MissionLayout.tsx
 // Shared layout header, Mission Overview drawer, and 4-stage grouped workflow
 // navigation for all mission workspace screens.
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   ArrowRight,
@@ -50,6 +50,10 @@ export default function MissionLayout({
   const location = useLocation();
   const [overviewOpen, setOverviewOpen] = useState(false);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [location.pathname]);
+
   const currentPage =
     MISSION_PAGES.find((p) => location.pathname.startsWith(p.path)) ??
     MISSION_PAGES[0];
@@ -64,7 +68,7 @@ export default function MissionLayout({
 
   if (fullscreenCanvas) {
     return (
-      <AppLayout fullscreen>
+      <AppLayout fullscreen theme={false}>
         <div className="flex h-full w-full flex-col overflow-hidden bg-[#0c0908]">
           {/* Ultra-compact persistent stage & mission bar for fullscreen Marswalk EVA */}
           <div className="mx-no-print z-[950] flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-mx-border bg-mx-bg/95 px-4 py-1.5 backdrop-blur-md">
@@ -336,8 +340,8 @@ export default function MissionLayout({
         </div>
       </div>
 
-      {/* Row 2: Persistent Sticky 4-Stage Workflow Navigator (Remains visible while scrolling) */}
-      <div className="mx-no-print sticky top-[var(--mx-header-height)] z-[950] border-b border-mx-border bg-mx-bg/95 shadow-md backdrop-blur-md">
+      {/* Row 2: 4-Stage Workflow Navigator */}
+      <div className="mx-no-print mx-workflow-nav border-b border-mx-border bg-mx-bg shadow-sm">
         <div className="mx-auto max-w-[1440px] px-5 py-2.5 sm:px-8 lg:px-14">
           <nav
             aria-label="Expedition workflow stages"
@@ -453,7 +457,7 @@ export default function MissionLayout({
       </div>
 
       {/* Page Heading & Main Content */}
-      <main className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 lg:px-14">
+      <main className="mx-mission-content mx-auto max-w-[1440px] px-5 py-8 sm:px-8 lg:px-14">
         <header className="mx-no-print mb-8 flex flex-wrap items-end justify-between gap-4 border-b border-mx-border pb-6">
           <div>
             <div className="flex flex-wrap items-center gap-2">

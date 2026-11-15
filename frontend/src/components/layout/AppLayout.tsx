@@ -8,16 +8,18 @@ interface AppLayoutProps {
   /** Full-viewport tools (maps, globe) hide the footer and lock scrolling. */
   fullscreen?: boolean;
   footer?: ReactNode;
+  theme?: boolean;
 }
 
 export default function AppLayout({
   children,
   fullscreen = false,
   footer,
+  theme = true,
 }: AppLayoutProps) {
   if (fullscreen) {
     return (
-      <div className="flex h-screen min-h-[560px] flex-col overflow-hidden bg-mx-bg">
+      <div className={`${theme ? "mx-app-theme " : ""}flex h-screen min-h-[560px] flex-col overflow-hidden bg-mx-bg`}>
         <Header />
         <div className="relative min-h-0 flex-1">{children}</div>
       </div>
@@ -25,7 +27,7 @@ export default function AppLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-mx-bg">
+    <div className={`${theme ? "mx-app-theme " : ""}flex min-h-screen flex-col bg-mx-bg`}>
       <Header />
       <div className="flex-1">{children}</div>
       {footer ?? <SiteFooter />}

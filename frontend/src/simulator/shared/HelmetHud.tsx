@@ -43,6 +43,7 @@ import {
   formatHeadingCardinal,
   shortestAngularDelta,
 } from "./navigation";
+import "./HelmetHud.css";
 
 export interface HudScientificTarget {
   readonly id: string;
@@ -138,6 +139,42 @@ function provenanceTag(prov: DataProvenance): string {
   }
 }
 
+function SurfaceMinimap({ environment, currentPos, baseCoordinates, heading, markers }: {
+  environment: SimulatorEnvironmentConfig;
+  currentPos: Coordinates;
+  baseCoordinates: Coordinates;
+  heading: number;
+  markers: readonly CompassMarkerItem[];
+}) {
+  const { westLonDeg, eastLonDeg, southLatDeg, northLatDeg } = environment.bounds;
+  const plot = (point: Coordinates) => ({
+    x: 12 + ((point.longitude - westLonDeg) / (eastLonDeg - westLonDeg)) * 176,
+    y: 188 - ((point.latitude - southLatDeg) / (northLatDeg - southLatDeg)) * 176,
+  });
+  const player = plot(currentPos);
+  const base = plot(baseCoordinates);
+  const inBounds = (point: { x: number; y: number }) =>
+    Number.isFinite(point.x) && Number.isFinite(point.y) && point.x >= 12 && point.x <= 188 && point.y >= 12 && point.y <= 188;
+
+  return (
+    <div className="visor-minimap" aria-label={`${environment.shortName} surface navigation map`}>
+      <div className="visor-panel-title"><Navigation size={13} /> SURFACE NAVIGATION <span>REGIONAL GRID</span></div>
+      <svg viewBox="0 0 200 200" role="img" aria-label={`Current position ${formatCoordinates(currentPos.latitude, currentPos.longitude)}; heading ${formatHeadingCardinal(heading)}. Markers show saved targets and habitat within the regional simulation bounds.`}>
+        <rect x="12" y="12" width="176" height="176" rx="4" className="visor-minimap-area" />
+        {[56, 100, 144].map((n) => <g key={n}><line x1={n} y1="12" x2={n} y2="188" className="visor-minimap-grid" /><line x1="12" y1={n} x2="188" y2={n} className="visor-minimap-grid" /></g>)}
+        <text x="100" y="8" textAnchor="middle" className="visor-minimap-north">N</text>
+        {inBounds(base) && <g><circle cx={base.x} cy={base.y} r="6" className="visor-minimap-base" /><text x={base.x + 9} y={base.y - 7} className="visor-minimap-label">BASE</text></g>}
+        {markers.filter((marker) => marker.kind !== "base").map((marker) => {
+          const point = plot(marker.coordinates);
+          return inBounds(point) ? <circle key={marker.id} cx={point.x} cy={point.y} r={marker.kind === "target" ? 4 : 3} className={marker.visited ? "visor-minimap-visited" : "visor-minimap-target"}><title>{marker.fullName}</title></circle> : null;
+        })}
+        {inBounds(player) && <g transform={`translate(${player.x} ${player.y}) rotate(${heading})`}><circle r="10" className="visor-minimap-player-ring" /><path d="M0 -11 L5 6 L0 3 L-5 6 Z" className="visor-minimap-player" /></g>}
+      </svg>
+      <div className="visor-minimap-caption">{formatCoordinates(currentPos.latitude, currentPos.longitude)} <span>HDG {formatHeadingCardinal(heading)}</span></div>
+    </div>
+  );
+}
+
 export default function HelmetHud({
   environment,
   isFallbackEnvironment = false,
@@ -206,7 +243,7 @@ export default function HelmetHud({
           : "NOMINAL FOOTING";
 
   // De-overlap compass markers: sort by priority (active target -> base -> unvisited -> landmark)
-  // and suppress markers whose angular position is within 13° of an already-placed marker
+  // and suppress markers whose angular position is within 20° of an already-placed marker
   // so badges on the bottom track never collide horizontally.
   const visibleTapeMarkers = (() => {
     const inFov = compassMarkers.filter((m) => Math.abs(m.deltaDeg) <= 56);
@@ -224,7 +261,7 @@ export default function HelmetHud({
     const placed: CompassMarkerItem[] = [];
     for (const candidate of prioritized) {
       const collides = placed.some(
-        (existing) => Math.abs(existing.deltaDeg - candidate.deltaDeg) < 13
+        (existing) => Math.abs(existing.deltaDeg - candidate.deltaDeg) < 20
       );
       if (!collides) {
         placed.push(candidate);
@@ -237,13 +274,15 @@ export default function HelmetHud({
 
   return (
     <>
+      <div className="visor-rim pointer-events-none absolute inset-0 z-[20]" aria-hidden="true" />
+      <div className="visor-reticle pointer-events-none absolute left-1/2 top-1/2 z-[20] -translate-x-1/2 -translate-y-1/2" aria-hidden="true"><span /></div>
       {/* ================================================================
           ASTRONAUT HELMET HUD — TOP PERIMETER
           (Left: Terrain & Geology | Center: 360° Compass Tape | Right: Mission & Waypoints)
           ================================================================ */}
-      <div className="pointer-events-none absolute inset-x-3 top-3 z-[25] grid grid-cols-1 items-start gap-2.5 lg:grid-cols-12">
+      <div className="visor-top pointer-events-none absolute inset-x-3 top-3 z-[25] grid grid-cols-1 items-start gap-2.5 lg:grid-cols-12">
         {/* TOP LEFT (Cols 1-3): Coordinates, Terrain Condition & Stratigraphy */}
-        <div className="pointer-events-auto rounded-xl border border-white/12 bg-[#141215]/88 px-3.5 py-2.5 text-xs shadow-lg backdrop-blur-md lg:col-span-3">
+        <div className="visor-panel pointer-events-auto rounded-xl border border-white/12 bg-[#141215]/88 px-3.5 py-2.5 text-xs shadow-lg backdrop-blur-md lg:col-span-3">
           <div className="flex items-center justify-between gap-2">
             <span className="mx-eyebrow mx-eyebrow--accent flex items-center gap-1">
               <MapPin size={11} className="text-mx-accent" />
@@ -328,7 +367,7 @@ export default function HelmetHud({
         {/* TOP CENTER (Cols 4-9): Two-Track Horizontal Navigation Compass Tape */}
         <div className="pointer-events-auto flex flex-col items-center lg:col-span-6">
           <div
-            className="relative w-full max-w-[640px] overflow-hidden rounded-xl border border-white/15 bg-[#121014]/90 px-3 pt-2 pb-2 shadow-xl backdrop-blur-md"
+            className="visor-panel relative w-full max-w-[640px] overflow-hidden rounded-xl border border-white/15 bg-[#121014]/90 px-3 pt-2 pb-2 shadow-xl backdrop-blur-md"
             aria-label="Astronaut Horizontal Navigation Compass"
           >
             {/* Top digital heading, target bearing & return-to-base bearing strip */}
@@ -458,7 +497,7 @@ export default function HelmetHud({
                       );
                     }}
                     style={{ left: `${leftPct}%` }}
-                    className={`common-compass-marker absolute bottom-1 z-[14] -translate-x-1/2 whitespace-nowrap rounded border px-1.5 py-0.5 font-mono text-[8.5px] font-semibold leading-none transition hover:scale-105 ${badgeColor}`}
+                    className={`common-compass-marker absolute bottom-1 z-[14] -translate-x-1/2 whitespace-nowrap rounded border px-1.5 py-0.5 font-mono text-[8px] font-semibold leading-none transition hover:scale-105 ${badgeColor}`}
                     title={`${m.fullName} — Bearing ${m.bearingDeg}°, Distance ${m.distanceMeters} m (Click to jump)`}
                   >
                     {m.shortName}{" "}
@@ -520,7 +559,7 @@ export default function HelmetHud({
         </div>
 
         {/* TOP RIGHT (Cols 10-12): EVA Timer, Base Return Vector & Quick-Jump Waypoints */}
-        <div className="pointer-events-auto rounded-xl border border-white/12 bg-[#141215]/88 px-3.5 py-2.5 text-xs shadow-lg backdrop-blur-md lg:col-span-3">
+        <div className="visor-panel pointer-events-auto rounded-xl border border-white/12 bg-[#141215]/88 px-3.5 py-2.5 text-xs shadow-lg backdrop-blur-md lg:col-span-3">
           <div className="flex items-center justify-between gap-2">
             <div
               className="inline-flex rounded-md border border-mx-border bg-mx-bg/90 p-0.5"
@@ -638,8 +677,9 @@ export default function HelmetHud({
           PROXIMITY CALLOUT CARD (<150 m to Target / Beacon)
           Positioned above the bottom-right environment panel with clear margin
           ================================================================ */}
-      {isApproachingBeacon && nearestBeacon && (
-        <div className="pointer-events-auto absolute bottom-28 right-3 z-[25] max-w-[330px] rounded-xl border border-emerald-500/45 bg-[#141215]/92 p-3 shadow-2xl backdrop-blur-md">
+      {isApproachingBeacon && nearestBeacon &&
+        (nearestBeacon.distanceMeters > 1 || nearestBeacon.isMissionTarget) && (
+        <div className="visor-beacon pointer-events-auto absolute bottom-28 right-3 z-[25] max-w-[330px] rounded-xl border border-emerald-500/45 bg-[#141215]/92 p-3 shadow-2xl backdrop-blur-md">
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
               <Camera size={12} />
@@ -678,9 +718,10 @@ export default function HelmetHud({
           ASTRONAUT HELMET HUD — BOTTOM PERIMETER
           (Left: PLSS Suit, Loadout & Action Strip | Right: Environment Telemetry)
           ================================================================ */}
-      <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[25] flex flex-wrap items-end justify-between gap-2.5">
+      <div className="visor-bottom pointer-events-none absolute inset-x-3 bottom-3 z-[25] flex flex-wrap items-end justify-between gap-2.5">
+        <SurfaceMinimap environment={environment} currentPos={currentPos} baseCoordinates={baseCoordinates} heading={liveHeadingDeg} markers={compassMarkers} />
         {/* BOTTOM LEFT: Suit Life-Support Systems, Equipment Status & Action Controls */}
-        <div className="pointer-events-auto flex max-w-full flex-col gap-1.5 rounded-xl border border-white/12 bg-[#141215]/90 px-3.5 py-2.5 text-xs shadow-xl backdrop-blur-md">
+        <div className="visor-panel visor-suit pointer-events-auto flex max-w-full flex-col gap-1.5 rounded-xl border border-white/12 bg-[#141215]/90 px-3.5 py-2.5 text-xs shadow-xl backdrop-blur-md">
           {/* Suit Life-Support Gauges (Explicitly labeled SIMULATED PLSS) */}
           <div className="flex flex-wrap items-center gap-3 font-mono text-[11px]">
             <span className="mx-eyebrow mx-eyebrow--accent">
@@ -808,7 +849,11 @@ export default function HelmetHud({
         </div>
 
         {/* BOTTOM RIGHT: Environmental Telemetry & Contingency Trigger */}
-        <div className="pointer-events-auto flex flex-col gap-1.5 rounded-xl border border-white/12 bg-[#141215]/90 px-3.5 py-2.5 text-xs shadow-xl backdrop-blur-md">
+        <div className="visor-panel visor-environment pointer-events-auto flex flex-col gap-1.5 rounded-xl border border-white/12 bg-[#141215]/90 px-3.5 py-2.5 text-xs shadow-xl backdrop-blur-md">
+          <div className="visor-terrain-readout">
+            <span className="visor-panel-title">TERRAIN DATA · DERIVED DEM</span>
+            <div><span>Elevation <strong>{liveElevationM.toFixed(0)} m</strong></span><span>Slope <strong>{liveSlopeDeg.toFixed(1)}°</strong></span></div>
+          </div>
           <div className="flex items-center justify-between gap-3">
             <span
               className="mx-eyebrow mx-eyebrow--accent"

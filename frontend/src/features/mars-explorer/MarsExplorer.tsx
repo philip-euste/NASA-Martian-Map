@@ -1,6 +1,8 @@
 
 import {
   Compass,
+  Eye,
+  EyeOff,
   Globe,
   Map as MapIcon,
   Minus,
@@ -25,6 +27,8 @@ export default function MarsExplorer() {
     transitionState,
     requestNavigationAction,
     resetExplorerView,
+    showGlobeLocations,
+    setShowGlobeLocations,
   } = useMarsExplorer();
 
   const { mission } = useMission();
@@ -125,6 +129,19 @@ export default function MarsExplorer() {
               >
                 <RotateCcw size={17} aria-hidden="true" />
               </button>
+
+              {viewMode === "globe" && (
+                <button
+                  type="button"
+                  className="mx-icon-btn"
+                  aria-label="Show globe bookmarks and locations"
+                  aria-pressed={showGlobeLocations}
+                  title={showGlobeLocations ? "Hide globe bookmarks and locations" : "Show globe bookmarks and locations"}
+                  onClick={() => setShowGlobeLocations(!showGlobeLocations)}
+                >
+                  {showGlobeLocations ? <Eye size={17} aria-hidden="true" /> : <EyeOff size={17} aria-hidden="true" />}
+                </button>
+              )}
 
               <button
                 type="button"

@@ -511,9 +511,9 @@ export default function ExpeditionReviewPage() {
                   return (
                     <div
                       key={note.id}
-                      className="flex items-start justify-between gap-3 rounded-lg border border-mx-border bg-mx-bg p-3.5"
+                      className="flex items-start justify-between gap-3 rounded-lg border border-mx-border bg-mx-bg p-3.5 min-w-0 overflow-hidden"
                     >
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="mx-mono text-[11px] text-mx-accent">
                             {formatCoordinates(
@@ -528,7 +528,7 @@ export default function ExpeditionReviewPage() {
                             USER NOTE
                           </span>
                         </div>
-                        <p className="m-0 mt-1.5 text-sm text-mx-text">
+                        <p className="m-0 mt-1.5 text-sm text-mx-text break-words [overflow-wrap:anywhere]">
                           {note.content}
                         </p>
                       </div>
@@ -559,14 +559,14 @@ export default function ExpeditionReviewPage() {
             />
 
             {mission.selectedDatasets.length > 0 && (
-              <div className="mb-4 rounded-lg border border-sky-500/30 bg-sky-950/15 p-3.5">
-                <span className="mx-eyebrow text-sky-300">
+              <div className="mb-4 rounded-lg border border-sky-500/30 bg-sky-950/15 p-3.5 min-w-0 overflow-hidden">
+                <span className="mx-eyebrow text-sky-300 block break-words [overflow-wrap:anywhere]">
                   ACTUAL NASA-DERIVED ORBITAL DATASETS (
                   {mission.selectedDatasets.length})
                 </span>
-                <ul className="m-0 mt-2 list-disc space-y-1 pl-4 text-xs text-mx-text">
+                <ul className="m-0 mt-2 list-disc space-y-1 pl-4 text-xs text-mx-text break-words [overflow-wrap:anywhere]">
                   {mission.selectedDatasets.map((ds) => (
-                    <li key={ds.id}>
+                    <li key={ds.id} className="min-w-0 break-words [overflow-wrap:anywhere]">
                       <strong>{ds.name}</strong> ({ds.source})
                     </li>
                   ))}
@@ -585,17 +585,17 @@ export default function ExpeditionReviewPage() {
                 {mission.selectedObservations.map((obs) => (
                   <div
                     key={obs.id}
-                    className="rounded-lg border border-mx-border bg-mx-bg p-3.5"
+                    className="rounded-lg border border-mx-border bg-mx-bg p-3.5 min-w-0 overflow-hidden"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="mx-eyebrow mx-eyebrow--accent">
+                    <div className="flex items-start justify-between gap-2 min-w-0">
+                      <span className="mx-eyebrow mx-eyebrow--accent min-w-0 flex-1 break-words [overflow-wrap:anywhere]">
                         {obs.source}
                       </span>
-                      <span className="mx-badge border-emerald-500/30 text-emerald-300 text-[10px]">
+                      <span className="mx-badge shrink-0 border-emerald-500/30 text-emerald-300 text-[10px]">
                         USER OBSERVATION
                       </span>
                     </div>
-                    <h4 className="mx-heading m-0 mt-1 text-sm">{obs.name}</h4>
+                    <h4 className="mx-heading m-0 mt-1 text-sm break-words [overflow-wrap:anywhere]">{obs.name}</h4>
                     {obs.coordinates && (
                       <p className="mx-mono m-0 mt-0.5 text-[11px] text-mx-dim">
                         {formatCoordinates(
@@ -605,7 +605,7 @@ export default function ExpeditionReviewPage() {
                       </p>
                     )}
                     {obs.description && (
-                      <p className="mx-body m-0 mt-1 text-xs">
+                      <p className="mx-body m-0 mt-1 text-xs break-all [overflow-wrap:anywhere] [word-break:break-all]">
                         {obs.description}
                       </p>
                     )}
@@ -636,12 +636,12 @@ export default function ExpeditionReviewPage() {
                 {mission.interpretations.map((interp) => (
                   <div
                     key={interp.id}
-                    className="rounded-lg border border-mx-border bg-mx-panel-2 p-3.5"
+                    className="rounded-lg border border-mx-border bg-mx-panel-2 p-3.5 min-w-0 overflow-hidden"
                   >
                     <span className="mx-eyebrow">
                       Scientific Interpretation ({interp.generatedBy})
                     </span>
-                    <p className="m-0 mt-1 text-xs text-mx-text">
+                    <p className="m-0 mt-1 text-xs text-mx-text break-words [overflow-wrap:anywhere]">
                       {interp.description}
                     </p>
                   </div>

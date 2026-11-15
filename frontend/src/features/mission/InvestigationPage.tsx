@@ -1633,11 +1633,11 @@ export default function InvestigationPage() {
                   return (
                     <div
                       key={obs.id}
-                      className="flex items-start justify-between gap-3 rounded-lg border border-mx-border bg-mx-bg p-3.5"
+                      className="flex items-start justify-between gap-3 rounded-lg border border-mx-border bg-mx-bg p-3.5 min-w-0 overflow-hidden"
                     >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="mx-eyebrow mx-eyebrow--accent">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                          <span className="mx-eyebrow mx-eyebrow--accent truncate">
                             {obs.source}
                           </span>
                           <span className="mx-badge text-[10px]">
@@ -1663,7 +1663,7 @@ export default function InvestigationPage() {
                             </span>
                           )}
                         </div>
-                        <h3 className="mx-heading m-0 mt-1 text-sm">
+                        <h3 className="mx-heading m-0 mt-1 text-sm break-words [overflow-wrap:anywhere]">
                           {obs.name}
                         </h3>
                         <p className="mx-mono m-0 mt-1 text-[11px] text-mx-dim">
@@ -1675,7 +1675,7 @@ export default function InvestigationPage() {
                             )}`}
                         </p>
                         {obs.description && (
-                          <p className="mx-body m-0 mt-1.5 text-xs">
+                          <p className="mx-body m-0 mt-1.5 text-xs break-all [overflow-wrap:anywhere] [word-break:break-all]">
                             {obs.description}
                           </p>
                         )}
