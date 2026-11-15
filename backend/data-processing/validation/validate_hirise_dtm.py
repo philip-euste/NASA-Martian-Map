@@ -418,7 +418,6 @@ def extract_wkt_from_html(html: str) -> str:
         + page_text[opening:end]
     )
 
-
 def normalize_longitude(longitude: float) -> float:
     """
     Convert east-positive longitude from 0-360
@@ -435,10 +434,17 @@ def normalize_longitude(longitude: float) -> float:
     return longitude
 
 
-def normalize_geometry_longitudes(geometry):
+def normalize_geometry_longitudes(geometry: Any) -> Any:
     """Normalize all geometry longitudes to -180..180."""
 
-    def normalize_coordinates(x, y, z=None):
+    if transform is None:
+        raise RuntimeError("Shapely transform is unavailable.")
+
+    def normalize_coordinates(
+        x: Any,
+        y: Any,
+        z: Any = None,
+    ) -> Any:
         if isinstance(x, (list, tuple)):
             normalized_x = [
                 normalize_longitude(value)
@@ -452,13 +458,10 @@ def normalize_geometry_longitudes(geometry):
 
         return normalized_x, y, z
 
-    return transform(
-        normalize_coordinates,
-        geometry,
-    )
+    return transform(normalize_coordinates, geometry)
 
 
-def retrieve_gazetteer_boundary(region_key: str) -> dict:
+def retrieve_gazetteer_boundary(region_key: str) -> dict[str, Any]:
     """
     Retrieve the same Gazetteer boundary used by the backend.
 
@@ -479,19 +482,15 @@ def retrieve_gazetteer_boundary(region_key: str) -> dict:
         )
 
     definition = REGION_DEFINITIONS[region_key]
-
     feature_id = definition["feature_id"]
 
-    feature_url = (
-        f"{GAZETTEER_FEATURE_URL}/{feature_id}"
-    )
+    feature_url = f"{GAZETTEER_FEATURE_URL}/{feature_id}"
 
     try:
         with httpx.Client(
             timeout=GAZETTEER_TIMEOUT,
             follow_redirects=True,
         ) as client:
-
             response = client.get(feature_url)
             response.raise_for_status()
 
@@ -502,16 +501,10 @@ def retrieve_gazetteer_boundary(region_key: str) -> dict:
         ) from error
 
     try:
-        geometry_wkt = extract_wkt_from_html(
-            response.text
-        )
+        geometry_wkt = extract_wkt_from_html(response.text)
+        geometry: Any = wkt.loads(geometry_wkt)
 
-        geometry = wkt.loads(geometry_wkt)
-
-        if not isinstance(
-            geometry,
-            (Polygon, MultiPolygon),
-        ):
+        if geometry.geom_type not in ("Polygon", "MultiPolygon"):
             raise ValueError(
                 f"Unsupported geometry type: {geometry.geom_type}"
             )
@@ -529,9 +522,7 @@ def retrieve_gazetteer_boundary(region_key: str) -> dict:
                 "Gazetteer boundary is invalid."
             )
 
-        geometry = normalize_geometry_longitudes(
-            geometry
-        )
+        geometry = normalize_geometry_longitudes(geometry)
 
     except Exception as error:
         raise RuntimeError(
@@ -561,7 +552,7 @@ def retrieve_gazetteer_boundary(region_key: str) -> dict:
 # MARS AREA PROJECTION
 # ============================================================
 
-def make_mars_projection(region_geometry):
+def make_mars_projection(region_geometry: Any) -> Any:
     """
     Build a local Mars-centered equirectangular projection.
 
@@ -584,8 +575,17 @@ def make_mars_projection(region_geometry):
         math.radians(center_latitude)
     )
 
-    def project_coordinates(x, y, z=None):
-        def project_one(longitude, latitude):
+    def project_coordinates(
+        x: Any,
+        y: Any,
+        z: Any = None,
+    ) -> Any:
+
+        def project_one(
+            longitude: float,
+            latitude: float,
+        ) -> tuple[float, float]:
+
             longitude = float(longitude)
             latitude = float(latitude)
 
@@ -626,31 +626,33 @@ def make_mars_projection(region_geometry):
     return project_coordinates
 
 
-def project_geometry(geometry, projection):
-    return transform(
-        projection,
-        geometry,
-    )
+def project_geometry(
+    geometry: Any,
+    projection: Any,
+) -> Any:
+    if transform is None:
+        raise RuntimeError("Shapely transform is unavailable.")
+
+    return transform(projection, geometry)
 
 
 # ============================================================
 # GEOMETRY HELPERS
 # ============================================================
 
-def extract_polygonal_geometry(geometry):
+def extract_polygonal_geometry(geometry: Any) -> Any | None:
     """Extract Polygon components from an intersection result."""
 
     if geometry.is_empty:
         return None
 
-    if isinstance(geometry, Polygon):
+    geometry_type = geometry.geom_type
+
+    if geometry_type in ("Polygon", "MultiPolygon"):
         return geometry
 
-    if isinstance(geometry, MultiPolygon):
-        return geometry
-
-    if isinstance(geometry, GeometryCollection):
-        polygons = []
+    if geometry_type == "GeometryCollection":
+        polygons: list[Any] = []
 
         for part in geometry.geoms:
             extracted = extract_polygonal_geometry(part)
@@ -658,22 +660,28 @@ def extract_polygonal_geometry(geometry):
             if extracted is None:
                 continue
 
-            if isinstance(extracted, Polygon):
+            if extracted.geom_type == "Polygon":
                 polygons.append(extracted)
 
-            elif isinstance(extracted, MultiPolygon):
+            elif extracted.geom_type == "MultiPolygon":
                 polygons.extend(extracted.geoms)
 
         if not polygons:
             return None
+
+        if unary_union is None:
+            raise RuntimeError("Shapely unary_union is unavailable.")
 
         return unary_union(polygons)
 
     return None
 
 
-def get_product_geometry(product: dict):
+def get_product_geometry(product: dict[str, Any]) -> Any | None:
     """Read and normalize a STAC GeoJSON geometry."""
+
+    if shape is None:
+        raise RuntimeError("Shapely shape is unavailable.")
 
     geometry_data = product.get("geometry")
 
@@ -681,7 +689,7 @@ def get_product_geometry(product: dict):
         return None
 
     try:
-        geometry = shape(geometry_data)
+        geometry: Any = shape(geometry_data)
 
         if geometry.is_empty:
             return None
