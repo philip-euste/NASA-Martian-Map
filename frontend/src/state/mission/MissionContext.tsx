@@ -13,6 +13,7 @@ import {
   CRISM_REFERENCE_METHOD,
   CRISM_REFERENCE_SOURCE,
   EVIDENCE_DATASETS_BY_ID,
+  PERSEVERANCE_DELTA_DEFAULT_SURFACE_IMAGE,
   getDatasetsForRegion,
   resolveDatasetMetadata,
   toMissionDataset,
@@ -167,7 +168,7 @@ export function createFeaturedDemoMission(): Mission {
       name: "Octavia E. Butler Landing (Base)",
       coordinates: { latitude: 18.4447, longitude: 77.4508 },
       description: "Initial surface exploration base and rover touchdown calibration benchmark.",
-      observationIds: ["obs-m2020-delta-crossbedding"],
+      observationIds: [],
       regionId: "jezero-crater",
     },
     {
@@ -183,7 +184,7 @@ export function createFeaturedDemoMission(): Mission {
       name: "Delta Front Scarp (Hawksbill Gap)",
       coordinates: { latitude: 18.4350, longitude: 77.4200 },
       description: "Exposed smectite clay and carbonate-rich mudstone strata with high biosignature preservation potential.",
-      observationIds: ["obs-crism-phyllosilicates"],
+      observationIds: ["obs-m2020-delta-crossbedding", "obs-crism-phyllosilicates"],
       regionId: "jezero-crater",
     },
     {
@@ -247,17 +248,18 @@ export function createFeaturedDemoMission(): Mission {
   const observations: Observation[] = [
     {
       id: "obs-m2020-delta-crossbedding",
-      name: "Perseverance Sol 172 Mastcam-Z Delta Strata Crossbedding",
-      coordinates: { latitude: 18.4447, longitude: 77.4508 },
+      name: "Perseverance Sol 420 Mastcam-Z Delta Strata Crossbedding",
+      coordinates: { latitude: 18.4350, longitude: 77.4200 },
       source: "NASA Mars 2020 Perseverance Rover Navcam / Mastcam-Z",
       regionId: "jezero-crater",
-      observationDate: "2021-08-15",
+      observationDate: "2022-04-26",
       datasetId: "m2020_perseverance_surface_imagery",
       description: "Steeply dipping foreset beds confirming vigorous fluvial discharge into standing lacustrine lake.",
+      surfaceImage: PERSEVERANCE_DELTA_DEFAULT_SURFACE_IMAGE,
       provenance: {
         source: "NASA Planetary Data System (PDS) Cartography and Imaging Sciences Node",
-        sourceId: "urn:nasa:pds:mars2020_perseverance_imagery:sol0172",
-        sourceUrl: "https://pds-imaging.jpl.nasa.gov/data/mars2020/",
+        sourceId: "urn:nasa:pds:mars2020_perseverance_imagery:sol0420",
+        sourceUrl: "https://mars.nasa.gov/mars2020/multimedia/raw-images/ZL0_0420_0704236345_332ECM_N0232872ZCAM08439_1100LMJ",
         processingMethod: "Mastcam-Z calibrated radiance EDR surface mosaic",
         limitations: ["Localized ground-level perspective subject to boulder shadows and atmospheric dust scattering."],
       },
@@ -486,10 +488,16 @@ function loadStoredMission(): Mission {
             };
           }
           const dsMeta = resolveDatasetMetadata(obs.datasetId || "");
+          const withSurfaceImage =
+            (obs.id === "obs-m2020-delta-crossbedding" ||
+              obs.datasetId === "m2020_perseverance_surface_imagery") &&
+            !obs.surfaceImage
+              ? { ...obs, surfaceImage: PERSEVERANCE_DELTA_DEFAULT_SURFACE_IMAGE }
+              : obs;
           return {
-            ...obs,
-            source: obs.source || dsMeta.name,
-            provenance: obs.provenance ?? {
+            ...withSurfaceImage,
+            source: withSurfaceImage.source || dsMeta.name,
+            provenance: withSurfaceImage.provenance ?? {
               source: `${dsMeta.instrumentAndMission} (${dsMeta.sourceReference})`,
               sourceId: dsMeta.pdsProductId,
               processingMethod: `${dsMeta.measurementProvided} (${dsMeta.spatialResolutionLabel})`,

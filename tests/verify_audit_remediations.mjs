@@ -208,6 +208,37 @@ for (const term of forbiddenTerms) {
   assert(!readme.toLowerCase().includes(term), `README.md does not contain '${term}'`);
 }
 
+// 9. Stage 01 Observation Cutout Frame & Ground Truth Photo Attachment
+console.log("\n--- 9. Verification of Stage 01 Observation Cutout Frame & Ground Truth Image ---");
+const evidenceDatasetsSrc = fs.readFileSync(path.join(frontend, "src/data/evidenceDatasets.ts"), "utf-8");
+assert(
+  evidenceDatasetsSrc.includes("PERSEVERANCE_DELTA_DEFAULT_SURFACE_IMAGE") &&
+  evidenceDatasetsSrc.includes("ZL0_0420_0704236345_332ECM_N0232872ZCAM08439_1100LMJ"),
+  "evidenceDatasets.ts defines and exports verified PERSEVERANCE_DELTA_DEFAULT_SURFACE_IMAGE"
+);
+
+const missionCtxSrc = fs.readFileSync(path.join(frontend, "src/state/mission/MissionContext.tsx"), "utf-8");
+assert(
+  missionCtxSrc.includes("surfaceImage: PERSEVERANCE_DELTA_DEFAULT_SURFACE_IMAGE"),
+  "MissionContext.tsx attaches default surfaceImage to initial observation in createFeaturedDemoMission"
+);
+assert(
+  missionCtxSrc.includes("PERSEVERANCE_DELTA_DEFAULT_SURFACE_IMAGE") &&
+  missionCtxSrc.includes("!obs.surfaceImage"),
+  "MissionContext.tsx migrates stored observations with missing surfaceImage in loadStoredMission"
+);
+
+const evidenceInspectorSrc = fs.readFileSync(path.join(frontend, "src/features/mission/EvidenceInspectorPage.tsx"), "utf-8");
+assert(
+  evidenceInspectorSrc.includes("activeSurfaceImage") &&
+  evidenceInspectorSrc.includes("PERSEVERANCE_DELTA_DEFAULT_SURFACE_IMAGE"),
+  "EvidenceInspectorPage.tsx resolves activeSurfaceImage to prevent empty missing frame"
+);
+assert(
+  evidenceInspectorSrc.includes("activeObservation.datasetId === \"crism_jezero_mtrdr\""),
+  "EvidenceInspectorPage.tsx supports both crism_jezero_vnir and crism_jezero_mtrdr dataset IDs"
+);
+
 console.log("\n===============================================================================");
 console.log(`AUDIT FUNCTIONALITY RESULTS: ${passed} PASSED, ${failed} FAILED`);
 console.log("===============================================================================");

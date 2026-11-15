@@ -2,7 +2,7 @@
 // Evidence Inspector (Phase 3D): separates Evidence Browsing from Evidence
 // Inspection, clearly distinguishes available vs. missing evidence, and
 // preserves HiRISE DEM sampling, derived analyses, and interpretations.
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -31,6 +31,8 @@ import { marsDemProvider } from "../../services/providers/marsDem";
 import {
   CRISM_REFERENCE_DATASET_ID,
   CRISM_REFERENCE_SOURCE,
+  PERSEVERANCE_DELTA_DEFAULT_SURFACE_IMAGE,
+  SURFACE_IMAGERY_DATASET_ID,
   resolveDatasetMetadata,
 } from "../../data/evidenceDatasets";
 import { getMarsRegionById } from "../../data/regions";
@@ -74,6 +76,37 @@ export default function EvidenceInspectorPage() {
     mission.selectedObservations[0] ??
     null;
   const observationRegionId = activeObservation?.regionId ?? mission.region?.id;
+
+  const activeSurfaceImage =
+    activeObservation?.surfaceImage ??
+    (activeObservation?.datasetId === SURFACE_IMAGERY_DATASET_ID ||
+    activeObservation?.id === "obs-m2020-delta-crossbedding"
+      ? PERSEVERANCE_DELTA_DEFAULT_SURFACE_IMAGE
+      : undefined);
+
+  useEffect(() => {
+    setCutoutImgFailed(false);
+  }, [activeObservation?.id]);
+
+  useEffect(() => {
+    if (
+      activeObservation &&
+      !activeObservation.surfaceImage &&
+      (activeObservation.datasetId === SURFACE_IMAGERY_DATASET_ID ||
+        activeObservation.id === "obs-m2020-delta-crossbedding")
+    ) {
+      const updatedObs = toMutable(mission.selectedObservations).map((obs) => {
+        if (obs.id !== activeObservation.id) return obs;
+        return {
+          ...obs,
+          surfaceImage: PERSEVERANCE_DELTA_DEFAULT_SURFACE_IMAGE,
+        };
+      });
+      updateMission({
+        selectedObservations: updatedObs,
+      });
+    }
+  }, [activeObservation, mission.selectedObservations, updateMission]);
 
   const isJezero = !mission.region || mission.region.id === "jezero-crater";
 
@@ -459,22 +492,22 @@ export default function EvidenceInspectorPage() {
 
                 <div className="mt-5 grid gap-6 md:grid-cols-12">
                   <div className="md:col-span-5">
-                    {activeObservation.surfaceImage ? (
+                    {activeSurfaceImage ? (
                       <div className="flex h-full flex-col justify-between rounded-lg border border-mx-border bg-mx-bg p-3">
                         <div className="overflow-hidden rounded border border-mx-border bg-mx-panel">
                           {!cutoutImgFailed ? (
                             <img
-                              key={activeObservation.surfaceImage.imageUrl}
-                              src={activeObservation.surfaceImage.imageUrl}
-                              alt={activeObservation.surfaceImage.caption || activeObservation.name}
+                              key={activeSurfaceImage.imageUrl}
+                              src={activeSurfaceImage.imageUrl}
+                              alt={activeSurfaceImage.caption || activeObservation.name}
                               onError={() => setCutoutImgFailed(true)}
                               className="aspect-[16/10] w-full object-contain bg-black/40"
                             />
                           ) : (
                             <ImagePending
                               className="aspect-[16/10] border-0"
-                              label={`Perseverance ${activeObservation.surfaceImage.instrument} (Sol ${activeObservation.surfaceImage.sol})`}
-                              detail={`Verified NASA Image ID: ${activeObservation.surfaceImage.imageId}. Remote image stream offline.`}
+                              label={`Perseverance ${activeSurfaceImage.instrument} (Sol ${activeSurfaceImage.sol})`}
+                              detail={`Verified NASA Image ID: ${activeSurfaceImage.imageId}. Remote image stream offline.`}
                             />
                           )}
                         </div>
@@ -484,7 +517,7 @@ export default function EvidenceInspectorPage() {
                               In-Situ Rover Surface Photograph
                             </span>
                             <a
-                              href={activeObservation.surfaceImage.sourceUrl}
+                              href={activeSurfaceImage.sourceUrl}
                               target="_blank"
                               rel="noreferrer"
                               className="font-mono text-mx-accent hover:underline"
@@ -493,19 +526,19 @@ export default function EvidenceInspectorPage() {
                             </a>
                           </div>
                           <div className="font-mono text-mx-text truncate">
-                            ID: {activeObservation.surfaceImage.imageId}
+                            ID: {activeSurfaceImage.imageId}
                           </div>
                           <div className="text-mx-muted">
-                            {activeObservation.surfaceImage.instrumentLabel} · Sol{" "}
-                            {activeObservation.surfaceImage.sol}
-                            {activeObservation.surfaceImage.site !== null
-                              ? ` · Site ${activeObservation.surfaceImage.site}, Drive ${
-                                  activeObservation.surfaceImage.drive ?? "—"
+                            {activeSurfaceImage.instrumentLabel} · Sol{" "}
+                            {activeSurfaceImage.sol}
+                            {activeSurfaceImage.site !== null
+                              ? ` · Site ${activeSurfaceImage.site}, Drive ${
+                                  activeSurfaceImage.drive ?? "—"
                                 }`
                               : ""}
                           </div>
                           <div className="text-mx-dim">
-                            Credit: {activeObservation.surfaceImage.credit}
+                            Credit: {activeSurfaceImage.credit}
                           </div>
                         </div>
                       </div>
@@ -513,7 +546,11 @@ export default function EvidenceInspectorPage() {
                       <ImagePending
                         className="h-full min-h-[170px]"
                         label="Observation Cutout Frame"
-                        detail={`Dataset ID: ${activeObservation.datasetId}. Attach a Perseverance surface photograph below or connect orbital cutouts.`}
+                        detail={`Dataset ID: ${activeObservation.datasetId}. ${
+                          activeObservation.datasetId === SURFACE_IMAGERY_DATASET_ID
+                            ? "Attach a Perseverance surface photograph from the catalog below."
+                            : "Orbital remote sensing cutout or spectral profile frame."
+                        }`}
                       />
                     )}
                   </div>
@@ -636,8 +673,8 @@ export default function EvidenceInspectorPage() {
                   <div className="mt-4 border-t border-mx-border pt-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs text-mx-muted">
-                        {activeObservation.surfaceImage
-                          ? `Linked Rover Photograph: ${activeObservation.surfaceImage.imageId} (${activeObservation.surfaceImage.instrument}, Sol ${activeObservation.surfaceImage.sol})`
+                        {activeSurfaceImage
+                          ? `Linked Rover Photograph: ${activeSurfaceImage.imageId} (${activeSurfaceImage.instrument}, Sol ${activeSurfaceImage.sol})`
                           : "Have supporting Perseverance surface imagery (Mastcam-Z, Navcam, or SuperCam RMI) for this observation?"}
                       </span>
                       <button
@@ -647,7 +684,7 @@ export default function EvidenceInspectorPage() {
                       >
                         {showRoverGallery
                           ? "Hide Perseverance Imagery Catalog"
-                          : activeObservation.surfaceImage
+                          : activeSurfaceImage
                             ? "Change / Inspect Rover Image"
                             : "Browse & Attach Rover Image"}
                       </button>
@@ -680,9 +717,11 @@ export default function EvidenceInspectorPage() {
               </section>
 
               {/* 2. Derived Measurements - Jezero Instruments */}
-              {isJezero && activeObservation.datasetId === "crism_jezero_vnir" && (
-                <CrismSpectralPanel />
-              )}
+              {isJezero &&
+                (activeObservation.datasetId === "crism_jezero_vnir" ||
+                  activeObservation.datasetId === "crism_jezero_mtrdr") && (
+                  <CrismSpectralPanel />
+                )}
 
               {isJezero && activeObservation.datasetId === "m2020_meda_env" && (
                 <MedaEnvironmentalPanel

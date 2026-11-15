@@ -21,6 +21,7 @@ import type {
   DatasetOperationalStatus,
   GeographicCoverageScope,
   MarsRegion,
+  SurfaceImageAttachment,
 } from "../types";
 import { MARS_REGIONS } from "./regions";
 import {
@@ -226,6 +227,28 @@ export interface SurfaceImageryCatalogItem {
 }
 
 export const SURFACE_IMAGERY_DATASET_ID = "m2020_perseverance_surface_imagery";
+
+/**
+ * Authentic, verified Perseverance Mastcam-Z photograph of the Jezero Western Delta strata
+ * acquired on Sol 420 (April 26, 2022). Serves as default in-situ ground truth reference.
+ */
+export const PERSEVERANCE_DELTA_DEFAULT_SURFACE_IMAGE: SurfaceImageAttachment = {
+  imageId: "ZL0_0420_0704236345_332ECM_N0232872ZCAM08439_1100LMJ",
+  roverName: "Perseverance",
+  instrument: "MCZ_LEFT",
+  instrumentLabel: "Mastcam-Z — Left Eye (Zoomable Panoramic Multispectral Camera)",
+  sol: 420,
+  dateTakenUtc: "2022-04-26T09:19:05.184",
+  dateTakenMars: "Sol-00420M15:22:44.849",
+  site: 23,
+  drive: "2872",
+  xyzLocalMeters: "(-129.099,-265.95,-21.5757)",
+  imageUrl: "https://mars.nasa.gov/mars2020-raw-images/pub/ods/surface/sol/00420/ids/edr/browse/zcam/ZL0_0420_0704236345_332ECM_N0232872ZCAM08439_1100LMJ01_1200.jpg",
+  thumbnailUrl: "https://mars.nasa.gov/mars2020-raw-images/pub/ods/surface/sol/00420/ids/edr/browse/zcam/ZL0_0420_0704236345_332ECM_N0232872ZCAM08439_1100LMJ01_320.jpg",
+  sourceUrl: "https://mars.nasa.gov/mars2020/multimedia/raw-images/ZL0_0420_0704236345_332ECM_N0232872ZCAM08439_1100LMJ",
+  credit: "NASA/JPL-Caltech/ASU",
+  caption: "NASA's Mars Perseverance rover acquired this image using its Left Mastcam-Z camera showing layered delta strata. This image was acquired on April 26, 2022 (Sol 420) at the local mean solar time of 15:22:44.",
+};
 
 /**
  * Map layers in `mapLayers.ts` that are pure visualization basemaps or synthetic
