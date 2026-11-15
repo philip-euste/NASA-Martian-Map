@@ -45,14 +45,19 @@ export type MissionUpdate = Partial<
 
 interface MissionContextValue {
   mission: DeepReadonly<Mission>;
+  archivedExpeditions: readonly DeepReadonly<Mission>[];
   updateMission: (updates: MissionUpdate) => void;
   updateSimulation: (updates: Partial<SimulationState>) => void;
   updateTemporal: (updates: Partial<TemporalState>) => void;
   setRegion: (region: MarsRegion | Region | null) => void;
   resetMission: () => void;
+  createNewExpedition: (region?: MarsRegion | Region | null, name?: string) => void;
+  abandonExpedition: () => void;
+  loadExpedition: (id: string) => void;
 }
 
 const MISSION_STORAGE_KEY = "mars-explorer-active-mission-v1";
+const ARCHIVE_STORAGE_KEY = "mars-explorer-archived-expeditions-v1";
 
 function getCurrentUTCDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -240,6 +245,19 @@ function loadStoredMission(): Mission {
   }
 }
 
+function loadArchivedExpeditions(): Mission[] {
+  try {
+    const raw =
+      window.localStorage.getItem(ARCHIVE_STORAGE_KEY) ||
+      window.sessionStorage.getItem(ARCHIVE_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 const MissionContext =
   createContext<MissionContextValue | null>(null);
 
@@ -249,6 +267,7 @@ export function MissionProvider({
   children: ReactNode;
 }) {
   const [mission, setMission] = useState<Mission>(loadStoredMission);
+  const [archivedExpeditions, setArchivedExpeditions] = useState<Mission[]>(loadArchivedExpeditions);
 
   useEffect(() => {
     try {
@@ -257,6 +276,66 @@ export function MissionProvider({
       // Ignore storage quota errors
     }
   }, [mission]);
+
+  function archiveMission(target: Mission) {
+    const hasWork = Boolean(
+      target.region ||
+      target.scientificTargets.length > 0 ||
+      target.selectedObservations.length > 0 ||
+      target.candidateRoutes.length > 0 ||
+      target.fieldNotes.length > 0 ||
+      target.reports.length > 0
+    );
+    if (!hasWork) return;
+
+    setArchivedExpeditions((prev) => {
+      const filtered = prev.filter((m) => m.id !== target.id);
+      const next = [target, ...filtered].slice(0, 25);
+      try {
+        window.localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(next));
+        window.sessionStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  }
+
+  function createNewExpedition(region?: MarsRegion | Region | null, name?: string): void {
+    archiveMission(mission);
+    const fresh = createInitialMission();
+    if (region) {
+      fresh.region = region as MarsRegion;
+    }
+    if (name?.trim()) {
+      fresh.name = name.trim();
+    } else if (region) {
+      fresh.name = `${region.name} Expedition`;
+    }
+    setMission(fresh);
+    try {
+      window.sessionStorage.setItem(MISSION_STORAGE_KEY, JSON.stringify(fresh));
+    } catch {}
+  }
+
+  function abandonExpedition(): void {
+    const fresh = createInitialMission();
+    setMission(fresh);
+    try {
+      window.sessionStorage.setItem(MISSION_STORAGE_KEY, JSON.stringify(fresh));
+    } catch {}
+  }
+
+  function loadExpedition(id: string): void {
+    const found = archivedExpeditions.find((m) => m.id === id);
+    if (found) {
+      archiveMission(mission);
+      setMission(found);
+      try {
+        window.sessionStorage.setItem(MISSION_STORAGE_KEY, JSON.stringify(found));
+      } catch {}
+    }
+  }
 
   // Listen for scientific fieldwork events emitted by the Marswalk 3D simulator iframe
   useEffect(() => {
@@ -509,11 +588,15 @@ export function MissionProvider({
     <MissionContext.Provider
       value={{
         mission,
+        archivedExpeditions,
         setRegion,
         updateMission,
         updateSimulation,
         updateTemporal,
         resetMission,
+        createNewExpedition,
+        abandonExpedition,
+        loadExpedition,
       }}
     >
       {children}

@@ -1,7 +1,7 @@
 // frontend/src/features/mission/ExpeditionReportPage.tsx
 // Expedition Report generation and viewing (Phase 6).
 import { useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Camera,
@@ -37,7 +37,8 @@ import MissionLayout from "./MissionLayout";
 import { createId, toMutable } from "./missionHelpers";
 
 export default function ExpeditionReportPage() {
-  const { mission, updateMission } = useMission();
+  const { mission, updateMission, createNewExpedition } = useMission();
+  const navigate = useNavigate();
 
   const activeRegion = mission.region
     ? getMarsRegionById(mission.region.id)
@@ -367,6 +368,18 @@ export default function ExpeditionReportPage() {
             <ArrowLeft size={15} aria-hidden="true" />
             Mission Review
           </Link>
+          <button
+            type="button"
+            onClick={() => {
+              createNewExpedition();
+              navigate("/mission/investigate");
+            }}
+            className="mx-btn mx-btn--secondary"
+            title="Archive this completed expedition and launch your next mission"
+          >
+            <Plus size={15} aria-hidden="true" />
+            Start Next Expedition
+          </button>
           {activeReport && (
             <>
               <button
@@ -527,10 +540,11 @@ export default function ExpeditionReportPage() {
               routes, simulated EVA samples, field notes, and knowledge gaps.
             </EmptyState>
           ) : (
-            <article
-              className="mx-panel mx-print-surface p-8"
-              aria-label="Expedition report document"
-            >
+            <>
+              <article
+                className="mx-panel mx-print-surface p-8"
+                aria-label="Expedition report document"
+              >
               <header className="border-b border-mx-border pb-6">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="mx-eyebrow mx-eyebrow--accent">
@@ -949,7 +963,30 @@ export default function ExpeditionReportPage() {
                 )}
               </section>
             </article>
-          )}
+
+            {/* Completion & Next Mission Action */}
+            <div className="mx-no-print mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-mx-accent/40 bg-mx-panel p-5">
+              <div className="max-w-xl">
+                <p className="mx-eyebrow mx-eyebrow--accent m-0">Expedition Complete</p>
+                <h4 className="mx-heading m-0 mt-1 text-base">Ready for the Next Mars Frontier?</h4>
+                <p className="mx-body m-0 mt-1 text-xs">
+                  Your expedition dossier has been compiled. You can export it or print it anytime. Starting a new expedition will safely preserve this report in your session archive.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  createNewExpedition();
+                  navigate("/mission/investigate");
+                }}
+                className="mx-btn mx-btn--primary min-h-11"
+              >
+                <Plus size={16} aria-hidden="true" />
+                Start Next Expedition
+              </button>
+            </div>
+          </>
+        )}
         </div>
       </div>
     </MissionLayout>

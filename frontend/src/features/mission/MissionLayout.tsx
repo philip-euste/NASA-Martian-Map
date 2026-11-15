@@ -2,7 +2,7 @@
 // Shared layout header, Mission Overview drawer, and 4-stage grouped workflow
 // navigation for all mission workspace screens.
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   Check,
@@ -10,11 +10,17 @@ import {
   ChevronUp,
   Compass,
   Edit3,
+  History,
   MapPin,
+  Plus,
+  RotateCcw,
   Sparkles,
+  Trash2,
+  X,
 } from "lucide-react";
 import AppLayout from "../../components/layout/AppLayout";
 import { DataField, formatCoordinates } from "../../components/ui";
+import { MARS_REGION_LIST, getMarsRegionById } from "../../data/regions";
 import { useMission } from "../../state/mission/MissionContext";
 import {
   MISSION_PAGES,
@@ -46,9 +52,21 @@ export default function MissionLayout({
   fullscreenCanvas = false,
   children,
 }: MissionLayoutProps) {
-  const { mission, updateMission } = useMission();
+  const {
+    mission,
+    updateMission,
+    createNewExpedition,
+    abandonExpedition,
+    archivedExpeditions,
+    loadExpedition,
+  } = useMission();
+  const navigate = useNavigate();
   const location = useLocation();
   const [overviewOpen, setOverviewOpen] = useState(false);
+  const [newExpeditionModalOpen, setNewExpeditionModalOpen] = useState(false);
+  const [abandonModalOpen, setAbandonModalOpen] = useState(false);
+  const [newExpeditionName, setNewExpeditionName] = useState("");
+  const [newExpeditionRegionId, setNewExpeditionRegionId] = useState<string>("jezero-crater");
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -150,198 +168,279 @@ export default function MissionLayout({
 
   return (
     <AppLayout>
-      {/* Row 1: Mission Identity, Region & Expandable Brief */}
-      <div className="mx-no-print border-b border-mx-border bg-mx-bg-raised">
-        <div className="mx-auto max-w-[1440px] px-5 pt-3.5 pb-3 sm:px-8 lg:px-14">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Left: Expedition Name + Region + Status */}
-            <div className="flex flex-wrap items-center gap-2.5">
-              <div className="flex items-center gap-2 rounded-md border border-mx-border bg-mx-bg px-2.5 py-1 focus-within:border-mx-accent">
-                <span className="mx-eyebrow mx-eyebrow--accent">Expedition</span>
-                <input
-                  type="text"
-                  aria-label="Expedition name"
-                  value={mission.name}
-                  onChange={(event) =>
-                    updateMission({ name: event.target.value })
-                  }
-                  className="w-44 bg-transparent font-display text-[14px] font-semibold text-mx-text focus:outline-none sm:w-52"
-                />
-                <Edit3
-                  size={12}
-                  className="pointer-events-none shrink-0 text-mx-dim"
-                  aria-hidden="true"
-                />
-              </div>
-
-              {mission.region ? (
-                <Link
-                  to={`/explorer?view=map&site=${mission.region.id}`}
-                  className="mx-badge border border-mx-border bg-mx-panel px-2.5 py-1 text-mx-text no-underline hover:border-mx-muted"
-                  title="View region on 2D Mars Map"
-                >
-                  <MapPin
+      {/* Sticky Mission Workflow Header: Stays pinned below the main navigation bar on scroll */}
+      <div className="mx-no-print sticky top-[var(--mx-header-height,64px)] z-[900] shadow-md transition-all">
+        {/* Row 1: Mission Identity, Region & Expandable Brief */}
+        <div className="border-b border-mx-border bg-mx-bg-raised/95 backdrop-blur-md">
+          <div className="mx-auto max-w-[1440px] px-5 pt-3.5 pb-3 sm:px-8 lg:px-14">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Left: Expedition Name + Region + Status */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex items-center gap-2 rounded-md border border-mx-border bg-mx-bg px-2.5 py-1 focus-within:border-mx-accent">
+                  <span className="mx-eyebrow mx-eyebrow--accent">Expedition</span>
+                  <input
+                    type="text"
+                    aria-label="Expedition name"
+                    value={mission.name}
+                    onChange={(event) =>
+                      updateMission({ name: event.target.value })
+                    }
+                    className="w-44 bg-transparent font-display text-[14px] font-semibold text-mx-text focus:outline-none sm:w-52"
+                  />
+                  <Edit3
                     size={12}
-                    className="mr-1.5 text-mx-accent"
+                    className="pointer-events-none shrink-0 text-mx-dim"
                     aria-hidden="true"
                   />
-                  <span className="font-medium">{mission.region.name}</span>
-                  <span className="mx-mono ml-1.5 text-[10px] text-mx-dim">
-                    (
-                    {formatCoordinates(
-                      mission.region.coordinates.latitude,
-                      mission.region.coordinates.longitude
-                    )}
-                    )
-                  </span>
-                </Link>
-              ) : (
-                <Link
-                  to="/explorer?view=map"
-                  className="mx-badge mx-badge--accent border border-mx-accent/40 px-2.5 py-1 no-underline hover:border-mx-accent"
-                >
-                  <Compass size={12} className="mr-1.5" aria-hidden="true" />
-                  Select Mars Region
-                </Link>
-              )}
-
-              <span className="mx-badge hidden border border-mx-border bg-mx-bg px-2.5 py-1 sm:inline-flex">
-                <span
-                  className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${
-                    completionPct >= 80
-                      ? "bg-mx-success"
-                      : completionPct > 0
-                        ? "bg-mx-accent"
-                        : "bg-mx-dim"
-                  }`}
-                />
-                {statusLabel}
-              </span>
-            </div>
-
-            {/* Right: Progress Indicator, Overview Drawer Toggle & Recommended Action */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div
-                className="flex items-center gap-2 rounded-md border border-mx-border bg-mx-bg px-3 py-1"
-                title="Overall mission workflow progress"
-              >
-                <span className="mx-mono text-[11px] text-mx-muted">
-                  Progress
-                </span>
-                <div className="h-1.5 w-20 overflow-hidden rounded-full bg-mx-panel-2">
-                  <div
-                    className="h-full rounded-full bg-mx-accent transition-all duration-300"
-                    style={{ width: `${Math.max(4, completionPct)}%` }}
-                  />
                 </div>
-                <span className="mx-mono text-[11px] font-semibold text-mx-text">
-                  {completionPct}%
+
+                {mission.region ? (
+                  <Link
+                    to={`/explorer?view=map&site=${mission.region.id}`}
+                    className="mx-badge border border-mx-border bg-mx-panel px-2.5 py-1 text-mx-text no-underline hover:border-mx-muted"
+                    title="View region on 2D Mars Map"
+                  >
+                    <MapPin
+                      size={12}
+                      className="mr-1.5 text-mx-accent"
+                      aria-hidden="true"
+                    />
+                    <span className="font-medium">{mission.region.name}</span>
+                    <span className="mx-mono ml-1.5 text-[10px] text-mx-dim">
+                      (
+                      {formatCoordinates(
+                        mission.region.coordinates.latitude,
+                        mission.region.coordinates.longitude
+                      )}
+                      )
+                    </span>
+                  </Link>
+                ) : (
+                  <Link
+                    to="/explorer?view=map"
+                    className="mx-badge mx-badge--accent border border-mx-accent/40 px-2.5 py-1 no-underline hover:border-mx-accent"
+                  >
+                    <Compass size={12} className="mr-1.5" aria-hidden="true" />
+                    Select Mars Region
+                  </Link>
+                )}
+
+                <span className="mx-badge hidden border border-mx-border bg-mx-bg px-2.5 py-1 sm:inline-flex">
+                  <span
+                    className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${
+                      completionPct >= 80
+                        ? "bg-mx-success"
+                        : completionPct > 0
+                          ? "bg-mx-accent"
+                          : "bg-mx-dim"
+                    }`}
+                  />
+                  {statusLabel}
                 </span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setOverviewOpen((prev) => !prev)}
-                aria-expanded={overviewOpen}
-                className={`mx-btn mx-btn--sm ${
-                  overviewOpen ? "mx-btn--primary" : "mx-btn--secondary"
-                }`}
-              >
-                Mission Overview
-                {overviewOpen ? (
-                  <ChevronUp size={14} aria-hidden="true" />
-                ) : (
-                  <ChevronDown size={14} aria-hidden="true" />
-                )}
-              </button>
-
-              {nextAction.path !== location.pathname && (
-                <Link
-                  to={nextAction.path}
-                  className="mx-btn mx-btn--primary mx-btn--sm"
-                  title={nextAction.reason}
+              {/* Right: Progress Indicator, Overview Drawer Toggle, New Expedition, Abandon & Recommended Action */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="flex items-center gap-2 rounded-md border border-mx-border bg-mx-bg px-3 py-1"
+                  title="Overall mission workflow progress"
                 >
-                  <Sparkles size={13} aria-hidden="true" />
-                  Next: {nextAction.label}
-                  <ArrowRight size={13} aria-hidden="true" />
-                </Link>
-              )}
-            </div>
-          </div>
-
-          {/* Expandable Mission Overview Drawer (Progressive Disclosure) */}
-          {overviewOpen && (
-            <section
-              aria-label="Mission overview details"
-              className="mt-3.5 rounded-lg border border-mx-border-strong bg-mx-bg p-5"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-mx-border pb-4">
-                <div className="max-w-2xl">
-                  <span className="mx-eyebrow mx-eyebrow--accent">
-                    Expedition Brief &amp; Telemetry
+                  <span className="mx-mono text-[11px] text-mx-muted">
+                    Progress
                   </span>
-                  <h2 className="mx-heading m-0 mt-1 text-lg">
-                    {mission.name} · {statusLabel}
-                  </h2>
-                  <p className="mx-body m-0 mt-1.5 text-xs">
-                    {mission.question
-                      ? `Research Question: "${mission.question}"`
-                      : "No research question framed yet. Define your primary question in Stage 01 (Scientific Investigation)."}
-                  </p>
+                  <div className="h-1.5 w-20 overflow-hidden rounded-full bg-mx-panel-2">
+                    <div
+                      className="h-full rounded-full bg-mx-accent transition-all duration-300"
+                      style={{ width: `${Math.max(4, completionPct)}%` }}
+                    />
+                  </div>
+                  <span className="mx-mono text-[11px] font-semibold text-mx-text">
+                    {completionPct}%
+                  </span>
                 </div>
 
-                <div className="rounded-md border border-mx-border bg-mx-panel px-3.5 py-2.5 text-xs">
-                  <span className="mx-eyebrow block text-mx-accent">
-                    Recommended Next Step
-                  </span>
-                  <p className="m-0 mt-1 font-medium text-mx-text">
-                    {nextAction.reason}
-                  </p>
+                <button
+                  type="button"
+                  onClick={() => setOverviewOpen((prev) => !prev)}
+                  aria-expanded={overviewOpen}
+                  className={`mx-btn mx-btn--sm ${
+                    overviewOpen ? "mx-btn--primary" : "mx-btn--secondary"
+                  }`}
+                >
+                  Mission Overview
+                  {overviewOpen ? (
+                    <ChevronUp size={14} aria-hidden="true" />
+                  ) : (
+                    <ChevronDown size={14} aria-hidden="true" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewExpeditionName("");
+                    setNewExpeditionRegionId(mission.region?.id ?? "jezero-crater");
+                    setNewExpeditionModalOpen(true);
+                  }}
+                  className="mx-btn mx-btn--secondary mx-btn--sm"
+                  title="Archive current expedition and launch a new one"
+                >
+                  <Plus size={13} aria-hidden="true" />
+                  <span className="hidden sm:inline">New Expedition</span>
+                  <span className="sm:hidden">New</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAbandonModalOpen(true)}
+                  className="mx-btn mx-btn--ghost mx-btn--sm text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  title="Abandon current expedition and reset workflow state"
+                >
+                  <Trash2 size={13} aria-hidden="true" />
+                  <span className="hidden md:inline">Abandon</span>
+                </button>
+
+                {nextAction.path !== location.pathname && (
                   <Link
                     to={nextAction.path}
-                    onClick={() => setOverviewOpen(false)}
-                    className="mt-2 inline-flex items-center gap-1 font-semibold text-mx-accent no-underline hover:underline"
+                    className="mx-btn mx-btn--primary mx-btn--sm"
+                    title={nextAction.reason}
                   >
-                    {nextAction.label}
+                    <Sparkles size={13} aria-hidden="true" />
+                    Next: {nextAction.label}
                     <ArrowRight size={13} aria-hidden="true" />
                   </Link>
+                )}
+              </div>
+            </div>
+
+            {/* Expandable Mission Overview Drawer (Progressive Disclosure) */}
+            {overviewOpen && (
+              <section
+                aria-label="Mission overview details"
+                className="mt-3.5 max-h-[calc(100vh-var(--mx-header-height,64px)-120px)] overflow-y-auto rounded-lg border border-mx-border-strong bg-mx-bg p-5 shadow-xl"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-mx-border pb-4">
+                  <div className="max-w-2xl">
+                    <span className="mx-eyebrow mx-eyebrow--accent">
+                      Expedition Brief &amp; Telemetry
+                    </span>
+                    <h2 className="mx-heading m-0 mt-1 text-lg">
+                      {mission.name} · {statusLabel}
+                    </h2>
+                    <p className="mx-body m-0 mt-1.5 text-xs">
+                      {mission.question
+                        ? `Research Question: "${mission.question}"`
+                        : "No research question framed yet. Define your primary question in Stage 01 (Scientific Investigation)."}
+                    </p>
+                  </div>
+
+                  <div className="rounded-md border border-mx-border bg-mx-panel px-3.5 py-2.5 text-xs">
+                    <span className="mx-eyebrow block text-mx-accent">
+                      Recommended Next Step
+                    </span>
+                    <p className="m-0 mt-1 font-medium text-mx-text">
+                      {nextAction.reason}
+                    </p>
+                    <Link
+                      to={nextAction.path}
+                      onClick={() => setOverviewOpen(false)}
+                      className="mt-2 inline-flex items-center gap-1 font-semibold text-mx-accent no-underline hover:underline"
+                    >
+                      {nextAction.label}
+                      <ArrowRight size={13} aria-hidden="true" />
+                    </Link>
+                  </div>
                 </div>
-              </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-                <DataField
-                  label="Selected Region"
-                  value={mission.region?.name}
-                  fallback="Not selected"
-                />
-                <DataField
-                  label="Current Stage"
-                  value={`Stage ${currentPage.stageNumber} · ${currentPage.shortLabel}`}
-                />
-                <DataField
-                  label="NASA Datasets"
-                  value={`${mission.selectedDatasets.length} selected`}
-                />
-                <DataField
-                  label="Observations"
-                  value={`${mission.selectedObservations.length} logged`}
-                />
-                <DataField
-                  label="Science Targets"
-                  value={`${mission.scientificTargets.length} targets (${mission.simulation.visitedTargetIds.length} visited)`}
-                />
-                <DataField
-                  label="Knowledge Gaps"
-                  value={`${mission.knowledgeGaps.length} identified`}
-                />
-              </div>
-            </section>
-          )}
+                <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+                  <DataField
+                    label="Selected Region"
+                    value={mission.region?.name}
+                    fallback="Not selected"
+                  />
+                  <DataField
+                    label="Current Stage"
+                    value={`Stage ${currentPage.stageNumber} · ${currentPage.shortLabel}`}
+                  />
+                  <DataField
+                    label="NASA Datasets"
+                    value={`${mission.selectedDatasets.length} selected`}
+                  />
+                  <DataField
+                    label="Observations"
+                    value={`${mission.selectedObservations.length} logged`}
+                  />
+                  <DataField
+                    label="Science Targets"
+                    value={`${mission.scientificTargets.length} targets (${mission.simulation.visitedTargetIds.length} visited)`}
+                  />
+                  <DataField
+                    label="Knowledge Gaps"
+                    value={`${mission.knowledgeGaps.length} identified`}
+                  />
+                </div>
+
+                {/* Archived Expeditions in Local Session */}
+                {archivedExpeditions.length > 0 && (
+                  <div className="mt-4 border-t border-mx-border pt-4">
+                    <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <History size={14} className="text-mx-accent" />
+                        <span className="font-display text-xs font-semibold uppercase tracking-wider text-mx-text">
+                          Archived Expeditions ({archivedExpeditions.length})
+                        </span>
+                      </div>
+                      <span className="mx-mono text-[10px] text-mx-muted">
+                        Saved in local browser session
+                      </span>
+                    </div>
+                    <div className="grid max-h-48 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+                      {archivedExpeditions.map((archived) => {
+                        const archPct = getMissionCompletionPercentage(archived);
+                        const archRegion =
+                          archived.region?.name ?? "Unassigned Region";
+                        return (
+                          <div
+                            key={archived.id}
+                            className="flex items-center justify-between gap-3 rounded-md border border-mx-border bg-mx-panel px-3 py-2 text-xs"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className="m-0 truncate font-semibold text-mx-text"
+                                title={archived.name}
+                              >
+                                {archived.name}
+                              </p>
+                              <p className="mx-mono m-0 mt-0.5 text-[10px] text-mx-muted">
+                                {archRegion} · {archPct}% complete
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                loadExpedition(archived.id);
+                                setOverviewOpen(false);
+                              }}
+                              className="mx-btn mx-btn--secondary mx-btn--sm shrink-0 px-2 py-0.5 text-[11px]"
+                              title="Resume this archived expedition"
+                            >
+                              <RotateCcw size={11} className="mr-1" />
+                              Resume
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Row 2: 4-Stage Workflow Navigator */}
-      <div className="mx-no-print mx-workflow-nav border-b border-mx-border bg-mx-bg shadow-sm">
+        {/* Row 2: 4-Stage Workflow Navigator */}
+        <div className="mx-workflow-nav border-b border-mx-border bg-mx-bg/95 backdrop-blur-md shadow-sm">
         <div className="mx-auto max-w-[1440px] px-5 py-2.5 sm:px-8 lg:px-14">
           <nav
             aria-label="Expedition workflow stages"
@@ -455,6 +554,7 @@ export default function MissionLayout({
           </nav>
         </div>
       </div>
+      </div>
 
       {/* Page Heading & Main Content */}
       <main className="mx-mission-content mx-auto max-w-[1440px] px-5 py-8 sm:px-8 lg:px-14">
@@ -484,6 +584,202 @@ export default function MissionLayout({
 
         {children}
       </main>
+
+      {/* New Expedition Modal */}
+      {newExpeditionModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="new-expedition-title"
+          className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-lg rounded-xl border border-mx-border bg-mx-bg-raised p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-mx-border pb-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-mx-accent/20 text-mx-accent">
+                  <Plus size={18} />
+                </div>
+                <div>
+                  <h3
+                    id="new-expedition-title"
+                    className="mx-heading m-0 text-base"
+                  >
+                    Start New Expedition
+                  </h3>
+                  <p className="mx-mono m-0 mt-0.5 text-[11px] text-mx-muted">
+                    Preserve current expedition and initialize a new exploration workspace
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNewExpeditionModalOpen(false)}
+                className="rounded p-1 text-mx-muted hover:bg-mx-panel hover:text-mx-text"
+                aria-label="Close modal"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-mx-text">
+                  Expedition Name
+                </label>
+                <input
+                  type="text"
+                  value={newExpeditionName}
+                  onChange={(e) => setNewExpeditionName(e.target.value)}
+                  placeholder={`${getMarsRegionById(newExpeditionRegionId)?.name ?? "Mars"} Expedition ${archivedExpeditions.length + 2}`}
+                  className="mt-1.5 w-full rounded-md border border-mx-border bg-mx-bg px-3 py-2 text-sm text-mx-text focus:border-mx-accent focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-mx-text">
+                  Primary Exploration Region
+                </label>
+                <select
+                  value={newExpeditionRegionId}
+                  onChange={(e) => setNewExpeditionRegionId(e.target.value)}
+                  className="mt-1.5 w-full rounded-md border border-mx-border bg-mx-bg px-3 py-2 text-sm text-mx-text focus:border-mx-accent focus:outline-none"
+                >
+                  {MARS_REGION_LIST.map((reg) => (
+                    <option key={reg.id} value={reg.id}>
+                      {reg.name} ({reg.category.replace("_", " ")})
+                      {reg.simulatorAvailability === "AVAILABLE"
+                        ? " — 3D Available"
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="mx-mono mt-1 text-[11px] text-mx-muted">
+                  {getMarsRegionById(newExpeditionRegionId)?.description}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-mx-border bg-mx-panel p-3 text-xs text-mx-muted">
+                <p className="m-0 font-medium text-mx-text">
+                  Automatic Archiving Notice:
+                </p>
+                <p className="m-0 mt-1">
+                  Your current expedition{" "}
+                  <strong className="text-mx-text">
+                    &ldquo;{mission.name}&rdquo;
+                  </strong>{" "}
+                  ({completionPct}% complete) will be preserved in your session
+                  archives. You can resume it anytime from the Mission Overview
+                  drawer.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setNewExpeditionModalOpen(false)}
+                className="mx-btn mx-btn--secondary mx-btn--sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const chosenRegion =
+                    getMarsRegionById(newExpeditionRegionId) ?? null;
+                  createNewExpedition(chosenRegion, newExpeditionName);
+                  setNewExpeditionModalOpen(false);
+                  navigate("/mission/investigate");
+                }}
+                className="mx-btn mx-btn--primary mx-btn--sm"
+              >
+                <Plus size={14} className="mr-1" />
+                Launch Expedition
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Abandon Expedition Modal */}
+      {abandonModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="abandon-expedition-title"
+          className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-md rounded-xl border border-red-500/40 bg-mx-bg-raised p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-mx-border pb-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/20 text-red-400">
+                  <Trash2 size={18} />
+                </div>
+                <div>
+                  <h3
+                    id="abandon-expedition-title"
+                    className="mx-heading m-0 text-base text-red-300"
+                  >
+                    Abandon Expedition
+                  </h3>
+                  <p className="mx-mono m-0 mt-0.5 text-[11px] text-mx-muted">
+                    Reset current workspace and clear progress
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAbandonModalOpen(false)}
+                className="rounded p-1 text-mx-muted hover:bg-mx-panel hover:text-mx-text"
+                aria-label="Close modal"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 text-xs">
+              <p className="m-0 text-mx-text">
+                Are you sure you want to abandon{" "}
+                <strong className="text-red-300">
+                  &ldquo;{mission.name}&rdquo;
+                </strong>
+                ?
+              </p>
+              <p className="m-0 text-mx-muted">
+                All unarchived waypoints, research framing questions, notes, and
+                simulated EVA samples in this workspace will be reset to defaults.
+              </p>
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-amber-200">
+                Tip: If you might want to revisit this work later, use{" "}
+                <strong>&ldquo;New Expedition&rdquo;</strong> instead — it
+                safely archives your progress before opening a clean workspace.
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setAbandonModalOpen(false)}
+                className="mx-btn mx-btn--secondary mx-btn--sm"
+              >
+                Keep Expedition
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  abandonExpedition();
+                  setAbandonModalOpen(false);
+                  navigate("/mission/investigate");
+                }}
+                className="mx-btn mx-btn--sm border border-red-500/50 bg-red-600/20 text-red-300 hover:bg-red-600/30 hover:text-red-200"
+              >
+                <Trash2 size={13} className="mr-1" />
+                Confirm Abandon
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

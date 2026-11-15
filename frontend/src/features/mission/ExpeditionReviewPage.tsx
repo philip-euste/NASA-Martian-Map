@@ -1,7 +1,7 @@
 // frontend/src/features/mission/ExpeditionReviewPage.tsx
 // Expedition Review dashboard (Phase 6).
 import { useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -40,7 +40,9 @@ import MissionLayout from "./MissionLayout";
 import { createId, toMutable } from "./missionHelpers";
 
 export default function ExpeditionReviewPage() {
-  const { mission, updateMission, updateSimulation } = useMission();
+  const { mission, updateMission, updateSimulation, createNewExpedition } =
+    useMission();
+  const navigate = useNavigate();
   const isJezero = mission.region?.id === "jezero-crater";
 
   const [noteContent, setNoteContent] = useState("");
@@ -845,7 +847,19 @@ export default function ExpeditionReviewPage() {
             )}
           </section>
 
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                createNewExpedition();
+                navigate("/mission/investigate");
+              }}
+              className="mx-btn mx-btn--secondary min-h-11"
+              title="Archive current expedition and launch a new one"
+            >
+              <Plus size={16} aria-hidden="true" />
+              New Expedition
+            </button>
             <Link
               to="/mission/report"
               className="mx-btn mx-btn--primary min-h-11"
