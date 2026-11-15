@@ -3,8 +3,6 @@
 @import "leaflet/dist/leaflet.css";
 @import "./styles/theme.css";
 
-/* Global base styles. Colours and fonts come from the design tokens
-   declared in ./styles/theme.css (Figma: Mars Explorer desktop screens). */
 @layer base {
   :root {
     font-family: var(--font-sans);

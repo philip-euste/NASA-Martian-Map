@@ -5,7 +5,7 @@
 // proximity, and tactical navigation map logic live in `../../shared/surfaceEngine`,
 // parameterized by `JEZERO_ENVIRONMENT`.
 
-import { JEZERO_ENVIRONMENT } from "../../environments/jezero";
+import { JEZERO_ENVIRONMENT } from "../jezero";
 import { mountSurfaceSimulator } from "../../shared/surfaceEngine";
 
 mountSurfaceSimulator(JEZERO_ENVIRONMENT);

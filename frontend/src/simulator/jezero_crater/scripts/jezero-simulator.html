@@ -224,6 +224,8 @@
       body.hosted-visor #status,
       body.hosted-visor #hud,
       body.hosted-visor #open-map,
+      body.hosted-visor #layer-select,
+      body.hosted-visor #layer-status,
       body.hosted-visor #credit,
       body.hosted-visor #proximity-prompt {
         display: none !important;
@@ -237,6 +239,36 @@
         padding: 7px 12px;
         font-size: 11px;
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      #layer-select {
+        position: fixed;
+        bottom: 12px;
+        right: 170px;
+        z-index: 5;
+        max-width: 280px;
+        padding: 6px 8px;
+        border: 1px solid #45404a;
+        border-radius: 6px;
+        background: rgba(28, 26, 30, 0.92);
+        color: #f3efea;
+        font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      #layer-status {
+        position: fixed;
+        bottom: 84px;
+        right: 16px;
+        z-index: 4;
+        max-width: 50%;
+        color: #d8b48f;
+        font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+        text-align: right;
+        pointer-events: none;
+      }
+
+      #layer-status:empty {
+        display: none;
       }
 
       #credit {
@@ -379,6 +411,12 @@
           display: none;
         }
 
+        #layer-select {
+          right: 10px;
+          bottom: 48px;
+          max-width: 200px;
+        }
+
         .overlay-card {
           padding: 18px;
         }
@@ -406,6 +444,8 @@
       <span id="hud-mode">MARS 0.38G WALK</span>
     </div>
 
+    <select id="layer-select" aria-label="Surface layer"></select>
+    <div id="layer-status"></div>
     <button id="open-map" class="secondary" type="button">Terrain Map [M]</button>
 
     <div id="credit"></div>
@@ -436,6 +476,7 @@
           <span><strong>R</strong> — Return to Habitat Base</span>
           <span><strong>M</strong> — Terrain Map / Teleport</span>
           <span><strong>F</strong> — Toggle Recon Flight</span>
+          <span><strong>L</strong> — Cycle Surface Layer</span>
         </div>
       </div>
     </div>

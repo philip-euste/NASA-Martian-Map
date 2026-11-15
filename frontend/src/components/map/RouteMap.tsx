@@ -1,3 +1,4 @@
+
 // frontend/src/components/map/RouteMap.tsx
 // Map component for the Route Planner (Section 3I, Figma: 2D Mars Map visual language).
 // Reuses MAP_LAYERS and getDataProvider without modifying MarsMap's zero-prop interface.
@@ -14,6 +15,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import type { Feature } from "geojson";
 import { Crosshair, Layers, Minus, Plus } from "lucide-react";
 import { MAP_LAYERS, type MapLayerId } from "../../data/mapLayers";
 import { getMarsRegionById } from "../../data/regions";
@@ -22,9 +24,11 @@ import {
   type TileLayerConfig,
 } from "../../services/dataProviders";
 import type { Coordinates, Waypoint } from "../../types";
+import { useMission } from "../../state/mission/MissionContext";
 import { identifyGeologicUnitAt } from "../../utils/jezeroStratigraphy";
 import { formatCoordinates } from "../ui";
 import "./MarsMap.css";
+import { apiUrl } from "../../lib/api";
 
 interface RouteTarget {
   readonly id: string;
@@ -54,6 +58,18 @@ interface RouteMapProps {
   regionId?: string;
 }
 
+interface StudyRegion {
+  readonly id: string;
+  readonly name: string;
+}
+
+const SUPPORTED_STUDY_REGIONS: readonly StudyRegion[] = [
+  { id: "jezero", name: "Jezero Crater" },
+  { id: "gale", name: "Gale Crater" },
+  { id: "valles-marineris", name: "Valles Marineris" },
+  { id: "olympus-mons", name: "Olympus Mons" },
+];
+
 function CenterUpdater({
   center,
   zoom,
@@ -64,9 +80,34 @@ function CenterUpdater({
   resetCounter: number;
 }) {
   const map = useMap();
+
   useEffect(() => {
     map.setView(center, zoom);
-  }, [center, zoom, resetCounter, map]);
+  }, [center[0], center[1], zoom, resetCounter, map]);
+
+  return null;
+}
+
+function BoundaryViewport({
+  feature,
+  regionId,
+}: {
+  feature: Feature;
+  regionId: string;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const bounds = L.geoJSON(feature).getBounds();
+
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, {
+        padding: [36, 36],
+        maxZoom: 9,
+      });
+    }
+  }, [feature, regionId, map]);
+
   return null;
 }
 
@@ -83,6 +124,7 @@ function ClickCapture({
       });
     },
   });
+
   return null;
 }
 
@@ -97,6 +139,9 @@ export default function RouteMap({
   onAddWaypoint,
   regionId,
 }: RouteMapProps) {
+  const { mission } = useMission();
+  const selectedStudyRegionId = mission.region?.id ?? null;
+
   const [layerId, setLayerId] = useState<MapLayerId>("mars_global_mola");
   const [tileConfig, setTileConfig] = useState<TileLayerConfig | null>(null);
   const [layerError, setLayerError] = useState<string | null>(null);
@@ -113,7 +158,116 @@ export default function RouteMap({
     activeRegion?.geologicalDatasets?.find((d) => d.dataPath)?.dataPath ??
     (isJezero ? "/data/jezero_geology_sim3464.geojson" : null);
 
+  const [boundaryFeatures, setBoundaryFeatures] = useState<
+    Record<string, Feature>
+  >({});
+  const [boundaryError, setBoundaryError] = useState<string | null>(null);
+
   const layer = MAP_LAYERS[layerId];
+
+  // Fetch every supported study-region boundary independently.
+  // A failed request for one region does not prevent the others from loading.
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadBoundaries() {
+      setBoundaryFeatures({});
+      setBoundaryError(null);
+
+      const results = await Promise.all(
+        SUPPORTED_STUDY_REGIONS.map(async (region) => {
+          try {
+            const response = await fetch(
+              apiUrl(`/api/regions/${encodeURIComponent(region.id)}/boundary`),
+              { signal: controller.signal }
+            );
+
+            const responseText = await response.text();
+
+            if (!response.ok) {
+              throw new Error(
+                `HTTP ${response.status}: ${responseText.slice(0, 120)}`
+              );
+            }
+
+            let payload: { feature?: Feature };
+
+            try {
+              payload = JSON.parse(responseText) as {
+                feature?: Feature;
+              };
+            } catch {
+              throw new Error("API returned HTML or invalid JSON.");
+            }
+
+            const feature = payload.feature;
+
+            if (
+              !feature ||
+              feature.type !== "Feature" ||
+              !feature.geometry
+            ) {
+              throw new Error("Response does not contain valid GeoJSON.");
+            }
+
+            return {
+              id: region.id,
+              feature,
+              error: null,
+            };
+          } catch (error) {
+            if (controller.signal.aborted) {
+              return null;
+            }
+
+            return {
+              id: region.id,
+              feature: null,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Unknown boundary loading error.",
+            };
+          }
+        })
+      );
+
+      if (controller.signal.aborted) return;
+
+      const loadedFeatures: Record<string, Feature> = {};
+      const failedRegions: string[] = [];
+
+      for (const result of results) {
+        if (!result) continue;
+
+        if (result.feature) {
+          loadedFeatures[result.id] = result.feature;
+        } else if (result.error) {
+          const region = SUPPORTED_STUDY_REGIONS.find(
+            (item) => item.id === result.id
+          );
+
+          failedRegions.push(
+            `${region?.name ?? result.id}: ${result.error}`
+          );
+        }
+      }
+
+      setBoundaryFeatures(loadedFeatures);
+
+      setBoundaryError(
+        failedRegions.length > 0
+          ? `Some study-region boundaries could not be loaded:\n${failedRegions.join("\n")}`
+          : null
+      );
+    }
+
+    void loadBoundaries();
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!showGeology || !activeGeologyDataPath) {
@@ -129,6 +283,7 @@ export default function RouteMap({
       .catch(() => {
         if (!cancelled) setGeologyData(null);
       });
+
     return () => {
       cancelled = true;
     };
@@ -136,7 +291,9 @@ export default function RouteMap({
 
   useEffect(() => {
     let cancelled = false;
+
     setLayerError(null);
+
     getDataProvider(layer.provider)
       .getLayerConfig(layerId, { forceRetry: retryToken > 0 })
       .then((cfg) => {
@@ -154,10 +311,15 @@ export default function RouteMap({
           );
         }
       });
+
     return () => {
       cancelled = true;
     };
   }, [layerId, layer.provider, retryToken]);
+
+  const selectedBoundary = selectedStudyRegionId
+    ? boundaryFeatures[selectedStudyRegionId]
+    : null;
 
   return (
     <div className="mx-map relative h-full min-h-[480px] w-full overflow-hidden rounded-[10px] border border-mx-border">
@@ -182,6 +344,7 @@ export default function RouteMap({
           zoom={zoom}
           resetCounter={resetCounter}
         />
+
         <ClickCapture onAddWaypoint={onAddWaypoint} />
 
         {tileConfig && (
@@ -207,6 +370,7 @@ export default function RouteMap({
             onEachFeature={(feature, geoLayer) => {
               if (feature.properties) {
                 const p = feature.properties;
+
                 geoLayer.bindTooltip(
                   `<strong>${p.unit_code}</strong>: ${p.unit_name}<br/><span style="font-size:10px;color:#cbd5e1">${p.lithology}</span>`,
                   { sticky: true, className: "mx-site-label" }
@@ -216,12 +380,58 @@ export default function RouteMap({
           />
         )}
 
+        {/* Automatically loaded boundaries for all supported study regions */}
+        {selectedBoundary && selectedStudyRegionId && (
+          <BoundaryViewport
+            feature={selectedBoundary}
+            regionId={selectedStudyRegionId}
+          />
+        )}
+
+        {SUPPORTED_STUDY_REGIONS.map((region) => {
+          const feature = boundaryFeatures[region.id];
+
+          if (!feature) return null;
+
+          const isSelected = region.id === selectedStudyRegionId;
+
+          return (
+            <GeoJSON
+              key={`study-region-boundary-${region.id}`}
+              data={feature}
+              style={{
+                color: isSelected ? "#f4a261" : "#75b9c2",
+                weight: isSelected ? 3.5 : 2,
+                opacity: isSelected ? 1 : 0.85,
+                fill: false,
+                fillOpacity: 0,
+                dashArray: isSelected ? "7 5" : "4 6",
+              }}
+              onEachFeature={(_feature, featureLayer) => {
+                featureLayer.bindTooltip(
+                  `${region.name}${isSelected ? " — Selected study region" : " — Study region"}`,
+                  {
+                    sticky: true,
+                    className: "mx-site-label",
+                  }
+                );
+              }}
+            />
+          );
+        })}
+
         {/* Saved candidate routes */}
         {routes.map((route) => {
           const isSelected = route.id === activeRouteId;
+
           const positions = route.waypoints.map(
-            (wp) => [wp.coordinates.latitude, wp.coordinates.longitude] as [number, number]
+            (wp) =>
+              [
+                wp.coordinates.latitude,
+                wp.coordinates.longitude,
+              ] as [number, number]
           );
+
           if (positions.length < 2) return null;
 
           return (
@@ -244,7 +454,10 @@ export default function RouteMap({
           ?.waypoints.map((wp, index) => (
             <CircleMarker
               key={wp.id}
-              center={[wp.coordinates.latitude, wp.coordinates.longitude]}
+              center={[
+                wp.coordinates.latitude,
+                wp.coordinates.longitude,
+              ]}
               radius={5}
               pathOptions={{
                 color: "#f47738",
@@ -253,7 +466,11 @@ export default function RouteMap({
                 fillOpacity: 1,
               }}
             >
-              <Tooltip direction="top" offset={[0, -8]} className="mx-site-label">
+              <Tooltip
+                direction="top"
+                offset={[0, -8]}
+                className="mx-site-label"
+              >
                 {wp.name ?? `WP ${index + 1}`}
               </Tooltip>
             </CircleMarker>
@@ -264,10 +481,10 @@ export default function RouteMap({
           <Polyline
             positions={draftWaypoints.map(
               (wp) =>
-                [wp.coordinates.latitude, wp.coordinates.longitude] as [
-                  number,
-                  number,
-                ]
+                [
+                  wp.coordinates.latitude,
+                  wp.coordinates.longitude,
+                ] as [number, number]
             )}
             pathOptions={{
               color: "#93b98a",
@@ -282,7 +499,10 @@ export default function RouteMap({
           return (
             <CircleMarker
               key={wp.id}
-              center={[wp.coordinates.latitude, wp.coordinates.longitude]}
+              center={[
+                wp.coordinates.latitude,
+                wp.coordinates.longitude,
+              ]}
               radius={5}
               pathOptions={{
                 color: unit?.color || "#93b98a",
@@ -302,7 +522,10 @@ export default function RouteMap({
         {/* Starting location marker */}
         {startingLocation && (
           <CircleMarker
-            center={[startingLocation.latitude, startingLocation.longitude]}
+            center={[
+              startingLocation.latitude,
+              startingLocation.longitude,
+            ]}
             radius={7}
             pathOptions={{
               color: "#f3efea",
@@ -317,7 +540,12 @@ export default function RouteMap({
               offset={[0, -10]}
               className="mx-site-label is-active"
             >
-              Start ({formatCoordinates(startingLocation.latitude, startingLocation.longitude)})
+              Start (
+              {formatCoordinates(
+                startingLocation.latitude,
+                startingLocation.longitude
+              )}
+              )
             </Tooltip>
           </CircleMarker>
         )}
@@ -326,7 +554,10 @@ export default function RouteMap({
         {targets.map((target) => (
           <CircleMarker
             key={target.id}
-            center={[target.coordinates.latitude, target.coordinates.longitude]}
+            center={[
+              target.coordinates.latitude,
+              target.coordinates.longitude,
+            ]}
             radius={6}
             bubblingMouseEvents={false}
             eventHandlers={{
@@ -362,6 +593,7 @@ export default function RouteMap({
           >
             <Plus size={17} />
           </button>
+
           <button
             type="button"
             className="mx-icon-btn"
@@ -370,6 +602,7 @@ export default function RouteMap({
           >
             <Minus size={17} />
           </button>
+
           <button
             type="button"
             className="mx-icon-btn"
@@ -378,6 +611,7 @@ export default function RouteMap({
           >
             <Crosshair size={17} />
           </button>
+
           <button
             type="button"
             className="mx-icon-btn"
@@ -395,11 +629,14 @@ export default function RouteMap({
               <label htmlFor="route-map-layer" className="mx-label">
                 Basemap layer
               </label>
+
               <select
                 id="route-map-layer"
                 className="mx-input text-xs"
                 value={layerId}
-                onChange={(e) => setLayerId(e.target.value as MapLayerId)}
+                onChange={(e) =>
+                  setLayerId(e.target.value as MapLayerId)
+                }
               >
                 {Object.values(MAP_LAYERS).map((item) => (
                   <option key={item.id} value={item.id}>
@@ -433,6 +670,7 @@ export default function RouteMap({
           role="alert"
         >
           <span>{layerError}</span>
+
           <button
             type="button"
             onClick={() => setRetryToken((c) => c + 1)}
@@ -440,6 +678,7 @@ export default function RouteMap({
           >
             Retry
           </button>
+
           {layerId !== "mars_global_mola" && (
             <button
               type="button"
@@ -449,6 +688,18 @@ export default function RouteMap({
               Use MOLA
             </button>
           )}
+        </div>
+      )}
+
+      {boundaryError && (
+        <div
+          className="mx-map-overlay right-4 top-16 max-w-sm rounded-md border border-amber-400/50 bg-mx-bg/95 px-3 py-2 text-xs text-mx-text shadow-lg"
+          role="alert"
+        >
+          <strong>Some study-region boundaries are unavailable</strong>
+          <p className="mb-0 mt-1 whitespace-pre-line break-words">
+            {boundaryError}
+          </p>
         </div>
       )}
 

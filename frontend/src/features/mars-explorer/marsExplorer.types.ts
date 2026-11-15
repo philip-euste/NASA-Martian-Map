@@ -1,4 +1,3 @@
-
 import type { ExplorationSite } from "../../data/explorationSites";
 import type { MapLayerId } from "../../data/mapLayers";
 import type { TileLayerConfig } from "../../services/dataProviders";
@@ -7,6 +6,47 @@ import type { Coordinates, TemporalMode, TemporalState } from "../../types";
 
 export type ExplorerViewMode = "globe" | "map" | "jezero";
 export type ExplorerNavigationAction = "zoom-in" | "zoom-out" | "reset";
+
+export type StudyRegionId =
+  | "jezero"
+  | "gale"
+  | "valles-marineris"
+  | "olympus-mons";
+
+export const STUDY_REGIONS: Record<
+  StudyRegionId,
+  {
+    id: StudyRegionId;
+    name: string;
+    category: string;
+    center: Coordinates;
+  }
+> = {
+  jezero: {
+    id: "jezero",
+    name: "Jezero Crater",
+    category: "Impact Crater",
+    center: { latitude: 18.41, longitude: 77.69 },
+  },
+  gale: {
+    id: "gale",
+    name: "Gale Crater",
+    category: "Impact Crater",
+    center: { latitude: -5.44, longitude: 137.7 },
+  },
+  "valles-marineris": {
+    id: "valles-marineris",
+    name: "Valles Marineris",
+    category: "Canyon System",
+    center: { latitude: -13.74, longitude: -59.2 },
+  },
+  "olympus-mons": {
+    id: "olympus-mons",
+    name: "Olympus Mons",
+    category: "Shield Volcano",
+    center: { latitude: 18.65, longitude: -133.8 },
+  },
+};
 
 export interface SavedLocation extends Coordinates {
   id: number;
@@ -42,6 +82,9 @@ export interface MarsExplorerContextValue {
   viewMode: ExplorerViewMode;
   setViewMode: (mode: ExplorerViewMode) => void;
   transitionState: TransitionState;
+
+  selectedStudyRegionId: StudyRegionId;
+  setSelectedStudyRegionId: (regionId: StudyRegionId) => void;
 
   selectedLayerId: MapLayerId;
   setSelectedLayerId: (layerId: MapLayerId) => void;
@@ -133,10 +176,18 @@ export const JEZERO_DEFAULT_COORDINATES: Coordinates = {
 
 export function normalizeCoordinates(coordinates: Coordinates): Coordinates | null {
   const { latitude, longitude } = coordinates;
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90) {
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90
+  ) {
     return null;
   }
-  const normalizedLongitude = (((longitude + 180) % 360) + 360) % 360 - 180;
+
+  const normalizedLongitude =
+    (((longitude + 180) % 360) + 360) % 360 - 180;
+
   return {
     latitude: Number(latitude.toFixed(6)),
     longitude: Number(normalizedLongitude.toFixed(6)),
@@ -149,14 +200,18 @@ export function sameCoords(
   tolerance = 0.0001
 ): boolean {
   if (!a || !b) return false;
+
   return (
     Math.abs(a.latitude - b.latitude) <= tolerance &&
     Math.abs(a.longitude - b.longitude) <= tolerance
   );
 }
 
-export function isWithinJezeroDemBounds(coordinates: Coordinates | null | undefined): boolean {
+export function isWithinJezeroDemBounds(
+  coordinates: Coordinates | null | undefined
+): boolean {
   if (!coordinates) return false;
+
   return (
     coordinates.latitude >= JEZERO_DEM_BOUNDS.southLatDeg &&
     coordinates.latitude <= JEZERO_DEM_BOUNDS.northLatDeg &&
@@ -165,7 +220,7 @@ export function isWithinJezeroDemBounds(coordinates: Coordinates | null | undefi
   );
 }
 
-// Shared LRU cache for NASA WMTS tile images across 3D Globe and 2D Map
+// Shared LRU cache for NASA WMTS tile images across 3D Globe and 2D Map.
 const MAX_SHARED_TILE_IMAGES = 320;
 const sharedTileImageCache = new Map<string, HTMLImageElement>();
 const sharedTileInFlight = new Map<string, Promise<HTMLImageElement>>();
@@ -173,14 +228,17 @@ const sharedTileInFlight = new Map<string, Promise<HTMLImageElement>>();
 export function getCachedTileImage(url: string): HTMLImageElement | undefined {
   const image = sharedTileImageCache.get(url);
   if (!image) return undefined;
+
   sharedTileImageCache.delete(url);
   sharedTileImageCache.set(url, image);
+
   return image;
 }
 
 function storeCachedTileImage(url: string, image: HTMLImageElement): void {
   sharedTileImageCache.delete(url);
   sharedTileImageCache.set(url, image);
+
   while (sharedTileImageCache.size > MAX_SHARED_TILE_IMAGES) {
     const oldestKey = sharedTileImageCache.keys().next().value;
     if (!oldestKey) break;
@@ -197,14 +255,10 @@ export function loadCachedTileImage(
   }
 
   const cached = getCachedTileImage(url);
-  if (cached) {
-    return Promise.resolve(cached);
-  }
+  if (cached) return Promise.resolve(cached);
 
   const existing = sharedTileInFlight.get(url);
-  if (existing && !signal) {
-    return existing;
-  }
+  if (existing && !signal) return existing;
 
   const promise = new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
@@ -222,18 +276,16 @@ export function loadCachedTileImage(
     }
 
     image.onload = () => {
-      if (signal) {
-        signal.removeEventListener("abort", onAbort);
-      }
+      if (signal) signal.removeEventListener("abort", onAbort);
+
       storeCachedTileImage(url, image);
       sharedTileInFlight.delete(url);
       resolve(image);
     };
 
     image.onerror = () => {
-      if (signal) {
-        signal.removeEventListener("abort", onAbort);
-      }
+      if (signal) signal.removeEventListener("abort", onAbort);
+
       sharedTileInFlight.delete(url);
       reject(new Error(`Failed to load NASA tile: ${url}`));
     };
@@ -241,9 +293,7 @@ export function loadCachedTileImage(
     image.src = url;
   });
 
-  if (!signal) {
-    sharedTileInFlight.set(url, promise);
-  }
+  if (!signal) sharedTileInFlight.set(url, promise);
 
   return promise;
 }

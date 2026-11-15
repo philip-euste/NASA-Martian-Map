@@ -1,7 +1,7 @@
-
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -12,6 +12,7 @@ import {
   useThree,
 } from "@react-three/fiber";
 import {
+  Line,
   OrbitControls,
   Stars,
 } from "@react-three/drei";
@@ -40,6 +41,284 @@ import {
 import type { Coordinates } from "../types";
 import type { TileLayerConfig } from "../services/dataProviders";
 import "./MarsGlobe.css";
+import type { Mesh } from "three";
+import { apiUrl } from "../lib/api";
+
+type StudyRegion = {
+  readonly id: string;
+  readonly name: string;
+};
+
+const SUPPORTED_STUDY_REGIONS: readonly StudyRegion[] = [
+  { id: "jezero", name: "Jezero Crater" },
+  { id: "gale", name: "Gale Crater" },
+  { id: "valles-marineris", name: "Valles Marineris" },
+  { id: "olympus-mons", name: "Olympus Mons" },
+];
+
+type GeoJSONPosition = [number, number, ...number[]];
+
+type RegionGeometry =
+  | {
+      type: "Polygon";
+      coordinates: GeoJSONPosition[][];
+    }
+  | {
+      type: "MultiPolygon";
+      coordinates: GeoJSONPosition[][][];
+    };
+
+type RegionFeature = {
+  type: "Feature";
+  properties?: Record<string, unknown>;
+  geometry: RegionGeometry;
+};
+
+function isRegionFeature(value: unknown): value is RegionFeature {
+  if (!value || typeof value !== "object") return false;
+
+  const feature = value as Record<string, unknown>;
+
+  if (feature.type !== "Feature") return false;
+  if (!feature.geometry || typeof feature.geometry !== "object") {
+    return false;
+  }
+
+  const geometry = feature.geometry as Record<string, unknown>;
+
+  if (
+    geometry.type !== "Polygon" &&
+    geometry.type !== "MultiPolygon"
+  ) {
+    return false;
+  }
+
+  return Array.isArray(geometry.coordinates);
+}
+
+function getBoundaryRings(
+  feature: RegionFeature
+): GeoJSONPosition[][] {
+  if (feature.geometry.type === "Polygon") {
+    return feature.geometry.coordinates;
+  }
+
+  return feature.geometry.coordinates.flat();
+}
+
+const BOUNDARY_RADIUS = 1.025;
+const MAX_SEGMENT_DEG = 0.5;
+
+// GeoJSON rings are sparse (a box has 4 vertices). Joining them with straight
+// segments makes chords that dip below the sphere once an edge spans more than
+// ~25 degrees. Subdividing in lon/lat keeps every point on the sphere, and the
+// edges follow parallels and meridians like the 2D map.
+function densifyRing(ring: GeoJSONPosition[]): THREE.Vector3[] {
+  if (ring.length < 2) return [];
+
+  const out: THREE.Vector3[] = [];
+
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [lon1, lat1] = ring[i];
+    const [lon2, lat2] = ring[i + 1];
+
+    // Shortest way across the +/-180 wrap.
+    const dLon = ((lon2 - lon1 + 540) % 360) - 180;
+    const dLat = lat2 - lat1;
+
+    const n = Math.min(
+      256,
+      Math.max(
+        1,
+        Math.ceil(
+          Math.max(Math.abs(dLon), Math.abs(dLat)) / MAX_SEGMENT_DEG
+        )
+      )
+    );
+
+    for (let k = 0; k < n; k++) {
+      const t = k / n;
+      out.push(
+        coordinatesToVector(
+          lat1 + dLat * t,
+          lon1 + dLon * t,
+          BOUNDARY_RADIUS
+        )
+      );
+    }
+  }
+
+  const [lastLon, lastLat] = ring[ring.length - 1];
+  out.push(coordinatesToVector(lastLat, lastLon, BOUNDARY_RADIUS));
+
+  return out;
+}
+
+// Filled interior, matching MarsMap's region style (fill #75b9c2 @ 0.16).
+const FILL_RADIUS = 1.02; // below the outline (1.025), above the surface
+const FILL_COLOR = "#75b9c2";
+const FILL_OPACITY = 0.16;
+const FILL_STEP_DEG = 1;
+const FILL_MAX_DEPTH = 6;
+const FILL_MAX_TRIANGLES = 150_000;
+
+function getPolygons(feature: RegionFeature): GeoJSONPosition[][][] {
+  return feature.geometry.type === "Polygon"
+    ? [feature.geometry.coordinates]
+    : feature.geometry.coordinates;
+}
+
+// Triangulate in lon/lat, then 4-way subdivide each triangle until its longest
+// edge is <= FILL_STEP_DEG and lift every vertex onto the sphere. Without the
+// subdivision, a big triangle is flat and cuts through the planet just like the
+// straight outline chords did.
+function buildFillGeometry(feature: RegionFeature): THREE.BufferGeometry | null {
+  const positions: number[] = [];
+  let triangles = 0;
+
+  const strip = (ring: GeoJSONPosition[]): THREE.Vector2[] => {
+    const pts = ring.map(([lon, lat]) => new THREE.Vector2(lon, lat));
+    if (pts.length > 1 && pts[0].equals(pts[pts.length - 1])) pts.pop();
+    return pts;
+  };
+
+  const mid = (a: THREE.Vector2, b: THREE.Vector2) =>
+    new THREE.Vector2((a.x + b.x) / 2, (a.y + b.y) / 2);
+
+  const emit = (
+    a: THREE.Vector2,
+    b: THREE.Vector2,
+    c: THREE.Vector2,
+    depth: number
+  ) => {
+    const longest = Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a));
+
+    if (
+      longest <= FILL_STEP_DEG ||
+      depth >= FILL_MAX_DEPTH ||
+      triangles >= FILL_MAX_TRIANGLES
+    ) {
+      for (const v of [a, b, c]) {
+        const p = coordinatesToVector(v.y, v.x, FILL_RADIUS);
+        positions.push(p.x, p.y, p.z);
+      }
+      triangles += 1;
+      return;
+    }
+
+    const ab = mid(a, b);
+    const bc = mid(b, c);
+    const ca = mid(c, a);
+
+    emit(a, ab, ca, depth + 1);
+    emit(ab, b, bc, depth + 1);
+    emit(ca, bc, c, depth + 1);
+    emit(ab, bc, ca, depth + 1);
+  };
+
+  for (const rings of getPolygons(feature)) {
+    const [outerRing, ...holeRings] = rings;
+    if (!outerRing) continue;
+
+    const contour = strip(outerRing);
+    if (contour.length < 3) continue;
+
+    const holes = holeRings.map(strip).filter((hole) => hole.length >= 3);
+    const all = contour.concat(...holes);
+
+    for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(contour, holes)) {
+      emit(all[i], all[j], all[k], 0);
+    }
+  }
+
+  if (positions.length === 0) return null;
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(positions, 3)
+  );
+  return geometry;
+}
+
+function RegionBoundary({
+  region,
+  feature,
+  selected,
+}: {
+  region: StudyRegion;
+  feature: RegionFeature;
+  selected: boolean;
+}) {
+  const rings = useMemo(
+    () => getBoundaryRings(feature).map(densifyRing),
+    [feature]
+  );
+
+  const fillGeometry = useMemo(() => buildFillGeometry(feature), [feature]);
+
+  useEffect(() => () => fillGeometry?.dispose(), [fillGeometry]);
+
+  return (
+    <group>
+      {fillGeometry && (
+        <mesh
+          geometry={fillGeometry}
+          renderOrder={1}
+          raycast={() => null} // never block clicks on the surface underneath
+        >
+          <meshBasicMaterial
+            color={FILL_COLOR}
+            transparent
+            opacity={FILL_OPACITY}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-1}
+          />
+        </mesh>
+      )}
+
+      {rings.map((points, index) => {
+        if (points.length < 2) return null;
+
+        return (
+          <Line
+            key={`${region.id}-${index}`}
+            points={points}
+            color={selected ? "#f4a261" : "#75b9c2"}
+            lineWidth={selected ? 2.5 : 1.5}
+            dashed
+            dashSize={selected ? 0.025 : 0.018}
+            gapSize={selected ? 0.015 : 0.018}
+            transparent
+            opacity={selected ? 1 : 0.85}
+            depthWrite={false}
+            renderOrder={2}
+          />
+        );
+      })}
+    </group>
+  );
+}
+
+function RotatingMars() {
+  const marsRef = useRef<Mesh>(null);
+
+  useFrame((_, delta) => {
+    if (marsRef.current) {
+      marsRef.current.rotation.y += delta * 0.15;
+    }
+  });
+
+  return (
+    <mesh ref={marsRef}>
+      <sphereGeometry args={[1, 64, 64]} />
+      <meshStandardMaterial color="#c1440e" roughness={0.9} metalness={0} />
+    </mesh>
+  );
+}
 
 export type Location = {
   name: string;
@@ -161,6 +440,7 @@ function GlobeScene({
   selectedKind,
   selectedSiteName,
   selectedSavedId,
+  selectedStudyRegionId,
   onSelectSite,
   onSelectSaved,
   onSelectSurfacePoint,
@@ -181,6 +461,7 @@ function GlobeScene({
   selectedKind: "site" | "saved" | "custom" | null;
   selectedSiteName: string | null;
   selectedSavedId: number | null;
+  selectedStudyRegionId: string | null;
   onSelectSite: (location: Location) => void;
   onSelectSaved: (location: SavedLocation) => void;
   onSelectSurfacePoint: (coordinates: Coordinates) => void;
@@ -191,6 +472,12 @@ function GlobeScene({
   onTextureLoaded: (message: string) => void;
 }) {
   const { camera } = useThree();
+
+  const [boundaryFeatures, setBoundaryFeatures] = useState<
+    Record<string, RegionFeature>
+  >({});
+
+  const [boundaryErrors, setBoundaryErrors] = useState<string[]>([]);
 
   const flyToDirection = useRef<THREE.Vector3 | null>(null);
   const flyToDistance = useRef<number | null>(null);
@@ -214,6 +501,86 @@ function GlobeScene({
 
   latestFocusRef.current = focusCoordinates;
   latestDistanceRef.current = initialDistance;
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadBoundaries() {
+      const results = await Promise.all(
+        SUPPORTED_STUDY_REGIONS.map(async (region) => {
+          try {
+            const response = await fetch(
+              apiUrl(`/api/regions/${encodeURIComponent(region.id)}/boundary`),
+              {
+                signal: controller.signal,
+                headers: {
+                  Accept: "application/json",
+                },
+              }
+            );
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            const payload: unknown = await response.json();
+
+            if (
+              !payload ||
+              typeof payload !== "object" ||
+              !("feature" in payload) ||
+              !isRegionFeature(payload.feature)
+            ) {
+              throw new Error("Invalid GeoJSON response");
+            }
+
+            return {
+              region,
+              feature: payload.feature,
+              error: null,
+            };
+          } catch (error) {
+            if (controller.signal.aborted) return null;
+
+            return {
+              region,
+              feature: null,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Unknown error",
+            };
+          }
+        })
+      );
+
+      if (controller.signal.aborted) return;
+
+      const features: Record<string, RegionFeature> = {};
+      const errors: string[] = [];
+
+      for (const result of results) {
+        if (!result) continue;
+
+        if (result.feature) {
+          features[result.region.id] = result.feature;
+        } else if (result.error) {
+          errors.push(
+            `${result.region.name}: ${result.error}`
+          );
+        }
+      }
+
+      setBoundaryFeatures(features);
+      setBoundaryErrors(errors);
+    }
+
+    void loadBoundaries();
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -397,6 +764,24 @@ function GlobeScene({
         onTextureLoaded={onTextureLoaded}
         onSelectSurfacePoint={onSelectSurfacePoint}
       />
+
+      {SUPPORTED_STUDY_REGIONS.map((region) => {
+        const feature = boundaryFeatures[region.id];
+
+        if (!feature) return null;
+
+        const selected = selectedStudyRegionId === region.id;
+
+        return (
+          <group key={region.id}>
+            <RegionBoundary
+              region={region}
+              feature={feature}
+              selected={selected}
+            />
+          </group>
+        );
+      })}
 
       {sites.map((location) => {
         const isSelected =
@@ -769,6 +1154,9 @@ export default function MarsGlobe({
             selectedKind={selectedKind}
             selectedSiteName={selectedSiteName}
             selectedSavedId={selectedSavedId}
+            selectedStudyRegionId={
+              shared?.selectedStudyRegionId ?? "jezero"
+            }
             onSelectSite={handleSelectSite}
             onSelectSaved={handleSelectSaved}
             onSelectSurfacePoint={

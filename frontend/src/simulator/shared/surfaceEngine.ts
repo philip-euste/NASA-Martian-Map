@@ -1,16 +1,13 @@
-// frontend/src/simulator/shared/surfaceEngine.ts
-//
-// Shared Three.js + 2D Tactical Map surface simulation engine.
-//
-// Driven by a `SimulatorEnvironmentConfig` so Jezero Crater today — and Gale
-// Crater, Valles Marineris, and Olympus Mons in the future — share the same
-// first-person physics, camera projection, seamless LOD terrain streaming,
-// beacon proximity system, and edge-to-edge tactical navigation map.
-
 import * as THREE from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import type { SimulatorEnvironmentConfig } from "./environment";
 import { verticalFovForAspect } from "./projection";
+import { MAP_LAYERS } from "../../data/mapLayers";
+import type { MapLayerId } from "../../data/mapLayers";
+import { composeWmtsCanvas } from "./wmtsLayers";
+
+type BuiltinLayer = "imagery" | "hillshade" | "elevation" | "slope";
+export type SurfaceLayer = BuiltinLayer | MapLayerId;
 
 export interface Manifest {
   name: string;
@@ -29,14 +26,7 @@ export interface Manifest {
   textureSize: number;
   textures: string;
   mapImage: string;
-  proj: {
-    westLonDeg: number;
-    eastLonDeg: number;
-    northLatDeg: number;
-    southLatDeg: number;
-    radius: number;
-    latCenterDeg: number;
-  };
+  proj: { westLonDeg: number; eastLonDeg: number; northLatDeg: number; southLatDeg: number; radius: number; latCenterDeg: number };
 }
 
 interface Tile {
@@ -72,7 +62,8 @@ interface ExpeditionTargetMessage {
     | "mars-explorer:contingency"
     | "mars-explorer:modal-state"
     | "mars-explorer:toggle-map"
-    | "mars-explorer:toggle-flight";
+    | "mars-explorer:toggle-flight"
+    | "mars-explorer:set-layer";
   regionId?: string;
   name?: string;
   latitude?: number;
@@ -80,15 +71,8 @@ interface ExpeditionTargetMessage {
   withinJezeroDem?: boolean;
   withinDem?: boolean;
   open?: boolean;
-  targets?: {
-    id: string;
-    name: string;
-    latitude: number;
-    longitude: number;
-    description?: string;
-    visited?: boolean;
-    kind?: string;
-  }[];
+  layer?: SurfaceLayer;
+  targets?: { id: string; name: string; latitude: number; longitude: number; description?: string; visited?: boolean; kind?: string }[];
   contingency?: string | null;
 }
 
@@ -117,19 +101,12 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   };
 
   const LANDMARKS = envConfig.landmarks.map((lm) => ({
-    id: lm.id,
-    name: lm.name,
-    lat: lm.latitude,
-    lon: lm.longitude,
-    description: lm.description,
+    id: lm.id, name: lm.name, lat: lm.latitude, lon: lm.longitude, description: lm.description,
   }));
 
-  const $ = <T extends HTMLElement>(id: string) =>
-    document.getElementById(id) as T;
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-  if (window.parent && window.parent !== window) {
-    document.body.classList.add("hosted-visor");
-  }
+  if (window.parent && window.parent !== window) document.body.classList.add("hosted-visor");
 
   const overlay = $("overlay");
   const startBtn = $<HTMLButtonElement>("start");
@@ -152,16 +129,13 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   const mapCenterPlayer = document.getElementById("map-center-player") as HTMLButtonElement | null;
   const mapZoomLabel = document.getElementById("map-zoom-label") as HTMLElement | null;
   const openMapBtn = $<HTMLButtonElement>("open-map");
+  const layerSelect = document.getElementById("layer-select") as HTMLSelectElement | null;
+  const layerStatusEl = document.getElementById("layer-status") as HTMLElement | null;
   const creditEl = $("credit");
 
   let externalModalOpen = false;
 
-  // ------------------------------------------------------------ renderer & camera
-  const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    logarithmicDepthBuffer: true,
-    powerPreference: "high-performance",
-  });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, powerPreference: "high-performance" });
 
   const getViewportSize = () => ({
     width: Math.max(1, document.documentElement.clientWidth || window.innerWidth),
@@ -177,36 +151,19 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   const scene = new THREE.Scene();
   const nominalSkyColor = new THREE.Color(envConfig.atmosphere.skyColor);
   const dustStormSkyColor = new THREE.Color(envConfig.atmosphere.dustStorm.skyColor);
-
   scene.background = nominalSkyColor.clone();
 
-  const sceneFog = new THREE.Fog(
-    nominalSkyColor.clone(),
-    envConfig.atmosphere.fogNearMeters,
-    envConfig.atmosphere.fogFarMeters
-  );
+  const sceneFog = new THREE.Fog(nominalSkyColor.clone(), envConfig.atmosphere.fogNearMeters, envConfig.atmosphere.fogFarMeters);
   scene.fog = sceneFog;
 
   const initAspect = initVp.width / initVp.height;
-  const camera = new THREE.PerspectiveCamera(
-    verticalFovForAspect(initAspect),
-    initAspect,
-    0.4,
-    80000
-  );
-  // Use YXZ Euler order to match PointerLockControls and prevent horizon roll.
+  const camera = new THREE.PerspectiveCamera(verticalFovForAspect(initAspect), initAspect, 0.4, 80000);
   camera.rotation.order = "YXZ";
 
   scene.add(new THREE.HemisphereLight(0xf3d6bd, 0x5a3a28, 0.92));
 
   const sun = new THREE.DirectionalLight(0xfff1e0, 1.75);
-  sun.position
-    .set(
-      envConfig.atmosphere.sunDirection[0],
-      envConfig.atmosphere.sunDirection[1],
-      envConfig.atmosphere.sunDirection[2]
-    )
-    .normalize();
+  sun.position.set(envConfig.atmosphere.sunDirection[0], envConfig.atmosphere.sunDirection[1], envConfig.atmosphere.sunDirection[2]).normalize();
   scene.add(sun);
 
   const controls = new PointerLockControls(camera, renderer.domElement);
@@ -215,22 +172,14 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   controls.maxPolarAngle = Math.PI - 0.15;
 
   const MAX_DELTA = 250;
-  document.addEventListener(
-    "mousemove",
-    (ev) => {
-      if (Math.abs(ev.movementX) > MAX_DELTA || Math.abs(ev.movementY) > MAX_DELTA) {
-        ev.stopImmediatePropagation();
-      }
-    },
-    true
-  );
+  document.addEventListener("mousemove", (ev) => {
+    if (Math.abs(ev.movementX) > MAX_DELTA || Math.abs(ev.movementY) > MAX_DELTA) ev.stopImmediatePropagation();
+  }, true);
 
-  // ------------------------------------------------------------ state
   let M: Manifest;
   let overview: Uint16Array;
   let overviewTex: THREE.Texture | null = null;
   let mapImg: HTMLImageElement | null = null;
-
   const tiles: Tile[] = [];
 
   let activeLoads = 0;
@@ -243,19 +192,13 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
   let initialCameraViewSet = false;
   let baseWorldPos = new THREE.Vector3(0, 0, 0);
-  let baseLatLon = {
-    lat: LANDMARKS[0].lat,
-    lon: LANDMARKS[0].lon,
-  };
+  let baseLatLon = { lat: LANDMARKS[0].lat, lon: LANDMARKS[0].lon };
 
   const beaconGroup = new THREE.Group();
   scene.add(beaconGroup);
 
   let missionBeacons: MissionTargetBeacon[] = [];
-  let nearestBeacon: {
-    beacon: MissionTargetBeacon;
-    distMeters: number;
-  } | null = null;
+  let nearestBeacon: { beacon: MissionTargetBeacon; distMeters: number } | null = null;
 
   const player = {
     pos: new THREE.Vector3(),
@@ -270,26 +213,19 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
   const keys = new Set<string>();
 
-  // ------------------------------------------------------------ coords
   function lonLatToColRow(lon: number, lat: number) {
     const p = M.proj;
     return {
-      col:
-        ((lon - p.westLonDeg) / (p.eastLonDeg - p.westLonDeg)) * M.cols - 0.5,
-      row:
-        ((p.northLatDeg - lat) / (p.northLatDeg - p.southLatDeg)) * M.rows - 0.5,
+      col: ((lon - p.westLonDeg) / (p.eastLonDeg - p.westLonDeg)) * M.cols - 0.5,
+      row: ((p.northLatDeg - lat) / (p.northLatDeg - p.southLatDeg)) * M.rows - 0.5,
     };
   }
 
   function colRowToLonLat(col: number, row: number) {
     const p = M.proj;
     return {
-      lon:
-        p.westLonDeg +
-        ((col + 0.5) / M.cols) * (p.eastLonDeg - p.westLonDeg),
-      lat:
-        p.northLatDeg -
-        ((row + 0.5) / M.rows) * (p.northLatDeg - p.southLatDeg),
+      lon: p.westLonDeg + ((col + 0.5) / M.cols) * (p.eastLonDeg - p.westLonDeg),
+      lat: p.northLatDeg - ((row + 0.5) / M.rows) * (p.northLatDeg - p.southLatDeg),
     };
   }
 
@@ -301,15 +237,9 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   function isLonLatInsideManifest(lon: number, lat: number): boolean {
     if (!M) return false;
     const p = M.proj;
-    return (
-      lon >= p.westLonDeg &&
-      lon <= p.eastLonDeg &&
-      lat >= p.southLatDeg &&
-      lat <= p.northLatDeg
-    );
+    return lon >= p.westLonDeg && lon <= p.eastLonDeg && lat >= p.southLatDeg && lat <= p.northLatDeg;
   }
 
-  // ------------------------------------------------------------ height & slope sampling
   function overviewH(oc: number, or: number) {
     const o = M.overview;
     const maxOc = Math.min(o.cols - 1, Math.floor(validColMax / o.step));
@@ -329,10 +259,8 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const r0 = Math.floor(fr);
     const ax = fc - c0;
     const ay = fr - r0;
-    return (
-      (overviewH(c0, r0) * (1 - ax) + overviewH(c0 + 1, r0) * ax) * (1 - ay) +
-      (overviewH(c0, r0 + 1) * (1 - ax) + overviewH(c0 + 1, r0 + 1) * ax) * ay
-    );
+    return (overviewH(c0, r0) * (1 - ax) + overviewH(c0 + 1, r0) * ax) * (1 - ay) +
+      (overviewH(c0, r0 + 1) * (1 - ax) + overviewH(c0 + 1, r0 + 1) * ax) * ay;
   }
 
   function sampleQ(col: number, row: number): number {
@@ -349,28 +277,21 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       const lr = row - ty * T;
       if (lc >= 0 && lc <= T && lr >= 0 && lr <= T) {
         const i = lr * (T + 1) + lc;
-        if (i >= 0 && i < t.full.length) {
-          return t.full[i];
-        }
+        if (i >= 0 && i < t.full.length) return t.full[i];
       }
     }
-
     return sampleOverviewBilinear(col, row);
   }
 
   function groundY(x: number, z: number): number {
     const c = Math.min(Math.max(xToCol(x), validColMin), validColMax);
     const r = Math.min(Math.max(zToRow(z), validRowMin), validRowMax);
-
     const c0 = Math.floor(c);
     const r0 = Math.floor(r);
     const ax = c - c0;
     const ay = r - r0;
-
-    const q =
-      (sampleQ(c0, r0) * (1 - ax) + sampleQ(c0 + 1, r0) * ax) * (1 - ay) +
+    const q = (sampleQ(c0, r0) * (1 - ax) + sampleQ(c0 + 1, r0) * ax) * (1 - ay) +
       (sampleQ(c0, r0 + 1) * (1 - ax) + sampleQ(c0 + 1, r0 + 1) * ax) * ay;
-
     return q * M.heightScale;
   }
 
@@ -380,11 +301,9 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const hx0 = groundY(x - step, z);
     const hz1 = groundY(x, z + step);
     const hz0 = groundY(x, z - step);
-
     const dIdx = (hx1 - hx0) / (2 * step);
     const dIdz = (hz1 - hz0) / (2 * step);
     const grad = Math.hypot(dIdx, dIdz);
-
     return (Math.atan(grad) * 180) / Math.PI;
   }
 
@@ -393,32 +312,23 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
    * adjacent tiles share identical normals across tile boundaries regardless
    * of tile boundaries or LOD transitions.
    */
-  function computeAnalyticalNormal(
-    col: number,
-    row: number,
-    out: Float32Array,
-    offset: number
-  ) {
+  function computeAnalyticalNormal(col: number, row: number, out: Float32Array, offset: number) {
     const delta = 4;
     const hR = sampleQ(col + delta, row) * M.heightScale;
     const hL = sampleQ(col - delta, row) * M.heightScale;
     const hD = sampleQ(col, row + delta) * M.heightScale;
     const hU = sampleQ(col, row - delta) * M.heightScale;
-
     const dx = (hR - hL) / (2 * delta * M.cellX);
     const dz = (hD - hU) / (2 * delta * M.cellZ);
-
     const nx = -dx;
     const ny = 1.0;
     const nz = -dz;
     const invLen = 1.0 / Math.hypot(nx, ny, nz);
-
     out[offset] = nx * invLen;
     out[offset + 1] = ny * invLen;
     out[offset + 2] = nz * invLen;
   }
 
-  // ------------------------------------------------------------ 3D Beacons
   function createBeaconMesh(isBase: boolean, visited: boolean): THREE.Group {
     const g = new THREE.Group();
     const primaryColor = isBase ? 0x38bdf8 : visited ? 0x93b98a : 0xf47738;
@@ -430,15 +340,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       pad.position.y = 0.4;
       g.add(pad);
 
-      const domeGeo = new THREE.SphereGeometry(
-        4.2,
-        16,
-        12,
-        0,
-        Math.PI * 2,
-        0,
-        Math.PI / 2
-      );
+      const domeGeo = new THREE.SphereGeometry(4.2, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
       const domeMat = new THREE.MeshLambertMaterial({ color: 0xe5e0d8 });
       const dome = new THREE.Mesh(domeGeo, domeMat);
       dome.position.y = 0.8;
@@ -451,121 +353,66 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       g.add(baseMesh);
     }
 
-    const beamGeo = new THREE.CylinderGeometry(
-      0.45,
-      0.45,
-      isBase ? 180 : 120,
-      8
-    );
-    const beamMat = new THREE.MeshBasicMaterial({
-      color: primaryColor,
-      transparent: true,
-      opacity: 0.38,
-      depthWrite: false,
-    });
-
+    const beamGeo = new THREE.CylinderGeometry(0.45, 0.45, isBase ? 180 : 120, 8);
+    const beamMat = new THREE.MeshBasicMaterial({ color: primaryColor, transparent: true, opacity: 0.38, depthWrite: false });
     const beam = new THREE.Mesh(beamGeo, beamMat);
     beam.position.y = isBase ? 90 : 60;
     g.add(beam);
-
     return g;
   }
 
   function rebuildBeacons(customTargets?: MissionTargetBeacon[]) {
     if (!M) return;
+    while (beaconGroup.children.length > 0) beaconGroup.remove(beaconGroup.children[0]);
 
-    while (beaconGroup.children.length > 0) {
-      const child = beaconGroup.children[0];
-      beaconGroup.remove(child);
-    }
-
-    const list: MissionTargetBeacon[] = [
-      {
-        id: "habitat-base",
-        name: "Habitat / Rover Base Station",
-        lat: baseLatLon.lat,
-        lon: baseLatLon.lon,
-        description: "Primary EVA deployment and return base.",
-        isBase: true,
-      },
-    ];
+    const list: MissionTargetBeacon[] = [{
+      id: "habitat-base",
+      name: "Habitat / Rover Base Station",
+      lat: baseLatLon.lat,
+      lon: baseLatLon.lon,
+      description: "Primary EVA deployment and return base.",
+      isBase: true,
+    }];
 
     if (customTargets && customTargets.length > 0) {
-      for (const t of customTargets) {
-        list.push(t);
-      }
+      for (const t of customTargets) list.push(t);
     } else {
       for (const lm of LANDMARKS.slice(1)) {
-        list.push({
-          id: lm.id,
-          name: lm.name,
-          lat: lm.lat,
-          lon: lm.lon,
-          description: lm.description,
-          visited: false,
-        });
+        list.push({ id: lm.id, name: lm.name, lat: lm.lat, lon: lm.lon, description: lm.description, visited: false });
       }
     }
 
     missionBeacons = list.map((b) => {
       const inside = isLonLatInsideManifest(b.lon, b.lat);
-      const coords = inside
-        ? lonLatToColRow(b.lon, b.lat)
-        : lonLatToColRow(baseLatLon.lon + 0.012, baseLatLon.lat + 0.008);
-
+      const coords = inside ? lonLatToColRow(b.lon, b.lat) : lonLatToColRow(baseLatLon.lon + 0.012, baseLatLon.lat + 0.008);
       const clampedCol = Math.min(Math.max(coords.col, validColMin), validColMax);
       const clampedRow = Math.min(Math.max(coords.row, validRowMin), validRowMax);
       const wx = colToX(clampedCol);
       const wz = rowToZ(clampedRow);
       const wy = groundY(wx, wz);
-
       const meshGroup = createBeaconMesh(Boolean(b.isBase), Boolean(b.visited));
       meshGroup.position.set(wx, wy, wz);
       beaconGroup.add(meshGroup);
-
-      return {
-        ...b,
-        group: meshGroup,
-      };
+      return { ...b, group: meshGroup };
     });
   }
 
   function updateBeaconsHeightAndProximity() {
     if (!M || missionBeacons.length === 0) return;
 
-    let closest: {
-      beacon: MissionTargetBeacon;
-      distMeters: number;
-    } | null = null;
+    let closest: { beacon: MissionTargetBeacon; distMeters: number } | null = null;
 
     for (const b of missionBeacons) {
       if (!b.group) continue;
-
       b.group.position.y = groundY(b.group.position.x, b.group.position.z);
+      const dist = Math.hypot(player.pos.x - b.group.position.x, player.pos.z - b.group.position.z);
 
-      const dist = Math.hypot(
-        player.pos.x - b.group.position.x,
-        player.pos.z - b.group.position.z
-      );
-
-      if (!closest || dist < closest.distMeters) {
-        closest = {
-          beacon: b,
-          distMeters: dist,
-        };
-      }
+      if (!closest || dist < closest.distMeters) closest = { beacon: b, distMeters: dist };
 
       if (!b.isBase && !b.visited && dist <= 45) {
         b.visited = true;
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage(
-            {
-              type: "marswalk:visit-target",
-              targetId: b.id,
-              name: b.name,
-            },
-            "*"
-          );
+          window.parent.postMessage({ type: "marswalk:visit-target", targetId: b.id, name: b.name }, "*");
         }
       }
     }
@@ -575,26 +422,93 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     if (closest && closest.distMeters <= 85) {
       proximityEl.classList.remove("hidden");
       if (closest.beacon.isBase) {
-        proximityEl.innerHTML =
-          `<strong>${closest.beacon.name}</strong> ` +
-          `(${Math.round(closest.distMeters)} m) · ` +
-          `Press <strong>[R]</strong> to Complete EVA Return`;
+        proximityEl.innerHTML = `<strong>${closest.beacon.name}</strong> (${Math.round(closest.distMeters)} m) · Press <strong>[R]</strong> to Complete EVA Return`;
       } else {
-        proximityEl.innerHTML =
-          `Approaching <strong>${closest.beacon.name}</strong> ` +
-          `(${Math.round(closest.distMeters)} m) · ` +
-          `Press <strong>[E]</strong> to Open Fieldwork &amp; Sampling`;
+        proximityEl.innerHTML = `Approaching <strong>${closest.beacon.name}</strong> (${Math.round(closest.distMeters)} m) · Press <strong>[E]</strong> to Open Fieldwork &amp; Sampling`;
       }
     } else {
       proximityEl.classList.add("hidden");
     }
   }
 
-  // ------------------------------------------------------------ meshing
-  function getTileStep(tx: number, ty: number): number {
-    if (tx < 0 || ty < 0 || tx >= M.tilesX || ty >= M.tilesY) {
-      return CONFIG.farStep;
+  const BUILTIN_LABEL: Record<BuiltinLayer, string> = {
+    imagery: "CTX Imagery (ortho)",
+    hillshade: "Hillshade",
+    elevation: "Elevation ramp",
+    slope: "Slope",
+  };
+
+  const MAP_LAYER_IDS = Object.keys(MAP_LAYERS) as MapLayerId[];
+  const LAYER_ORDER: SurfaceLayer[] = [...(Object.keys(BUILTIN_LABEL) as BuiltinLayer[]), ...MAP_LAYER_IDS];
+  const isMapLayer = (l: SurfaceLayer): l is MapLayerId => l in MAP_LAYERS;
+  const layerLabel = (l: SurfaceLayer) => isMapLayer(l) ? MAP_LAYERS[l].name : BUILTIN_LABEL[l];
+  let surfaceLayer: SurfaceLayer = "imagery";
+
+  // WMTS layer materials: one shared material per layer, textured with a
+  // region-wide canvas composited from NASA Trek tiles (see wmtsLayers.ts).
+  const MAX_CACHED_WMTS = 4;
+  const wmtsMats = new Map<MapLayerId, THREE.Material>();
+  const wmtsPending = new Map<MapLayerId, Promise<THREE.Material>>();
+  const wmtsOrder: MapLayerId[] = [];
+  const wmtsInfo = new Map<MapLayerId, string>();
+  const sharedWmtsMats = new Set<THREE.Material>();
+
+  // THREE.Color(hex) converts to the linear working space, so lerping here is
+  // correct for vertexColors.
+  const ELEV_STOPS = [0x2b3a67, 0x3f8f8a, 0xc9b458, 0xb5683a, 0xf2ede6].map((h) => new THREE.Color(h));
+  const SLOPE_STOPS = [0x3d7a4a, 0xd9a441, 0xc2362b, 0x6b1a2e].map((h) => new THREE.Color(h));
+  const RAD2DEG = 180 / Math.PI;
+
+  function lerpStops(stops: THREE.Color[], i: number, f: number, out: Float32Array, o: number) {
+    const a = stops[i];
+    const b = stops[i + 1];
+    out[o] = a.r + (b.r - a.r) * f;
+    out[o + 1] = a.g + (b.g - a.g) * f;
+    out[o + 2] = a.b + (b.b - a.b) * f;
+  }
+
+  function elevColor(t: number, out: Float32Array, o: number) {
+    const x = Math.min(Math.max(t, 0), 1) * (ELEV_STOPS.length - 1);
+    const i = Math.min(Math.floor(x), ELEV_STOPS.length - 2);
+    lerpStops(ELEV_STOPS, i, x - i, out, o);
+  }
+
+  // Knots follow the environment's hazard thresholds so colours match the HUD
+  // classes. Assumes 0 < slopeCautionDeg < slopeHazardDeg.
+  const SLOPE_KNOTS = [0, envConfig.hazards.slopeCautionDeg, envConfig.hazards.slopeHazardDeg, envConfig.hazards.slopeHazardDeg * 1.5];
+
+  function slopeColor(deg: number, out: Float32Array, o: number) {
+    let i = 0;
+    while (i < 2 && deg > SLOPE_KNOTS[i + 1]) i++;
+    const f = Math.min(Math.max((deg - SLOPE_KNOTS[i]) / (SLOPE_KNOTS[i + 1] - SLOPE_KNOTS[i]), 0), 1);
+    lerpStops(SLOPE_STOPS, i, f, out, o);
+  }
+
+  const fallbackMat = new THREE.MeshLambertMaterial({ color: CONFIG.marsTint });
+  const vcMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  let overviewMat: THREE.MeshLambertMaterial = fallbackMat;
+
+  function pickMaterial(t: Tile): THREE.Material {
+    if (isMapLayer(surfaceLayer)) return wmtsMats.get(surfaceLayer) ?? fallbackMat;
+    switch (surfaceLayer) {
+      case "hillshade": return fallbackMat;
+      case "elevation":
+      case "slope": return vcMat;
+      default: return t.tex ? new THREE.MeshLambertMaterial({ map: t.tex, color: CONFIG.marsTint }) : overviewMat;
     }
+  }
+
+  const isSharedMat = (m: THREE.Material) => m === overviewMat || m === fallbackMat || m === vcMat || sharedWmtsMats.has(m);
+
+  // Colour ramp attribute and UV set both depend on the active layer.
+  // uvImg: per-tile ortho UVs. uvGeo: whole-manifest lon/lat UVs for WMTS canvases.
+  function bindLayerAttrs(geo: THREE.BufferGeometry) {
+    geo.setAttribute("color", geo.getAttribute(surfaceLayer === "slope" ? "colorSlope" : "colorElev"));
+    geo.setAttribute("uv", geo.getAttribute(isMapLayer(surfaceLayer) ? "uvGeo" : "uvImg"));
+  }
+
+  function getTileStep(tx: number, ty: number): number {
+    if (tx < 0 || ty < 0 || tx >= M.tilesX || ty >= M.tilesY) return CONFIG.farStep;
     const t = tiles[ty * M.tilesX + tx];
     if (!t || t.lod < 0) return CONFIG.farStep;
     return CONFIG.lodSteps[t.lod] ?? CONFIG.farStep;
@@ -619,58 +533,64 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
    *    continuous across tile boundaries.
    * 4. Places vertical skirts only on the outer perimeter of the DEM domain,
    *    eliminating interior skirt Z-fighting lines at shallow viewing angles.
+   * 5. Bakes elevation and slope colour attributes so layer switching only
+   *    swaps a material / attribute binding and never rebuilds geometry.
    */
   function buildTileGeometry(t: Tile, step: number): THREE.BufferGeometry {
     const T = M.tileSize;
     const n = T / step + 1;
-
     const c0 = t.tx * T;
     const r0 = t.ty * T;
-
     const isOuterWest = t.tx === 0;
     const isOuterEast = t.tx === M.tilesX - 1;
     const isOuterNorth = t.ty === 0;
     const isOuterSouth = t.ty === M.tilesY - 1;
-
     const outerEdges: number[][] = [];
-    if (isOuterNorth) {
-      outerEdges.push(Array.from({ length: n }, (_, j) => j));
-    }
-    if (isOuterSouth) {
-      outerEdges.push(Array.from({ length: n }, (_, j) => (n - 1) * n + (n - 1 - j)));
-    }
-    if (isOuterWest) {
-      outerEdges.push(Array.from({ length: n }, (_, i) => (n - 1 - i) * n));
-    }
-    if (isOuterEast) {
-      outerEdges.push(Array.from({ length: n }, (_, i) => i * n + n - 1));
-    }
+
+    if (isOuterNorth) outerEdges.push(Array.from({ length: n }, (_, j) => j));
+    if (isOuterSouth) outerEdges.push(Array.from({ length: n }, (_, j) => (n - 1) * n + (n - 1 - j)));
+    if (isOuterWest) outerEdges.push(Array.from({ length: n }, (_, i) => (n - 1 - i) * n));
+    if (isOuterEast) outerEdges.push(Array.from({ length: n }, (_, i) => i * n + n - 1));
 
     const vCount = n * n + outerEdges.length * 2 * n;
     const pos = new Float32Array(vCount * 3);
     const norm = new Float32Array(vCount * 3);
     const uv = new Float32Array(vCount * 2);
+    const uvG = new Float32Array(vCount * 2);
+    const colE = new Float32Array(vCount * 3);
+    const colS = new Float32Array(vCount * 3);
     const idx: number[] = [];
+
+    const copyColors = (dst: number, src: number) => {
+      for (let c = 0; c < 3; c++) {
+        colE[dst * 3 + c] = colE[src * 3 + c];
+        colS[dst * 3 + c] = colS[src * 3 + c];
+      }
+      uvG[dst * 2] = uvG[src * 2];
+      uvG[dst * 2 + 1] = uvG[src * 2 + 1];
+    };
 
     const useTile = !!t.tex;
     const halfTexel = useTile ? 0.5 / Math.max(256, M.textureSize) : 0;
     const hs = M.heightScale;
+    const hRange = Math.max(1e-6, M.heightMax - M.heightMin);
 
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         const k = i * n + j;
-
         const rawCol = c0 + j * step;
         const rawRow = r0 + i * step;
-
         const col = Math.min(Math.max(rawCol, validColMin), validColMax);
         const row = Math.min(Math.max(rawRow, validRowMin), validRowMax);
 
         pos[k * 3] = colToX(col);
         pos[k * 3 + 1] = sampleQ(col, row) * hs;
         pos[k * 3 + 2] = rowToZ(row);
-
         computeAnalyticalNormal(col, row, norm, k * 3);
+        elevColor(pos[k * 3 + 1] / hRange, colE, k * 3);
+        slopeColor(Math.acos(Math.min(1, norm[k * 3 + 1])) * RAD2DEG, colS, k * 3);
+        uvG[k * 2] = (col + 0.5) / M.cols;
+        uvG[k * 2 + 1] = 1 - (row + 0.5) / M.rows;
 
         if (useTile) {
           const fracU = (col - c0) / T;
@@ -718,18 +638,10 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       }
     };
 
-    if (!isOuterNorth) {
-      stitchRowEdge(0, Math.max(step, getTileStep(t.tx, t.ty - 1)));
-    }
-    if (!isOuterSouth) {
-      stitchRowEdge(n - 1, Math.max(step, getTileStep(t.tx, t.ty + 1)));
-    }
-    if (!isOuterWest) {
-      stitchColEdge(0, Math.max(step, getTileStep(t.tx - 1, t.ty)));
-    }
-    if (!isOuterEast) {
-      stitchColEdge(n - 1, Math.max(step, getTileStep(t.tx + 1, t.ty)));
-    }
+    if (!isOuterNorth) stitchRowEdge(0, Math.max(step, getTileStep(t.tx, t.ty - 1)));
+    if (!isOuterSouth) stitchRowEdge(n - 1, Math.max(step, getTileStep(t.tx, t.ty + 1)));
+    if (!isOuterWest) stitchColEdge(0, Math.max(step, getTileStep(t.tx - 1, t.ty)));
+    if (!isOuterEast) stitchColEdge(n - 1, Math.max(step, getTileStep(t.tx + 1, t.ty)));
 
     for (let i = 0; i < n - 1; i++) {
       for (let j = 0; j < n - 1; j++) {
@@ -754,8 +666,10 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         norm[sk * 3 + 2] = norm[g * 3 + 2];
         uv[sk * 2] = uv[g * 2];
         uv[sk * 2 + 1] = uv[g * 2 + 1];
+        copyColors(sk, g);
         sk++;
       }
+
       const botBase = sk;
       for (const g of e) {
         pos[sk * 3] = pos[g * 3];
@@ -766,6 +680,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         norm[sk * 3 + 2] = norm[g * 3 + 2];
         uv[sk * 2] = uv[g * 2];
         uv[sk * 2 + 1] = uv[g * 2 + 1];
+        copyColors(sk, g);
         sk++;
       }
 
@@ -781,18 +696,15 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     geo.setAttribute("normal", new THREE.BufferAttribute(norm, 3));
-    geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    geo.setAttribute("uvImg", new THREE.BufferAttribute(uv, 2));
+    geo.setAttribute("uvGeo", new THREE.BufferAttribute(uvG, 2));
+    geo.setAttribute("colorElev", new THREE.BufferAttribute(colE, 3));
+    geo.setAttribute("colorSlope", new THREE.BufferAttribute(colS, 3));
+    bindLayerAttrs(geo);
     geo.setIndex(idx);
     geo.computeBoundingSphere();
-
     return geo;
   }
-
-  const fallbackMat = new THREE.MeshLambertMaterial({
-    color: CONFIG.marsTint,
-  });
-
-  let overviewMat: THREE.MeshLambertMaterial = fallbackMat;
 
   function setTileMesh(t: Tile, lod: number) {
     const step = lod < 0 ? CONFIG.farStep : CONFIG.lodSteps[lod];
@@ -800,35 +712,19 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const texKey = useTile ? "t" : "o";
     const edgeKey = getNeighbourEdgeSignature(t, step);
 
-    if (
-      t.mesh &&
-      t.lod === lod &&
-      t.texKey === texKey &&
-      t.edgeKey === edgeKey
-    ) {
-      return;
-    }
+    if (t.mesh && t.lod === lod && t.texKey === texKey && t.edgeKey === edgeKey) return;
 
     t.lod = lod;
     t.texKey = texKey;
     t.edgeKey = edgeKey;
 
     const geo = buildTileGeometry(t, step);
-
-    let mat: THREE.Material = overviewMat;
-    if (t.tex) {
-      mat = new THREE.MeshLambertMaterial({
-        map: t.tex,
-        color: CONFIG.marsTint,
-      });
-    }
+    const mat = pickMaterial(t);
 
     if (t.mesh) {
       t.mesh.geometry.dispose();
       const old = t.mesh.material as THREE.Material;
-      if (old !== overviewMat && old !== fallbackMat && old !== mat) {
-        old.dispose();
-      }
+      if (!isSharedMat(old) && old !== mat) old.dispose();
       t.mesh.geometry = geo;
       t.mesh.material = mat;
     } else {
@@ -838,33 +734,166 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     }
   }
 
-  // ------------------------------------------------------------ loading
+  function applyLayerToTiles() {
+    for (const t of tiles) {
+      if (!t.mesh) continue;
+      const old = t.mesh.material as THREE.Material;
+      const mat = pickMaterial(t);
+      t.mesh.material = mat;
+      if (!isSharedMat(old) && old !== mat) old.dispose();
+      bindLayerAttrs(t.mesh.geometry);
+    }
+  }
+
+  function disposeWmtsLayer(id: MapLayerId) {
+    const mat = wmtsMats.get(id) as THREE.MeshLambertMaterial | undefined;
+    if (!mat) return;
+    mat.map?.dispose();
+    mat.dispose();
+    sharedWmtsMats.delete(mat);
+    wmtsMats.delete(id);
+    wmtsInfo.delete(id);
+  }
+
+  function ensureMapLayerMaterial(id: MapLayerId): Promise<THREE.Material> {
+    const hit = wmtsMats.get(id);
+    if (hit) return Promise.resolve(hit);
+    let p = wmtsPending.get(id);
+
+    if (!p) {
+      p = composeWmtsCanvas(id, {
+        westLonDeg: M.proj.westLonDeg,
+        eastLonDeg: M.proj.eastLonDeg,
+        southLatDeg: M.proj.southLatDeg,
+        northLatDeg: M.proj.northLatDeg,
+        radius: M.proj.radius,
+      }, { maxPx: Math.min(4096, renderer.capabilities.maxTextureSize) })
+        .then((res) => {
+          const tex = new THREE.CanvasTexture(res.canvas);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+          tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+          tex.needsUpdate = true;
+
+          // Lit like the terrain; white so data colours are not tinted.
+          const mat = new THREE.MeshLambertMaterial({ map: tex });
+          wmtsMats.set(id, mat);
+          sharedWmtsMats.add(mat);
+          wmtsInfo.set(id, `${res.metersPerPixel.toFixed(res.metersPerPixel < 10 ? 1 : 0)} m/px · ${res.loaded}/${res.total} tiles`);
+          wmtsOrder.push(id);
+
+          while (wmtsOrder.length > MAX_CACHED_WMTS) {
+            const vi = wmtsOrder.findIndex((v) => v !== surfaceLayer && v !== id);
+            if (vi < 0) break;
+            disposeWmtsLayer(wmtsOrder.splice(vi, 1)[0]);
+          }
+          return mat as THREE.Material;
+        })
+        .finally(() => wmtsPending.delete(id));
+      wmtsPending.set(id, p);
+    }
+    return p;
+  }
+
+  function setLayerStatus(layer: SurfaceLayer, state: "loading" | "ready" | "error", err?: string) {
+    const label = layerLabel(layer);
+    const text = state === "loading"
+      ? `Loading ${label}…`
+      : state === "error"
+        ? `${label}: ${err ?? "failed"}`
+        : isMapLayer(layer)
+          ? `${label} · ${wmtsInfo.get(layer) ?? ""}`
+          : label;
+
+    if (layerStatusEl) layerStatusEl.textContent = text;
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "marswalk:layer-status", layer, state, message: text }, "*");
+    }
+  }
+
+  let layerToken = 0;
+
+  function setSurfaceLayer(layer: SurfaceLayer) {
+    surfaceLayer = layer;
+    const token = ++layerToken;
+    if (layerSelect) layerSelect.value = layer;
+    applyLayerToTiles();
+
+    if (isMapLayer(layer) && M) {
+      setLayerStatus(layer, "loading");
+      ensureMapLayerMaterial(layer)
+        .then(() => {
+          if (token !== layerToken) return;
+          applyLayerToTiles();
+          setLayerStatus(layer, "ready");
+        })
+        .catch((e: unknown) => {
+          if (token !== layerToken) return;
+          console.warn("[wmts] layer failed", layer, e);
+          setLayerStatus(layer, "error", e instanceof Error ? e.message : String(e));
+        });
+    } else {
+      setLayerStatus(layer, "ready");
+    }
+    emitTelemetrySync();
+  }
+
+  function cycleSurfaceLayer() {
+    setSurfaceLayer(LAYER_ORDER[(LAYER_ORDER.indexOf(surfaceLayer) + 1) % LAYER_ORDER.length]);
+  }
+
+  function populateLayerSelect() {
+    if (!layerSelect) return;
+
+    const group = (label: string, items: { id: string; name: string; title?: string }[]) => {
+      const g = document.createElement("optgroup");
+      g.label = label;
+      for (const it of items) {
+        const o = document.createElement("option");
+        o.value = it.id;
+        o.textContent = it.name;
+        if (it.title) o.title = it.title;
+        g.appendChild(o);
+      }
+      layerSelect.appendChild(g);
+    };
+
+    group("Terrain", (Object.keys(BUILTIN_LABEL) as BuiltinLayer[]).map((id) => ({ id, name: BUILTIN_LABEL[id] })));
+
+    const byCat = new Map<string, { id: string; name: string; title: string }[]>();
+    for (const l of Object.values(MAP_LAYERS)) {
+      const arr = byCat.get(l.category) ?? [];
+      arr.push({ id: l.id, name: l.name, title: l.description });
+      byCat.set(l.category, arr);
+    }
+    for (const [cat, items] of byCat) group(`NASA Trek · ${cat}`, items);
+
+    layerSelect.value = surfaceLayer;
+    layerSelect.addEventListener("change", () => {
+      setSurfaceLayer(layerSelect.value as SurfaceLayer);
+      layerSelect.blur();
+    });
+  }
+
+  populateLayerSelect();
+
   async function fetchBuffer(url: string) {
     const r = await fetch(url);
-    if (!r.ok) {
-      throw new Error(`${r.status} ${url}`);
-    }
+    if (!r.ok) throw new Error(`${r.status} ${url}`);
     return r.arrayBuffer();
   }
 
   const texLoader = new THREE.TextureLoader();
 
   function loadTexture(url: string): Promise<THREE.Texture> {
-    return new Promise((res, rej) =>
-      texLoader.load(
-        url,
-        (tx) => {
-          tx.colorSpace = THREE.SRGBColorSpace;
-          tx.anisotropy = renderer.capabilities.getMaxAnisotropy();
-          tx.wrapS = tx.wrapT = THREE.ClampToEdgeWrapping;
-          tx.minFilter = THREE.LinearMipmapLinearFilter;
-          tx.magFilter = THREE.LinearFilter;
-          res(tx);
-        },
-        undefined,
-        rej
-      )
-    );
+    return new Promise((res, rej) => texLoader.load(url, (tx) => {
+      tx.colorSpace = THREE.SRGBColorSpace;
+      tx.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      tx.wrapS = tx.wrapT = THREE.ClampToEdgeWrapping;
+      tx.minFilter = THREE.LinearMipmapLinearFilter;
+      tx.magFilter = THREE.LinearFilter;
+      res(tx);
+    }, undefined, rej));
   }
 
   function tileDistance(t: Tile, x: number, z: number) {
@@ -879,9 +908,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   }
 
   function requestFull(t: Tile) {
-    if (t.full || t.loading || activeLoads >= CONFIG.maxConcurrentLoads) {
-      return;
-    }
+    if (t.full || t.loading || activeLoads >= CONFIG.maxConcurrentLoads) return;
     t.loading = true;
     activeLoads++;
 
@@ -898,16 +925,8 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   }
 
   function requestTex(t: Tile) {
-    if (
-      t.tex ||
-      t.texLoading ||
-      M.textures[t.ty * M.tilesX + t.tx] !== "1"
-    ) {
-      return;
-    }
-    if (activeLoads >= CONFIG.maxConcurrentLoads) {
-      return;
-    }
+    if (t.tex || t.texLoading || M.textures[t.ty * M.tilesX + t.tx] !== "1") return;
+    if (activeLoads >= CONFIG.maxConcurrentLoads) return;
     t.texLoading = true;
     activeLoads++;
 
@@ -928,13 +947,9 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       for (let dx = -1; dx <= 1; dx++) {
         const nx = t.tx + dx;
         const ny = t.ty + dy;
-        if (nx < 0 || ny < 0 || nx >= M.tilesX || ny >= M.tilesY) {
-          continue;
-        }
+        if (nx < 0 || ny < 0 || nx >= M.tilesX || ny >= M.tilesY) continue;
         const n = tiles[ny * M.tilesX + nx];
-        if (n.mesh) {
-          setTileMesh(n, n.lod);
-        }
+        if (n.mesh) setTileMesh(n, n.lod);
       }
     }
   }
@@ -949,44 +964,28 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     rebuildNeighbourhood(t);
   }
 
-  // ------------------------------------------------------------ streaming
   let lastStreamTile = "";
   let streamTimer = 0;
 
   function updateStreaming(dt: number) {
     streamTimer -= dt;
-
     const T = M.tileSize;
     const ptx = Math.floor(xToCol(player.pos.x) / T);
     const pty = Math.floor(zToRow(player.pos.z) / T);
     const key = `${ptx},${pty}`;
 
-    if (streamTimer > 0 && key === lastStreamTile) {
-      return;
-    }
-
+    if (streamTimer > 0 && key === lastStreamTile) return;
     streamTimer = 0.5;
     lastStreamTile = key;
 
-    const order = [...tiles].sort(
-      (a, b) =>
-        tileDistance(a, player.pos.x, player.pos.z) -
-        tileDistance(b, player.pos.x, player.pos.z)
-    );
-
+    const order = [...tiles].sort((a, b) => tileDistance(a, player.pos.x, player.pos.z) - tileDistance(b, player.pos.x, player.pos.z));
     let full = 0;
     const changedTiles: Tile[] = [];
 
     for (const t of order) {
       const d = tileDistance(t, player.pos.x, player.pos.z);
-
-      const near =
-        Math.abs(t.tx - ptx) <= CONFIG.nearTileRadius &&
-        Math.abs(t.ty - pty) <= CONFIG.nearTileRadius;
-
-      const keep =
-        Math.abs(t.tx - ptx) <= CONFIG.nearTileRadius + 1 &&
-        Math.abs(t.ty - pty) <= CONFIG.nearTileRadius + 1;
+      const near = Math.abs(t.tx - ptx) <= CONFIG.nearTileRadius && Math.abs(t.ty - pty) <= CONFIG.nearTileRadius;
+      const keep = Math.abs(t.tx - ptx) <= CONFIG.nearTileRadius + 1 && Math.abs(t.ty - pty) <= CONFIG.nearTileRadius + 1;
 
       if (near) {
         requestFull(t);
@@ -995,9 +994,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         unloadTile(t);
       }
 
-      if (t.full) {
-        full++;
-      }
+      if (t.full) full++;
 
       let lod = -1;
       if (t.full) {
@@ -1023,71 +1020,49 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
           for (let dx = -1; dx <= 1; dx++) {
             const nx = ct.tx + dx;
             const ny = ct.ty + dy;
-            if (nx >= 0 && ny >= 0 && nx < M.tilesX && ny < M.tilesY) {
-              rebuildSet.add(tiles[ny * M.tilesX + nx]);
-            }
+            if (nx >= 0 && ny >= 0 && nx < M.tilesX && ny < M.tilesY) rebuildSet.add(tiles[ny * M.tilesX + nx]);
           }
         }
       }
-      for (const rt of rebuildSet) {
-        setTileMesh(rt, rt.lod);
-      }
+      for (const rt of rebuildSet) setTileMesh(rt, rt.lod);
     }
 
     hudTiles.textContent = `TILES ${full}/${tiles.length}`;
     updateBeaconsHeightAndProximity();
   }
 
-  // ------------------------------------------------------------ player & physics
   let pendingSnap = 0;
 
   function teleport(col: number, row: number) {
     col = Math.min(Math.max(col, validColMin + 4), validColMax - 4);
     row = Math.min(Math.max(row, validRowMin + 4), validRowMax - 4);
-
     player.pos.set(colToX(col), 0, rowToZ(row));
     player.pos.y = groundY(player.pos.x, player.pos.z) + CONFIG.eyeHeight;
-
     player.vel.set(0, 0, 0);
     player.horizVel.set(0, 0);
-
     camera.position.copy(player.pos);
-
     lastStreamTile = "";
     streamTimer = 0;
     pendingSnap = 3;
   }
 
-  function applyExpeditionSpawn(
-    lat: number | null,
-    lon: number | null,
-    name?: string | null
-  ) {
+  function applyExpeditionSpawn(lat: number | null, lon: number | null, name?: string | null) {
     if (!M) return;
 
-    const hasValidCoords =
-      lat !== null &&
-      lon !== null &&
-      Number.isFinite(lat) &&
-      Number.isFinite(lon);
+    const hasValidCoords = lat !== null && lon !== null && Number.isFinite(lat) && Number.isFinite(lon);
 
     if (hasValidCoords && isLonLatInsideManifest(lon!, lat!)) {
       baseLatLon = { lat: lat!, lon: lon! };
       const target = lonLatToColRow(lon!, lat!);
       teleport(target.col, target.row);
       baseWorldPos.copy(player.pos);
-
       const label = name?.trim() || "Selected Expedition Site";
       statusEl.textContent = `BASE: ${label} · ${lat!.toFixed(4)}°N ${lon!.toFixed(4)}°E`;
       rebuildBeacons();
       return;
     }
 
-    baseLatLon = {
-      lat: LANDMARKS[0].lat,
-      lon: LANDMARKS[0].lon,
-    };
-
+    baseLatLon = { lat: LANDMARKS[0].lat, lon: LANDMARKS[0].lon };
     const fallback = lonLatToColRow(LANDMARKS[0].lon, LANDMARKS[0].lat);
     teleport(fallback.col, fallback.row);
     baseWorldPos.copy(player.pos);
@@ -1097,23 +1072,18 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     } else {
       statusEl.textContent = `BASE: ${envConfig.displayName} · ${LANDMARKS[0].name}`;
     }
-
     rebuildBeacons();
   }
 
   const fwd = new THREE.Vector3();
   const right = new THREE.Vector3();
   const move = new THREE.Vector3();
-
   let telemetryTimer = 0;
 
   function updatePlayer(dt: number) {
     const sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
-
     camera.getWorldDirection(fwd);
-    if (!player.fly) {
-      fwd.y = 0;
-    }
+    if (!player.fly) fwd.y = 0;
     fwd.normalize();
     right.crossVectors(fwd, camera.up).normalize();
 
@@ -1127,7 +1097,6 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const ground = groundY(player.pos.x, player.pos.z);
     const slopeDeg = sampleSlopeDegrees(player.pos.x, player.pos.z);
     player.currentSlopeDeg = slopeDeg;
-
     const prevX = player.pos.x;
     const prevZ = player.pos.z;
 
@@ -1135,36 +1104,19 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       const sp = sprint ? CONFIG.flySprintSpeed : CONFIG.flySpeed;
       if (keys.has("Space")) move.y += 1;
       if (keys.has("KeyC") || keys.has("ControlLeft")) move.y -= 1;
-
       player.pos.addScaledVector(move, sp * dt);
       player.pos.y = Math.max(player.pos.y, ground + CONFIG.eyeHeight);
       player.vel.set(0, 0, 0);
       player.horizVel.set(0, 0);
     } else {
-      const slopeFactor = Math.max(
-        0.42,
-        1 - Math.max(0, slopeDeg - 8) * 0.025
-      );
-      const targetSpeed =
-        (sprint ? CONFIG.sprintSpeed : CONFIG.walkSpeed) * slopeFactor;
+      const slopeFactor = Math.max(0.42, 1 - Math.max(0, slopeDeg - 8) * 0.025);
+      const targetSpeed = (sprint ? CONFIG.sprintSpeed : CONFIG.walkSpeed) * slopeFactor;
       const targetVx = move.x * targetSpeed;
       const targetVz = move.z * targetSpeed;
-      const rate =
-        move.lengthSq() > 0 ? CONFIG.suitAcceleration : CONFIG.suitDamping;
+      const rate = move.lengthSq() > 0 ? CONFIG.suitAcceleration : CONFIG.suitDamping;
 
-      player.horizVel.x = THREE.MathUtils.damp(
-        player.horizVel.x,
-        targetVx,
-        rate,
-        dt
-      );
-      player.horizVel.y = THREE.MathUtils.damp(
-        player.horizVel.y,
-        targetVz,
-        rate,
-        dt
-      );
-
+      player.horizVel.x = THREE.MathUtils.damp(player.horizVel.x, targetVx, rate, dt);
+      player.horizVel.y = THREE.MathUtils.damp(player.horizVel.y, targetVz, rate, dt);
       player.vel.x = player.horizVel.x;
       player.vel.z = player.horizVel.y;
       player.vel.y -= CONFIG.gravity * dt;
@@ -1175,18 +1127,14 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       }
 
       player.pos.addScaledVector(player.vel, dt);
-
       const g = groundY(player.pos.x, player.pos.z) + CONFIG.eyeHeight;
+
       if (player.pos.y <= g || pendingSnap > 0) {
         player.pos.y = g;
         player.vel.y = 0;
         player.onGround = true;
       } else if (player.pos.y - g > 0.05) {
-        if (
-          player.onGround &&
-          player.vel.y <= 0 &&
-          player.pos.y - g < targetSpeed * dt * 1.5
-        ) {
+        if (player.onGround && player.vel.y <= 0 && player.pos.y - g < targetSpeed * dt * 1.5) {
           player.pos.y = g;
         } else {
           player.onGround = false;
@@ -1198,40 +1146,23 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const maxWorldX = colToX(validColMax - 4);
     const minWorldZ = rowToZ(validRowMin + 4);
     const maxWorldZ = rowToZ(validRowMax - 4);
-
     player.pos.x = Math.min(Math.max(player.pos.x, minWorldX), maxWorldX);
     player.pos.z = Math.min(Math.max(player.pos.z, minWorldZ), maxWorldZ);
-
     camera.position.copy(player.pos);
 
     const stepDist = Math.hypot(player.pos.x - prevX, player.pos.z - prevZ);
-    if (stepDist > 0.001 && stepDist < 50) {
-      player.totalTraverseMeters += stepDist;
-    }
-
+    if (stepDist > 0.001 && stepDist < 50) player.totalTraverseMeters += stepDist;
     player.elapsedSeconds += dt;
 
-    if (pendingSnap > 0 && activeLoads === 0) {
-      pendingSnap--;
-    }
+    if (pendingSnap > 0 && activeLoads === 0) pendingSnap--;
 
-    const { lon, lat } = colRowToLonLat(
-      xToCol(player.pos.x),
-      zToRow(player.pos.z)
-    );
+    const { lon, lat } = colRowToLonLat(xToCol(player.pos.x), zToRow(player.pos.z));
     const elev = CONFIG.groundOffset + (player.pos.y - CONFIG.eyeHeight);
-    const distFromBase = Math.hypot(
-      player.pos.x - baseWorldPos.x,
-      player.pos.z - baseWorldPos.z
-    );
+    const distFromBase = Math.hypot(player.pos.x - baseWorldPos.x, player.pos.z - baseWorldPos.z);
 
     hudPos.textContent = `${lat.toFixed(4)}°N ${lon.toFixed(4)}°E · ELEV ${elev.toFixed(0)} m`;
     hudSlope.textContent = `SLOPE ${slopeDeg.toFixed(1)}°`;
-    hudBase.textContent = `BASE ${
-      distFromBase >= 1000
-        ? `${(distFromBase / 1000).toFixed(2)} km`
-        : `${Math.round(distFromBase)} m`
-    }`;
+    hudBase.textContent = `BASE ${distFromBase >= 1000 ? `${(distFromBase / 1000).toFixed(2)} km` : `${Math.round(distFromBase)} m`}`;
 
     telemetryTimer += dt;
     if (telemetryTimer >= 0.14) {
@@ -1251,49 +1182,38 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   function emitTelemetrySync() {
     if (!M || !window.parent || window.parent === window) return;
 
-    const { lon, lat } = colRowToLonLat(
-      xToCol(player.pos.x),
-      zToRow(player.pos.z)
-    );
+    const { lon, lat } = colRowToLonLat(xToCol(player.pos.x), zToRow(player.pos.z));
     const elev = CONFIG.groundOffset + (player.pos.y - CONFIG.eyeHeight);
     const slopeDeg = sampleSlopeDegrees(player.pos.x, player.pos.z);
-    const distFromBase = Math.hypot(
-      player.pos.x - baseWorldPos.x,
-      player.pos.z - baseWorldPos.z
-    );
+    const distFromBase = Math.hypot(player.pos.x - baseWorldPos.x, player.pos.z - baseWorldPos.z);
     const headingDegrees = getHeadingDegrees();
 
-    window.parent.postMessage(
-      {
-        type: "marswalk:telemetry-sync",
-        environmentId: envConfig.id,
-        latitude: Number(lat.toFixed(5)),
-        longitude: Number(lon.toFixed(5)),
-        elevationMeters: Math.round(elev),
-        elevation: Math.round(elev),
-        slopeDegrees: Number(slopeDeg.toFixed(1)),
-        slopeDeg: Number(slopeDeg.toFixed(1)),
-        headingDegrees,
-        distanceFromBaseMeters: Math.round(distFromBase),
-        totalTraverseMeters: Math.round(player.totalTraverseMeters),
-        elapsedTimeSeconds: Math.round(player.elapsedSeconds),
-        flyMode: player.fly,
-        isPointerLocked: controls.isLocked,
-        mapOpen: !mapPanel.classList.contains("hidden"),
-        nearestTarget: nearestBeacon
-          ? {
-              id: nearestBeacon.beacon.id,
-              name: nearestBeacon.beacon.name,
-              distanceMeters: Math.round(nearestBeacon.distMeters),
-              isBase: Boolean(nearestBeacon.beacon.isBase),
-            }
-          : null,
-      },
-      "*"
-    );
+    window.parent.postMessage({
+      type: "marswalk:telemetry-sync",
+      environmentId: envConfig.id,
+      latitude: Number(lat.toFixed(5)),
+      longitude: Number(lon.toFixed(5)),
+      elevationMeters: Math.round(elev),
+      elevation: Math.round(elev),
+      slopeDegrees: Number(slopeDeg.toFixed(1)),
+      slopeDeg: Number(slopeDeg.toFixed(1)),
+      headingDegrees,
+      distanceFromBaseMeters: Math.round(distFromBase),
+      totalTraverseMeters: Math.round(player.totalTraverseMeters),
+      elapsedTimeSeconds: Math.round(player.elapsedSeconds),
+      flyMode: player.fly,
+      surfaceLayer,
+      isPointerLocked: controls.isLocked,
+      mapOpen: !mapPanel.classList.contains("hidden"),
+      nearestTarget: nearestBeacon ? {
+        id: nearestBeacon.beacon.id,
+        name: nearestBeacon.beacon.name,
+        distanceMeters: Math.round(nearestBeacon.distMeters),
+        isBase: Boolean(nearestBeacon.beacon.isBase),
+      } : null,
+    }, "*");
   }
 
-  // ------------------------------------------------------------ 2D Tactical Map (Edge-to-Edge, Isotropic Scale, Zoomable & Pannable)
   let mapSel: { col: number; row: number } | null = null;
   let mapZoom = 1.0;
   let mapPanX = 0;
@@ -1314,18 +1234,13 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   function getMapViewBounds() {
     const totalCols = M.tilesX * M.tileSize;
     const totalRows = M.tilesY * M.tileSize;
-
     const spanCols = Math.max(100, validColMax - validColMin);
     const spanRows = Math.max(100, validRowMax - validRowMin);
-
     const rect = mapCanvas.getBoundingClientRect();
-    const canvasAspect =
-      rect.width > 10 && rect.height > 10 ? rect.width / rect.height : 1.5;
-
+    const canvasAspect = rect.width > 10 && rect.height > 10 ? rect.width / rect.height : 1.5;
     const demMetersW = spanCols * M.cellX;
     const demMetersH = spanRows * M.cellZ;
     const demAspect = demMetersW / demMetersH;
-
     let visCols: number;
     let visRows: number;
 
@@ -1352,31 +1267,15 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
     const halfVisCols = visCols / 2;
     const halfVisRows = visRows / 2;
+    mapPanX = Math.min(Math.max(mapPanX, validColMin + halfVisCols), validColMax - halfVisCols);
+    mapPanY = Math.min(Math.max(mapPanY, validRowMin + halfVisRows), validRowMax - halfVisRows);
 
-    mapPanX = Math.min(
-      Math.max(mapPanX, validColMin + halfVisCols),
-      validColMax - halfVisCols
-    );
-    mapPanY = Math.min(
-      Math.max(mapPanY, validRowMin + halfVisRows),
-      validRowMax - halfVisRows
-    );
-
-    return {
-      colMin: mapPanX - halfVisCols,
-      rowMin: mapPanY - halfVisRows,
-      visCols,
-      visRows,
-      totalCols,
-      totalRows,
-    };
+    return { colMin: mapPanX - halfVisCols, rowMin: mapPanY - halfVisRows, visCols, visRows, totalCols, totalRows };
   }
 
   function setMapZoom(nextZoom: number) {
     mapZoom = Math.min(6.0, Math.max(1.0, Number(nextZoom.toFixed(2))));
-    if (mapZoomLabel) {
-      mapZoomLabel.textContent = `${mapZoom.toFixed(1)}×`;
-    }
+    if (mapZoomLabel) mapZoomLabel.textContent = `${mapZoom.toFixed(1)}×`;
     drawMap();
   }
 
@@ -1390,14 +1289,12 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   function drawMap() {
     if (!M || mapPanel.classList.contains("hidden")) return;
     const ctx = mapCanvas.getContext("2d")!;
-
     const rect = mapCanvas.getBoundingClientRect();
     if (rect.width < 2 || rect.height < 2) return;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const targetW = Math.max(1, Math.round(rect.width * dpr));
     const targetH = Math.max(1, Math.round(rect.height * dpr));
-
     if (mapCanvas.width !== targetW || mapCanvas.height !== targetH) {
       mapCanvas.width = targetW;
       mapCanvas.height = targetH;
@@ -1405,13 +1302,10 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
     const W = mapCanvas.width;
     const H = mapCanvas.height;
-
     ctx.fillStyle = "#16110e";
     ctx.fillRect(0, 0, W, H);
 
-    const { colMin, rowMin, visCols, visRows, totalCols, totalRows } =
-      getMapViewBounds();
-
+    const { colMin, rowMin, visCols, visRows, totalCols, totalRows } = getMapViewBounds();
     const colToPx = (col: number) => ((col - colMin) / visCols) * W;
     const rowToPy = (row: number) => ((row - rowMin) / visRows) * H;
 
@@ -1459,9 +1353,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     };
 
     // Planned route polyline connecting base & beacons
-    const validBeacons = missionBeacons.filter((b) =>
-      isLonLatInsideManifest(b.lon, b.lat)
-    );
+    const validBeacons = missionBeacons.filter((b) => isLonLatInsideManifest(b.lon, b.lat));
     if (validBeacons.length >= 2) {
       ctx.save();
       ctx.beginPath();
@@ -1481,9 +1373,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
     // Reference landmarks
     for (const lm of LANDMARKS) {
-      const already = validBeacons.some(
-        (b) => Math.hypot(b.lat - lm.lat, b.lon - lm.lon) < 0.003
-      );
+      const already = validBeacons.some((b) => Math.hypot(b.lat - lm.lat, b.lon - lm.lon) < 0.003);
       if (already || !isLonLatInsideManifest(lm.lon, lm.lat)) continue;
       const p = lonLatToColRow(lm.lon, lm.lat);
       dot(p.col, p.row, "#94a3b8", 4);
@@ -1495,20 +1385,11 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       const p = lonLatToColRow(b.lon, b.lat);
       const px = colToPx(p.col);
       const py = rowToPy(p.row);
-
-      dot(
-        p.col,
-        p.row,
-        b.isBase ? "#38bdf8" : b.visited ? "#10b981" : "#f47738",
-        b.isBase ? 6.5 : 5.5
-      );
+      dot(p.col, p.row, b.isBase ? "#38bdf8" : b.visited ? "#10b981" : "#f47738", b.isBase ? 6.5 : 5.5);
 
       const label = b.name;
       const textW = ctx.measureText(label).width;
-      const labelX =
-        px + 12 * dpr + textW + 10 * dpr > W
-          ? px - textW - 16 * dpr
-          : px + 8 * dpr;
+      const labelX = px + 12 * dpr + textW + 10 * dpr > W ? px - textW - 16 * dpr : px + 8 * dpr;
       ctx.fillStyle = "rgba(16, 14, 18, 0.85)";
       ctx.fillRect(labelX, py - 9 * dpr, textW + 8 * dpr, 16 * dpr);
       ctx.fillStyle = b.isBase ? "#bae6fd" : b.visited ? "#a7f3d0" : "#f3efea";
@@ -1520,7 +1401,6 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const pr = zToRow(player.pos.z);
     const ppx = colToPx(pc);
     const ppy = rowToPy(pr);
-
     camera.getWorldDirection(fwd);
     const dirLen = 28 * dpr;
     const dirAngle = Math.atan2(fwd.z, fwd.x);
@@ -1536,14 +1416,10 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
     ctx.beginPath();
     ctx.moveTo(ppx, ppy);
-    ctx.lineTo(
-      ppx + Math.cos(dirAngle) * dirLen,
-      ppy + Math.sin(dirAngle) * dirLen
-    );
+    ctx.lineTo(ppx + Math.cos(dirAngle) * dirLen, ppy + Math.sin(dirAngle) * dirLen);
     ctx.strokeStyle = "#ffd36b";
     ctx.lineWidth = 2.2 * dpr;
     ctx.stroke();
-
     dot(pc, pr, "#ffd36b", 5.5);
 
     if (mapSel) {
@@ -1559,32 +1435,20 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   }
 
   function selectOnMap(e: MouseEvent) {
-    if (mapDragMovedDist > 6) {
-      return;
-    }
+    if (mapDragMovedDist > 6) return;
     const rect = mapCanvas.getBoundingClientRect();
     const { colMin, rowMin, visCols, visRows } = getMapViewBounds();
-
     const col = colMin + ((e.clientX - rect.left) / rect.width) * visCols;
     const row = rowMin + ((e.clientY - rect.top) / rect.height) * visRows;
 
-    if (col < validColMin || row < validRowMin || col > validColMax || row > validRowMax) {
-      return;
-    }
-
+    if (col < validColMin || row < validRowMin || col > validColMax || row > validRowMax) return;
     mapSel = { col, row };
 
     const { lon, lat } = colRowToLonLat(col, row);
-    const elev =
-      CONFIG.groundOffset +
-      sampleQ(Math.round(col), Math.round(row)) * M.heightScale;
-
+    const elev = CONFIG.groundOffset + sampleQ(Math.round(col), Math.round(row)) * M.heightScale;
     const selWorldX = colToX(col);
     const selWorldZ = rowToZ(row);
-    const distFromPlayer = Math.hypot(
-      selWorldX - player.pos.x,
-      selWorldZ - player.pos.z
-    );
+    const distFromPlayer = Math.hypot(selWorldX - player.pos.x, selWorldZ - player.pos.z);
 
     let snappedBeacon: MissionTargetBeacon | null = null;
     for (const b of missionBeacons) {
@@ -1606,10 +1470,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   }
 
   function openMap() {
-    if (!M || !tiles.length) {
-      return;
-    }
-
+    if (!M || !tiles.length) return;
     controls.unlock();
     overlay.classList.add("hidden");
     mapPanel.classList.remove("hidden");
@@ -1623,10 +1484,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     // fills `.map-canvas-wrap` edge-to-edge.
     mapCanvas.style.removeProperty("width");
     mapCanvas.style.removeProperty("height");
-
-    requestAnimationFrame(() => {
-      drawMap();
-    });
+    requestAnimationFrame(() => drawMap());
     drawMap();
     emitTelemetrySync();
   }
@@ -1636,22 +1494,15 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     emitTelemetrySync();
   }
 
-  // ------------------------------------------------------------ input & messaging
   document.addEventListener("keydown", (e) => {
-    if (externalModalOpen && e.code !== "Escape" && e.code !== "KeyE") {
-      return;
-    }
-
+    if (externalModalOpen && e.code !== "Escape" && e.code !== "KeyE") return;
     keys.add(e.code);
 
     if (e.code === "KeyM" && M) {
-      if (mapPanel.classList.contains("hidden")) {
-        openMap();
-      } else {
+      if (mapPanel.classList.contains("hidden")) openMap();
+      else {
         closeMap();
-        if (!externalModalOpen) {
-          controls.lock();
-        }
+        if (!externalModalOpen) controls.lock();
       }
     }
 
@@ -1661,6 +1512,8 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       emitTelemetrySync();
     }
 
+    if (e.code === "KeyL" && M && !e.repeat) cycleSurfaceLayer();
+
     if (e.code === "KeyE" && M) {
       externalModalOpen = true;
       keys.clear();
@@ -1669,26 +1522,14 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       controls.unlock();
 
       if (window.parent && window.parent !== window) {
-        const { lon, lat } = colRowToLonLat(
-          xToCol(player.pos.x),
-          zToRow(player.pos.z)
-        );
-        window.parent.postMessage(
-          {
-            type: "marswalk:open-fieldwork",
-            latitude: Number(lat.toFixed(5)),
-            longitude: Number(lon.toFixed(5)),
-            targetId:
-              nearestBeacon && !nearestBeacon.beacon.isBase
-                ? nearestBeacon.beacon.id
-                : undefined,
-            targetName:
-              nearestBeacon && !nearestBeacon.beacon.isBase
-                ? nearestBeacon.beacon.name
-                : undefined,
-          },
-          "*"
-        );
+        const { lon, lat } = colRowToLonLat(xToCol(player.pos.x), zToRow(player.pos.z));
+        window.parent.postMessage({
+          type: "marswalk:open-fieldwork",
+          latitude: Number(lat.toFixed(5)),
+          longitude: Number(lon.toFixed(5)),
+          targetId: nearestBeacon && !nearestBeacon.beacon.isBase ? nearestBeacon.beacon.id : undefined,
+          targetName: nearestBeacon && !nearestBeacon.beacon.isBase ? nearestBeacon.beacon.name : undefined,
+        }, "*");
       }
     }
 
@@ -1697,27 +1538,21 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       keys.clear();
       overlay.classList.add("hidden");
       closeMap();
-
       const baseColRow = lonLatToColRow(baseLatLon.lon, baseLatLon.lat);
       teleport(baseColRow.col, baseColRow.row);
       controls.unlock();
 
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage(
-          {
-            type: "marswalk:return-to-base",
-            totalTraverseMeters: Math.round(player.totalTraverseMeters),
-            elapsedTimeSeconds: Math.round(player.elapsedSeconds),
-          },
-          "*"
-        );
+        window.parent.postMessage({
+          type: "marswalk:return-to-base",
+          totalTraverseMeters: Math.round(player.totalTraverseMeters),
+          elapsedTimeSeconds: Math.round(player.elapsedSeconds),
+        }, "*");
       }
     }
   });
 
-  document.addEventListener("keyup", (e) => {
-    keys.delete(e.code);
-  });
+  document.addEventListener("keyup", (e) => keys.delete(e.code));
 
   startBtn.addEventListener("click", () => {
     externalModalOpen = false;
@@ -1725,9 +1560,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   });
 
   renderer.domElement.addEventListener("click", () => {
-    if (M && mapPanel.classList.contains("hidden") && !externalModalOpen) {
-      controls.lock();
-    }
+    if (M && mapPanel.classList.contains("hidden") && !externalModalOpen) controls.lock();
   });
 
   controls.addEventListener("lock", () => {
@@ -1739,9 +1572,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
   controls.addEventListener("unlock", () => {
     keys.clear();
-    if (mapPanel.classList.contains("hidden") && !externalModalOpen) {
-      overlay.classList.remove("hidden");
-    }
+    if (mapPanel.classList.contains("hidden") && !externalModalOpen) overlay.classList.remove("hidden");
     emitTelemetrySync();
   });
 
@@ -1762,6 +1593,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const dx = e.clientX - mapDragStartX;
     const dy = e.clientY - mapDragStartY;
     mapDragMovedDist = Math.hypot(dx, dy);
+
     if (mapDragMovedDist > 3) {
       const rect = mapCanvas.getBoundingClientRect();
       const { visCols, visRows } = getMapViewBounds();
@@ -1775,20 +1607,16 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     mapDragging = false;
   });
 
-  mapCanvas.addEventListener(
-    "wheel",
-    (e) => {
-      e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.25 : 0.8;
-      setMapZoom(mapZoom * factor);
-    },
-    { passive: false }
-  );
+  mapCanvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.25 : 0.8;
+    setMapZoom(mapZoom * factor);
+  }, { passive: false });
 
   mapCanvas.addEventListener("click", selectOnMap);
-
   mapZoomIn?.addEventListener("click", () => setMapZoom(mapZoom * 1.35));
   mapZoomOut?.addEventListener("click", () => setMapZoom(mapZoom / 1.35));
+
   mapZoomReset?.addEventListener("click", () => {
     if (M) {
       mapPanX = xToCol(player.pos.x);
@@ -1796,6 +1624,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     }
     setMapZoom(1.0);
   });
+
   mapCenterPlayer?.addEventListener("click", () => {
     if (mapZoom < 1.8) {
       mapZoom = 2.0;
@@ -1805,9 +1634,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   });
 
   mapGo.addEventListener("click", () => {
-    if (!mapSel) {
-      return;
-    }
+    if (!mapSel) return;
     teleport(mapSel.col, mapSel.row);
     closeMap();
     emitTelemetrySync();
@@ -1816,9 +1643,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
   mapClose.addEventListener("click", () => {
     closeMap();
-    if (!externalModalOpen && !controls.isLocked) {
-      overlay.classList.remove("hidden");
-    }
+    if (!externalModalOpen && !controls.isLocked) overlay.classList.remove("hidden");
   });
 
   function syncViewportProjection() {
@@ -1829,169 +1654,139 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     camera.updateProjectionMatrix();
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(vp.width, vp.height, false);
-
-    if (!mapPanel.classList.contains("hidden")) {
-      drawMap();
-    }
+    if (!mapPanel.classList.contains("hidden")) drawMap();
   }
 
   window.addEventListener("resize", syncViewportProjection);
 
   if (typeof ResizeObserver !== "undefined") {
-    const ro = new ResizeObserver(() => {
-      syncViewportProjection();
-    });
+    const ro = new ResizeObserver(() => syncViewportProjection());
     ro.observe(document.documentElement);
     const wrap = mapCanvas.parentElement;
-    if (wrap) {
-      ro.observe(wrap);
-    }
+    if (wrap) ro.observe(wrap);
   }
 
-  window.addEventListener(
-    "message",
-    (event: MessageEvent<ExpeditionTargetMessage>) => {
-      const data = event.data;
-      if (!data || typeof data.type !== "string") {
-        return;
+  window.addEventListener("message", (event: MessageEvent<ExpeditionTargetMessage>) => {
+    const data = event.data;
+    if (!data || typeof data.type !== "string") return;
+
+    if (data.type === "mars-explorer:modal-state") {
+      externalModalOpen = Boolean(data.open);
+      if (externalModalOpen) {
+        keys.clear();
+        overlay.classList.add("hidden");
+        closeMap();
+        controls.unlock();
       }
+      emitTelemetrySync();
+      return;
+    }
 
-      if (data.type === "mars-explorer:modal-state") {
-        externalModalOpen = Boolean(data.open);
-        if (externalModalOpen) {
-          keys.clear();
-          overlay.classList.add("hidden");
-          closeMap();
-          controls.unlock();
-        }
-        emitTelemetrySync();
-        return;
+    if (data.type === "mars-explorer:toggle-map" && M) {
+      if (mapPanel.classList.contains("hidden")) openMap();
+      else closeMap();
+      return;
+    }
+
+    if (data.type === "mars-explorer:toggle-flight" && M) {
+      player.fly = !player.fly;
+      hudMode.textContent = player.fly ? "RECON FLIGHT" : "MARS 0.38G WALK";
+      emitTelemetrySync();
+      return;
+    }
+
+    if (data.type === "mars-explorer:set-layer" && M) {
+      if (data.layer && LAYER_ORDER.includes(data.layer)) setSurfaceLayer(data.layer);
+      else cycleSurfaceLayer();
+      return;
+    }
+
+    if (data.type === "mars-explorer:expedition") {
+      applyExpeditionSpawn(
+        typeof data.latitude === "number" ? data.latitude : null,
+        typeof data.longitude === "number" ? data.longitude : null,
+        data.name ?? null
+      );
+
+      if (Array.isArray(data.targets)) {
+        rebuildBeacons(data.targets.map((t) => ({
+          id: t.id,
+          name: t.name,
+          lat: t.latitude,
+          lon: t.longitude,
+          description: t.description,
+          visited: t.visited,
+        })));
       }
-
-      if (data.type === "mars-explorer:toggle-map" && M) {
-        if (mapPanel.classList.contains("hidden")) {
-          openMap();
-        } else {
-          closeMap();
-        }
-        return;
+      emitTelemetrySync();
+    } else if (data.type === "mars-explorer:targets" && Array.isArray(data.targets)) {
+      rebuildBeacons(data.targets.map((t) => ({
+        id: t.id,
+        name: t.name,
+        lat: t.latitude,
+        lon: t.longitude,
+        description: t.description,
+        visited: t.visited,
+      })));
+      emitTelemetrySync();
+    } else if (
+      data.type === "mars-explorer:teleport" &&
+      typeof data.latitude === "number" &&
+      typeof data.longitude === "number" &&
+      M
+    ) {
+      if (isLonLatInsideManifest(data.longitude, data.latitude)) {
+        const c = lonLatToColRow(data.longitude, data.latitude);
+        teleport(c.col, c.row);
+        emitTelemetrySync();
       }
-
-      if (data.type === "mars-explorer:toggle-flight" && M) {
-        player.fly = !player.fly;
-        hudMode.textContent = player.fly ? "RECON FLIGHT" : "MARS 0.38G WALK";
-        emitTelemetrySync();
-        return;
-      }
-
-      if (data.type === "mars-explorer:expedition") {
-        applyExpeditionSpawn(
-          typeof data.latitude === "number" ? data.latitude : null,
-          typeof data.longitude === "number" ? data.longitude : null,
-          data.name ?? null
-        );
-
-        if (Array.isArray(data.targets)) {
-          rebuildBeacons(
-            data.targets.map((t) => ({
-              id: t.id,
-              name: t.name,
-              lat: t.latitude,
-              lon: t.longitude,
-              description: t.description,
-              visited: t.visited,
-            }))
-          );
-        }
-        emitTelemetrySync();
-      } else if (
-        data.type === "mars-explorer:targets" &&
-        Array.isArray(data.targets)
-      ) {
-        rebuildBeacons(
-          data.targets.map((t) => ({
-            id: t.id,
-            name: t.name,
-            lat: t.latitude,
-            lon: t.longitude,
-            description: t.description,
-            visited: t.visited,
-          }))
-        );
-        emitTelemetrySync();
-      } else if (
-        data.type === "mars-explorer:teleport" &&
-        typeof data.latitude === "number" &&
-        typeof data.longitude === "number" &&
-        M
-      ) {
-        if (isLonLatInsideManifest(data.longitude, data.latitude)) {
-          const c = lonLatToColRow(data.longitude, data.latitude);
-          teleport(c.col, c.row);
-          emitTelemetrySync();
-        }
-      } else if (data.type === "mars-explorer:return-base" && M) {
-        const baseColRow = lonLatToColRow(baseLatLon.lon, baseLatLon.lat);
-        teleport(baseColRow.col, baseColRow.row);
-        emitTelemetrySync();
-      } else if (data.type === "mars-explorer:contingency") {
-        if (data.contingency === "dust-squall") {
-          scene.background = dustStormSkyColor.clone();
-          sceneFog.color.copy(dustStormSkyColor);
-          sceneFog.near = envConfig.atmosphere.dustStorm.fogNearMeters;
-          sceneFog.far = envConfig.atmosphere.dustStorm.fogFarMeters;
-        } else {
-          scene.background = nominalSkyColor.clone();
-          sceneFog.color.copy(nominalSkyColor);
-          sceneFog.near = envConfig.atmosphere.fogNearMeters;
-          sceneFog.far = envConfig.atmosphere.fogFarMeters;
-        }
+    } else if (data.type === "mars-explorer:return-base" && M) {
+      const baseColRow = lonLatToColRow(baseLatLon.lon, baseLatLon.lat);
+      teleport(baseColRow.col, baseColRow.row);
+      emitTelemetrySync();
+    } else if (data.type === "mars-explorer:contingency") {
+      if (data.contingency === "dust-squall") {
+        scene.background = dustStormSkyColor.clone();
+        sceneFog.color.copy(dustStormSkyColor);
+        sceneFog.near = envConfig.atmosphere.dustStorm.fogNearMeters;
+        sceneFog.far = envConfig.atmosphere.dustStorm.fogFarMeters;
+      } else {
+        scene.background = nominalSkyColor.clone();
+        sceneFog.color.copy(nominalSkyColor);
+        sceneFog.near = envConfig.atmosphere.fogNearMeters;
+        sceneFog.far = envConfig.atmosphere.fogFarMeters;
       }
     }
-  );
+  });
 
-  // ------------------------------------------------------------ boot
   async function boot() {
     try {
       const r = await fetch(`${CONFIG.dataUrl}manifest.json`);
-      if (!r.ok) {
-        throw new Error("manifest missing");
-      }
+      if (!r.ok) throw new Error("manifest missing");
 
       M = await r.json();
-
       CONFIG.farStep = M.overview.step;
       CONFIG.groundOffset = M.heightMin;
-
       validColMin = CONFIG.edgeTrimCells;
       validColMax = Math.max(validColMin + 64, M.cols - CONFIG.edgeTrimCells);
       validRowMin = CONFIG.edgeTrimCells;
       validRowMax = Math.max(validRowMin + 64, M.rows - CONFIG.edgeTrimCells);
-
       halfW = (M.tilesX * M.tileSize * M.cellX) / 2;
       halfD = (M.tilesY * M.tileSize * M.cellZ) / 2;
-
-      overview = new Uint16Array(
-        await fetchBuffer(`${CONFIG.dataUrl}overview.u16`)
-      );
+      overview = new Uint16Array(await fetchBuffer(`${CONFIG.dataUrl}overview.u16`));
     } catch {
-      loadingEl.innerHTML =
-        `${envConfig.displayName} 3D elevation data is unavailable.<br>` +
+      loadingEl.innerHTML = `${envConfig.displayName} 3D elevation data is unavailable.<br>` +
         `Verify that <code>${CONFIG.dataUrl}manifest.json</code> and ` +
         `<code>${CONFIG.dataUrl}overview.u16</code> are present, then reload.`;
-
       statusEl.textContent = "Terrain elevation data unavailable";
       startBtn.disabled = true;
 
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage(
-          {
-            type: "jezero-simulation-error",
-            environmentId: envConfig.id,
-            message: `Unable to load ${envConfig.displayName} 3D terrain elevation data (${CONFIG.dataUrl}manifest.json or ${CONFIG.dataUrl}overview.u16).`,
-          },
-          "*"
-        );
+        window.parent.postMessage({
+          type: "jezero-simulation-error",
+          environmentId: envConfig.id,
+          message: `Unable to load ${envConfig.displayName} 3D terrain elevation data (${CONFIG.dataUrl}manifest.json or ${CONFIG.dataUrl}overview.u16).`,
+        }, "*");
       }
       return;
     }
@@ -2000,49 +1795,33 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
     try {
       overviewTex = await loadTexture(`${CONFIG.dataUrl}${M.mapImage}`);
-      overviewMat = new THREE.MeshLambertMaterial({
-        map: overviewTex,
-        color: CONFIG.marsTint,
-      });
+      overviewMat = new THREE.MeshLambertMaterial({ map: overviewTex, color: CONFIG.marsTint });
     } catch {
       console.warn("overview image missing; using flat colour");
     }
 
     mapImg = new Image();
     mapImg.onload = () => {
-      if (!mapPanel.classList.contains("hidden")) {
-        drawMap();
-      }
+      if (!mapPanel.classList.contains("hidden")) drawMap();
     };
     mapImg.src = `${CONFIG.dataUrl}${M.mapImage}`;
 
     for (let ty = 0; ty < M.tilesY; ty++) {
       for (let tx = 0; tx < M.tilesX; tx++) {
         const t: Tile = {
-          tx,
-          ty,
-          mesh: null,
-          lod: -2,
-          edgeKey: "",
-          full: null,
-          tex: null,
-          texKey: "",
-          loading: false,
-          texLoading: false,
+          tx, ty, mesh: null, lod: -2, edgeKey: "", full: null, tex: null,
+          texKey: "", loading: false, texLoading: false,
         };
         tiles.push(t);
       }
     }
 
-    for (const t of tiles) {
-      setTileMesh(t, -1);
-    }
+    for (const t of tiles) setTileMesh(t, -1);
 
     const params = new URLSearchParams(window.location.search);
     const paramLat = params.has("lat") ? Number(params.get("lat")) : null;
     const paramLon = params.has("lon") ? Number(params.get("lon")) : null;
     const paramName = params.get("name");
-
     applyExpeditionSpawn(paramLat, paramLon, paramName);
 
     // Set initial horizontal viewing direction (315° NW toward the delta scarp)
@@ -2053,18 +1832,11 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     }
 
     syncViewportProjection();
-
     loadingEl.classList.add("hidden");
     startBtn.disabled = false;
 
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage(
-        {
-          type: "jezero-simulation-ready",
-          environmentId: envConfig.id,
-        },
-        "*"
-      );
+      window.parent.postMessage({ type: "jezero-simulation-ready", environmentId: envConfig.id }, "*");
       emitTelemetrySync();
     }
   }
@@ -2073,7 +1845,6 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
   function frame() {
     requestAnimationFrame(frame);
-
     const dt = Math.min(clock.getDelta(), 0.1);
 
     if (M && tiles.length) {
@@ -2082,12 +1853,8 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       } else if (pendingSnap > 0) {
         player.pos.y = groundY(player.pos.x, player.pos.z) + CONFIG.eyeHeight;
         camera.position.copy(player.pos);
-
-        if (activeLoads === 0) {
-          pendingSnap--;
-        }
+        if (activeLoads === 0) pendingSnap--;
       }
-
       updateStreaming(dt);
     }
 

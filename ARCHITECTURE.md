@@ -7,123 +7,102 @@ NASAMartianMap/
 ├── .venv/
 ├── backend/
 │   ├── main.py
-│   ├── terrain_dem.py
-│   ├── data-processing/
-│   │   ├── acquisition/
-│   │   │   ├── discover_hirise_dtm.py
-│   │   │   └── download_meda_test.py
-│   │   ├── processing/
-│   │   │   └── process_meda.py
-│   │   └── validation/
-│   │       ├── inspect_remote_dem.py
-│   │       └── test_dem_coordinate.py
-│   └── datasets/
-│       ├── meda/
-│       │   ├── processed/
-│       │   ├── indexes/
-│       │   └── raw/
-│       └── rover_imagery/
-│           ├── raw/
-│           └── indexes/
-├── frontend/
-│   ├── dist/
-│   ├── node_modules/
-│   ├── index.html
-│   ├── package.json
-│   ├── package-lock.json
-│   ├── tsconfig.json
-│   ├── vite.config.ts
-│   ├── public/
-│   │   └── data/
-│   │       ├── jezero_geology_sim3464.geojson
-│   │       ├── meda_processed_bundle.json
-│   │       └── perseverance_surface_imagery.json
-│   └── src/
-│       ├── App.css
-│       ├── App.tsx
-│       ├── index.css
-│       ├── main.tsx
-│       ├── app/
-│       │   └── routes/
-│       │       └── AppRoutes.tsx
-│       ├── components/
-│       │   ├── layout/
-│       │   │   ├── AppLayout.tsx
-│       │   │   └── Header.tsx
-│       │   ├── map/
-│       │   │   ├── MarsMap.css
-│       │   │   ├── MarsMap.tsx
-│       │   │   └── RouteMap.tsx
-│       │   └── ui/
-│       │       └── index.tsx
-│       ├── data/
-│       │   ├── evidenceDatasets.ts
-│       │   ├── explorationSites.ts
-│       │   ├── mapLayers.ts
-│       │   ├── marsLocations.ts
-│       │   └── regions.ts
-│       ├── features/
-│       │   ├── auth/
-│       │   ├── mars-explorer/
-│       │   ├── mission/
-│       │   │   ├── EvidenceInspectorPage.tsx
-│       │   │   ├── ExpeditionReportPage.tsx
-│       │   │   ├── ExpeditionReviewPage.tsx
-│       │   │   ├── InvestigationPage.tsx
-│       │   │   ├── KnowledgeGapsPage.tsx
-│       │   │   ├── MarswalkPage.tsx
-│       │   │   ├── MissionBuilderPage.tsx
-│       │   │   ├── MissionLayout.tsx
-│       │   │   ├── RoutePlannerPage.tsx
-│       │   │   ├── missionHelpers.ts
-│       │   │   └── workflow.ts
-│       │   ├── planetary-explorer/
-│       │   │   ├── ExplorerPage.tsx
-│       │   │   └── LocationPage.tsx
-│       │   └── welcome/
-│       │       ├── WelcomePage.css
-│       │       └── WelcomePage.tsx
-│       ├── globe/
-│       │   ├── MarsGlobe.css
-│       │   ├── MarsGlobe.tsx
-│       │   └── MarsSurface.tsx
-│       ├── mars_walking/
-│       │   ├── main.ts
-│       │   └── style.css
-│       ├── services/
-│       │   ├── connectionStatus.ts
-│       │   ├── dataProviders.ts
-│       │   └── providers/
-│       │       ├── marsDem.ts
-│       │       ├── nasaTrek.ts
-│       │       └── perseveranceImageryProvider.ts
-│       ├── simulator/
-│       │   ├── environments/
-│       │   │   ├── catalog.ts
-│       │   │   └── jezero.ts
-│       │   ├── jezero-crater/
-│       │   │   ├── scripts/
-│       │   │   └── src/
-│       │   │       └── jezero_main.ts
-│       │   └── shared/
-│       │       ├── environment.ts
-│       │       ├── HelmetHud.tsx
-│       │       ├── navigation.ts
-│       │       └── styles.ts
-│       ├── state/
-│       │   └── mission/
-│       │       └── MissionContext.tsx
-│       ├── styles/
-│       │   └── theme.css
-│       ├── three/
-│       │   └── globe/
-│       │       └── MarsGlobe.tsx
-│       ├── types/
-│       │   ├── assets.d.ts
-│       │   ├── index.ts
-│       │   └── region.ts
-│       └── utils/
-│           └── jezeroStratigraphy.ts
+|   |── terrain_dem.py
+|   ├── data-processing
+|   |   ├── acquisition
+|   |   |   |── download_meda_test.py
+|   |   |   └── discover_hirise_dtm.py
+|   |   ├── processing
+|   |   |   └── process_meda.py
+|   |   └── validation
+|   |       ├── inspect_remote_dem.py
+|   |       └── test_dem_coordinate.py
+|   └── datasets
+|       ├── meda
+|       |   |── processes
+|       |   |── indexes
+|       |   └── raw
+|       └── rover_imagery
+|           |── raw
+|           └── indexes
+└── frontend
+    ├── dist
+    ├── node_modules
+    ├── public
+    └── src
+        ├── app\routes
+        │   └── AppRoutes.tsx
+        ├── components
+        │   |── layout
+        |   |   |── AppLayout.tsx
+        │   |   └── Header.tsx
+        │   |── map
+        |   |   |── MarsMap.css
+        |   |   |── MarsMap.tsx
+        |   |   └── RouteMap.tsx
+        │   └── ui
+        |       └── index.tsx
+        ├── data
+        │   |── mapLayers.ts 
+        |   |── explorationSites.ts
+        |   └── marsLocations.ts
+        ├── features
+        |   ├── mission
+        │   │   |── EvidenceInspectorPage.tsx
+        │   │   |── ExpeditionReportPage.tsx
+        │   │   |── ExperiditionReviewPage.tsx
+        │   │   |── InvestigationPage.tsx
+        │   │   |── KnowledgeGapsPage.tsx
+        │   │   |── missionHelpers.ts
+        │   │   |── MissionLayout.tsx
+        │   │   |── RoutePlannerPage.tsx
+        │   │   └── workflow.ts
+        │   ├── planetary-explorer
+        │   │   |── LocationPage.tsx
+        │   │   └── ExplorerPage.tsx
+        │   └── welcome
+        |       |── Welcomeassets
+        │       |── WelcomePage.css
+        │       └── WelcomePage.tsx
+        ├── globe
+        │   ├── components
+        │   ├── utils
+        │   ├── MarsGlobe.css
+        │   ├── MarsSurface.tsx
+        │   └── MarsGlobe.tsx
+        ├── mars_walking
+        │   ├── main.ts
+        │   └── style.css
+        ├── services
+        │   |── providers
+        │   |   ├── nasaTrek.ts 
+        │   |   └── marsDem.ts
+        │   └── dataProviders.ts 
+        ├── simulator\jezero-crater
+        │   |── scripts
+        │   |   ├── build-jezero.mjs
+        │   |   └── jezero_simulator.html
+        │   └── src
+        │       └── jezero_main.ts
+        ├── state\mission
+        │   └── MissionContext.tsx
+        ├── styles
+        │   └── theme.css
+        ├── three\globe
+        │   └── MarsGlobe.tsx
+        ├── types
+        │   ├── assets.d.ts
+        │   └── index.ts
+        ├── App.css
+        ├── App.tsx
+        ├── index.css
+        └── main.tsx
+    ├── index.html
+    ├── package-lock.json 
+    ├── package.json 
+    ├── tsconfig.json 
+    ├── vite.config.ts
+    ├── scripts
 ├── .gitignore
 ├── ARCHITECTURE.md
 ├── LICENSE
