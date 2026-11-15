@@ -13,21 +13,27 @@ import {
   CRISM_REFERENCE_METHOD,
   CRISM_REFERENCE_SOURCE,
   EVIDENCE_DATASETS_BY_ID,
+  getDatasetsForRegion,
   resolveDatasetMetadata,
   toMissionDataset,
 } from "../../data/evidenceDatasets";
 import { getMarsRegionById } from "../../data/regions";
 import type {
+  ExpeditionReport,
   FieldNote,
+  KnowledgeGap,
   MarsEnvironmentConditions,
   MarsRegion,
   Mission,
   Observation,
   Region,
+  Route,
+  ScientificTarget,
   SimulatedSample,
   SimulationState,
   SuitTelemetry,
   TemporalState,
+  Waypoint,
 } from "../../types";
 
 type DeepReadonly<T> = T extends readonly (infer Item)[]
@@ -54,6 +60,7 @@ interface MissionContextValue {
   createNewExpedition: (region?: MarsRegion | Region | null, name?: string) => void;
   abandonExpedition: () => void;
   loadExpedition: (id: string) => void;
+  loadFeaturedDemo: () => void;
 }
 
 const MISSION_STORAGE_KEY = "mars-explorer-active-mission-v1";
@@ -139,6 +146,289 @@ function createInitialMission(): Mission {
     fieldNotes: [],
     reports: [],
 
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function createFeaturedDemoMission(): Mission {
+  const now = new Date().toISOString();
+  const jezeroRegion = getMarsRegionById("jezero-crater") ?? null;
+  const target1Id = "target-octavia-butler";
+  const target2Id = "target-kodiak-butte";
+  const target3Id = "target-delta-scarp";
+  const target4Id = "target-belva-rim";
+  const routeId = "route-western-delta-traverse";
+  const reportId = "report-jezero-benchmark";
+
+  const targets: ScientificTarget[] = [
+    {
+      id: target1Id,
+      name: "Octavia E. Butler Landing (Base)",
+      coordinates: { latitude: 18.4447, longitude: 77.4508 },
+      description: "Initial surface exploration base and rover touchdown calibration benchmark.",
+      observationIds: ["obs-m2020-delta-crossbedding"],
+      regionId: "jezero-crater",
+    },
+    {
+      id: target2Id,
+      name: "Kodiak Butte Isolated Remnant",
+      coordinates: { latitude: 18.4180, longitude: 77.4120 },
+      description: "Steeply dipping deltaic bottomset-to-topset foreset beds indicating past lake level stages.",
+      observationIds: ["obs-m2020-delta-crossbedding"],
+      regionId: "jezero-crater",
+    },
+    {
+      id: target3Id,
+      name: "Delta Front Scarp (Hawksbill Gap)",
+      coordinates: { latitude: 18.4350, longitude: 77.4200 },
+      description: "Exposed smectite clay and carbonate-rich mudstone strata with high biosignature preservation potential.",
+      observationIds: ["obs-crism-phyllosilicates"],
+      regionId: "jezero-crater",
+    },
+    {
+      id: target4Id,
+      name: "Belva Crater Impact Ejecta",
+      coordinates: { latitude: 18.4850, longitude: 77.3850 },
+      description: "Deep excavated crustal olivine-bearing basaltic megabreccia blocks.",
+      observationIds: [],
+      regionId: "jezero-crater",
+    },
+  ];
+
+  const waypoints: Waypoint[] = [
+    {
+      id: "wp-1",
+      name: "Octavia E. Butler Base",
+      coordinates: { latitude: 18.4447, longitude: 77.4508 },
+      targetId: target1Id,
+      visited: true,
+    },
+    {
+      id: "wp-2",
+      name: "Māaz-Séítah Floor Contact",
+      coordinates: { latitude: 18.4400, longitude: 77.4350 },
+      visited: true,
+    },
+    {
+      id: "wp-3",
+      name: "Delta Front Lower Scarp",
+      coordinates: { latitude: 18.4350, longitude: 77.4200 },
+      targetId: target3Id,
+      visited: true,
+    },
+    {
+      id: "wp-4",
+      name: "Western Delta Upper Topset",
+      coordinates: { latitude: 18.4300, longitude: 77.4050 },
+      visited: true,
+    },
+  ];
+
+  const route: Route = {
+    id: routeId,
+    name: "Western Delta Astrobiology Traverse",
+    waypoints,
+    distanceMeters: 3420,
+    elevationGainMeters: 68,
+    elevationLossMeters: 12,
+    reachedTargetIds: [target1Id, target3Id],
+    returnRouteIncluded: true,
+    returnDistanceMeters: 3420,
+    terrainMetrics: {
+      averageSlopeDegrees: 4.8,
+      maximumSlopeDegrees: 13.9,
+      averageRoughness: 0.18,
+      uncertaintyNotes: ["CTX 20m DEM smooths localized meter-scale scarp verticality."],
+      assumptions: ["Astronaut traverse speed maintained at 1.8 km/h under Martian 0.38g gravity."],
+    },
+  };
+
+  const observations: Observation[] = [
+    {
+      id: "obs-m2020-delta-crossbedding",
+      name: "Perseverance Sol 172 Mastcam-Z Delta Strata Crossbedding",
+      coordinates: { latitude: 18.4447, longitude: 77.4508 },
+      source: "NASA Mars 2020 Perseverance Rover Navcam / Mastcam-Z",
+      regionId: "jezero-crater",
+      observationDate: "2021-08-15",
+      datasetId: "m2020_perseverance_surface_imagery",
+      description: "Steeply dipping foreset beds confirming vigorous fluvial discharge into standing lacustrine lake.",
+      provenance: {
+        source: "NASA Planetary Data System (PDS) Cartography and Imaging Sciences Node",
+        sourceId: "urn:nasa:pds:mars2020_perseverance_imagery:sol0172",
+        sourceUrl: "https://pds-imaging.jpl.nasa.gov/data/mars2020/",
+        processingMethod: "Mastcam-Z calibrated radiance EDR surface mosaic",
+        limitations: ["Localized ground-level perspective subject to boulder shadows and atmospheric dust scattering."],
+      },
+    },
+    {
+      id: "obs-crism-phyllosilicates",
+      name: "CRISM Western Delta Smectite/Carbonate Absorption",
+      coordinates: { latitude: 18.4350, longitude: 77.4200 },
+      source: CRISM_REFERENCE_SOURCE,
+      regionId: "jezero-crater",
+      datasetId: CRISM_REFERENCE_DATASET_ID,
+      description: "2.3 µm and 1.9 µm vibrational overtone bands diagnostic of Fe/Mg smectite clays (nontronite/saponite).",
+      provenance: {
+        source: CRISM_REFERENCE_SOURCE,
+        sourceId: "urn:nasa:pds:mro_crism:mtrdr:frt00005850_07",
+        sourceUrl: CRISM_MTRDR_ARCHIVE_URL,
+        processingMethod: CRISM_REFERENCE_METHOD,
+        limitations: [CRISM_REFERENCE_LIMITATION],
+      },
+    },
+  ];
+
+  const fieldNotes: FieldNote[] = [
+    {
+      id: "note-delta-contact",
+      missionId: "featured-jezero-expedition",
+      content: "Sharp stratigraphic transition observed between rough crater floor basalt and lighter-toned layered delta sediments. Lamination dip angle is ~12 degrees eastward.",
+      createdAt: now,
+      coordinates: { latitude: 18.4350, longitude: 77.4200 },
+      relatedTargetId: target3Id,
+    },
+  ];
+
+  const knowledgeGaps: KnowledgeGap[] = [
+    {
+      id: "gap-1",
+      description: "Exact timing of late-stage flood boulder deposition on upper delta topsets.",
+      reason: "Requires in-situ radiometric dating of basaltic boulders excavated by Belva impact event.",
+      relatedDatasetIds: ["ctx_jezero_dtm_20m"],
+      relatedObservationIds: ["obs-m2020-delta-crossbedding"],
+      significance: "Determines whether Jezero Lake had multiple prolonged wet intervals or short-lived deluge events.",
+    },
+  ];
+
+  const report: ExpeditionReport = {
+    id: reportId,
+    missionId: "featured-jezero-expedition",
+    title: "Jezero Crater Western Delta Astrobiology Traverse — Benchmark Dossier",
+    generatedAt: now,
+    summary: "Synthesis of orbital HiRISE/CTX DTM data, CRISM spectral mineralogy, and Perseverance ground-truth imaging across the Jezero lacustrine-deltaic sequence. Confirms clear contact transition from olivine-bearing crater floor mafic units (Hcf_cr) to fine-grained clay-rich delta deposits (Njd_w).",
+    datasetIds: ["ctx_jezero_dtm_20m", "hirise_jezero_dtm", "crism_jezero_mtrdr", "m2020_perseverance_surface_imagery", "m2020_meda_weather"],
+    observationIds: ["obs-m2020-delta-crossbedding", "obs-crism-phyllosilicates"],
+    scientificTargetIds: [target1Id, target2Id, target3Id, target4Id],
+    candidateRouteIds: [routeId],
+    selectedRouteId: routeId,
+    fieldNotes,
+    knowledgeGaps,
+    limitations: [
+      "Simulated EVA metabolic drawdowns reflect Apollo/Artemis baseline models (NASA SP-2008-548).",
+      "Orbital remote sensing spatial resolution is 20m for CTX DTM and 25cm for HiRISE orthomosaics.",
+    ],
+    conclusions: [
+      "The Jezero Western Delta represents a multi-phase deltaic deposit with robust preservation potential for organic biosignatures.",
+      "The contact crossing between the Māaz formation floor and the delta scarp exhibits low slope hazards (<15°), confirming traverse safety for astronaut EVA.",
+      "Fine-grained smectite clays sampled at Target 3 correlate with CRISM orbital absorption bands, validating the 4-tier evidentiary pipeline.",
+    ],
+    recommendedInvestigations: [
+      "Perform high-precision laser-induced breakdown spectroscopy (LIBS) on Kodiak Butte basal contact strata.",
+      "Cache sample canisters from both the low-energy mudstones and high-energy conglomerate channels for Mars Sample Return.",
+    ],
+    simulatedSampleIds: ["sample-jz-eva-01", "sample-jz-eva-02"],
+  };
+
+  return {
+    id: "featured-jezero-expedition",
+    name: "Jezero Delta Astrobiology Expedition (Featured)",
+    objective: "Reconstruct the lacustrine-deltaic depositional sequence of Jezero Crater and evaluate biosignature preservation potential across the Western Delta front.",
+    question: "Did the lacustrine-deltaic sequence in Jezero Crater preserve biosignatures within smectite clay-bearing strata of the Western Delta scarp?",
+    region: jezeroRegion,
+    configuration: {
+      startingLocation: { latitude: 18.4447, longitude: 77.4508 },
+      scientificTargetIds: [target1Id, target2Id, target3Id, target4Id],
+      missionDurationSols: 3,
+      hypotheticalEVADurationHours: 6.5,
+      nominalTraverseSpeedKmh: 1.8,
+      astronautWeightKg: 80,
+      astronautHeightCm: 180,
+      oxygenConsumptionLitersPerHour: 48,
+      terrainPreferences: {
+        preferredSlopeDegrees: 15,
+        preferredRoughness: 0.5,
+        avoidKnownObstacles: true,
+      },
+      sciencePriorities: ["Biosignature preservation in smectite clay", "Delta topset/foreset contact mapping"],
+      explorationStrategy: "Walk out and return loop from Octavia E. Butler base across delta scarp.",
+      equipment: ["rock_hammer", "portable_xrf", "sample_canisters", "handheld_multispectral_imager"],
+      equipmentLoadout: ["rock_hammer", "portable_xrf", "sample_canisters", "handheld_multispectral_imager"],
+      missionConstraints: ["Max traverse slope < 15 degrees", "Return to base reserve O2 > 20%"],
+      requireReturnToBase: true,
+    },
+    selectedDatasets: getDatasetsForRegion("jezero-crater")
+      .slice(0, 5)
+      .map(toMissionDataset),
+    selectedObservations: observations,
+    scientificTargets: targets,
+    knowledgeGaps,
+    derivedAnalyses: [],
+    interpretations: [],
+    hypotheses: [],
+    candidateRoutes: [route],
+    selectedRouteId: routeId,
+    simulation: {
+      currentPosition: { latitude: 18.4350, longitude: 77.4200 },
+      visitedTargetIds: [target1Id, target2Id, target3Id, target4Id],
+      elapsedTimeSeconds: 5240,
+      progressPercentage: 100,
+      isActive: false,
+      mode: "free",
+      returnedToBase: true,
+      completedAt: now,
+      distanceFromBaseMeters: 2840,
+      totalTraverseMeters: 3420,
+      simulatedSamples: [
+        {
+          id: "sample-jz-eva-01",
+          tubeId: "JZ-EVA-01",
+          name: "Delta Scarp Fine-Grained Clay Mudstone",
+          sampleType: "Rock Core",
+          coordinates: { latitude: 18.4350, longitude: 77.4200 },
+          targetId: target3Id,
+          geologicUnitCode: "Njd_w",
+          geologicalContext: "Harvested from low-energy laminated lacustrine mudstone at the base of the Western Delta front.",
+          collectedAt: now,
+          isSimulated: true,
+          provenanceTier: "SIMULATED_EVA_ACTIVITY",
+        },
+        {
+          id: "sample-jz-eva-02",
+          tubeId: "JZ-EVA-02",
+          name: "Crater Floor Mafic Regolith Transition",
+          sampleType: "Regolith",
+          coordinates: { latitude: 18.4400, longitude: 77.4350 },
+          targetId: target1Id,
+          geologicUnitCode: "Hcf_cr",
+          geologicalContext: "Floor unit basaltic sand and pyroxene-rich gravel near the Séítah formation boundary.",
+          collectedAt: now,
+          isSimulated: true,
+          provenanceTier: "SIMULATED_EVA_ACTIVITY",
+        },
+      ],
+      suit: {
+        oxygenPercent: 88.4,
+        suitPressureKpa: 29.6,
+        co2ScrubberPercent: 91,
+        suitTemperatureCelsius: 21.2,
+        ventilationNominal: true,
+        hydrationPercent: 84,
+        batteryPercent: 79,
+        commsStatus: "Nominal",
+        dustExposureIndex: 3,
+        readinessVerified: true,
+      },
+      environment: createDefaultEnvironment(),
+    },
+    temporal: {
+      mode: "present",
+      selectedDate: getCurrentUTCDate(),
+      futureSols: 1,
+    },
+    fieldNotes,
+    reports: [report],
     createdAt: now,
     updatedAt: now,
   };
@@ -335,6 +625,15 @@ export function MissionProvider({
         window.sessionStorage.setItem(MISSION_STORAGE_KEY, JSON.stringify(found));
       } catch {}
     }
+  }
+
+  function loadFeaturedDemo(): void {
+    archiveMission(mission);
+    const demo = createFeaturedDemoMission();
+    setMission(demo);
+    try {
+      window.sessionStorage.setItem(MISSION_STORAGE_KEY, JSON.stringify(demo));
+    } catch {}
   }
 
   // Listen for scientific fieldwork events emitted by the Marswalk 3D simulator iframe
@@ -597,6 +896,7 @@ export function MissionProvider({
         createNewExpedition,
         abandonExpedition,
         loadExpedition,
+        loadFeaturedDemo,
       }}
     >
       {children}

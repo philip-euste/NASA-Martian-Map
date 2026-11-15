@@ -36,17 +36,24 @@ export default function AppLayout({
 }
 
 export function SiteFooter({
-  left = "Mars Explorer",
-  right = "Data: NASA / JPL-Caltech / USGS",
+  left = "Mars Explorer · Open Science Planetary Mission Synthesis",
+  right = "Data: NASA / JPL-Caltech / USGS Astrogeology / ESA",
 }: {
   left?: ReactNode;
   right?: ReactNode;
 }) {
   return (
-    <footer className="mx-no-print border-t border-mx-border">
-      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-5 py-6 sm:px-8">
-        <span className="mx-eyebrow text-mx-dim">{left}</span>
-        <span className="mx-eyebrow text-mx-dim">{right}</span>
+    <footer className="mx-no-print border-t border-mx-border bg-mx-bg-raised/40">
+      <div className="mx-auto flex max-w-[1440px] flex-col gap-2.5 px-5 py-6 sm:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="mx-eyebrow text-mx-dim">{left}</span>
+          <span className="mx-eyebrow text-mx-dim">{right}</span>
+        </div>
+        <p className="mx-mono m-0 text-[10px] text-mx-dim">
+          Independent open-science educational research tool developed for the NASA Space Apps Challenge.
+          Planetary remote sensing datasets, orbital mosaics, and rover archives are public domain works of NASA / JPL-Caltech / USGS.
+          Not officially affiliated with or endorsed by NASA.
+        </p>
       </div>
     </footer>
   );

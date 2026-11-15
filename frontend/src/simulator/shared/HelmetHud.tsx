@@ -838,8 +838,11 @@ export default function HelmetHud({
           <div className="visor-panel visor-suit pointer-events-auto flex w-full max-w-full flex-col gap-1.5 rounded-xl border border-white/12 bg-[#141215]/90 px-3.5 py-2.5 text-xs shadow-xl backdrop-blur-md">
             {/* Suit Life-Support Gauges (Explicitly labeled SIMULATED PLSS) */}
             <div className="flex flex-wrap items-center gap-3 font-mono text-[11px]">
-              <span className="mx-eyebrow mx-eyebrow--accent">
-                PLSS SUIT (SIMULATED)
+              <span
+                className="mx-eyebrow mx-eyebrow--accent cursor-help"
+                title="Bioenergetics Baseline: NASA SP-2008-548 (Apollo Lunar Surface EVA standards) scaled to Martian 0.38g gravity, 120 kg suit mass, and terrain slope work."
+              >
+                PLSS SUIT (SIMULATED) ℹ
               </span>
               <span className="text-mx-muted">
                 O₂{" "}

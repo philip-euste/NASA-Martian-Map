@@ -647,7 +647,7 @@ export default function MissionBuilderPage() {
                       />
                       <p className="mx-hint">
                         Slopes above ~15° increase astronaut metabolic exertion
-                        and slip risk.
+                        and slip risk (NASA SP-2008-548 Apollo bioenergetics baseline: W = m · g_mars · sin(θ) · v).
                       </p>
                     </div>
 

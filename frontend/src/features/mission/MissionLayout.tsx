@@ -59,6 +59,7 @@ export default function MissionLayout({
     abandonExpedition,
     archivedExpeditions,
     loadExpedition,
+    loadFeaturedDemo,
   } = useMission();
   const navigate = useNavigate();
   const location = useLocation();
@@ -288,6 +289,19 @@ export default function MissionLayout({
                   <Plus size={13} aria-hidden="true" />
                   <span className="hidden sm:inline">New Expedition</span>
                   <span className="sm:hidden">New</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    loadFeaturedDemo();
+                    navigate("/mission/report");
+                  }}
+                  className="mx-btn mx-btn--ghost mx-btn--sm text-mx-accent hover:bg-mx-accent/15"
+                  title="Load Featured Jezero Delta Astrobiology benchmark expedition (1-Click Demo for evaluators)"
+                >
+                  <Sparkles size={13} className="text-mx-accent" aria-hidden="true" />
+                  <span className="hidden lg:inline">Featured Demo</span>
                 </button>
 
                 <button
@@ -622,6 +636,33 @@ export default function MissionLayout({
             </div>
 
             <div className="mt-4 space-y-4">
+              {/* Evaluator 1-Click Benchmark Preset */}
+              <div className="rounded-lg border border-mx-accent/40 bg-mx-accent/10 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="max-w-xs">
+                    <span className="mx-eyebrow mx-eyebrow--accent">Evaluator Quickstart</span>
+                    <p className="mx-heading m-0 text-xs font-semibold text-mx-text">
+                      Jezero Delta Benchmark Preset
+                    </p>
+                    <p className="mx-body m-0 mt-0.5 text-[11px] text-mx-muted">
+                      Pre-populates 4 completed stages with USGS SIM 3464 stratigraphy, rover imagery, and an exportable dossier.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      loadFeaturedDemo();
+                      setNewExpeditionModalOpen(false);
+                      navigate("/mission/report");
+                    }}
+                    className="mx-btn mx-btn--primary mx-btn--sm shrink-0"
+                  >
+                    <Sparkles size={12} className="mr-1" />
+                    Load Preset
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-mx-text">
                   Expedition Name
