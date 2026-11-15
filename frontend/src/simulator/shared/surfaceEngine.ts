@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
-import type { SimulatorEnvironmentConfig } from "./environment";
+import { normalizeEastLongitude, type SimulatorEnvironmentConfig } from "./environment";
 import { verticalFovForAspect } from "./projection";
 import { MAP_LAYERS } from "../../data/mapLayers";
 import type { MapLayerId } from "../../data/mapLayers";
@@ -235,9 +235,10 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   const zToRow = (z: number) => (z + halfD) / M.cellZ;
 
   function isLonLatInsideManifest(lon: number, lat: number): boolean {
-    if (!M) return false;
+    if (!M || !Number.isFinite(lon) || !Number.isFinite(lat) || lat < -90 || lat > 90) return false;
     const p = M.proj;
-    return lon >= p.westLonDeg && lon <= p.eastLonDeg && lat >= p.southLatDeg && lat <= p.northLatDeg;
+    const eastLon = normalizeEastLongitude(lon);
+    return eastLon >= p.westLonDeg && eastLon <= p.eastLonDeg && lat >= p.southLatDeg && lat <= p.northLatDeg;
   }
 
   function overviewH(oc: number, or: number) {
@@ -277,10 +278,11 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       const lr = row - ty * T;
       if (lc >= 0 && lc <= T && lr >= 0 && lr <= T) {
         const i = lr * (T + 1) + lc;
-        if (i >= 0 && i < t.full.length) return t.full[i];
+        if (i >= 0 && i < t.full.length && Number.isFinite(t.full[i])) return t.full[i];
       }
     }
-    return sampleOverviewBilinear(col, row);
+    const fallback = sampleOverviewBilinear(col, row);
+    return Number.isFinite(fallback) ? fallback : M.heightMin / M.heightScale;
   }
 
   function groundY(x: number, z: number): number {
@@ -292,7 +294,8 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const ay = r - r0;
     const q = (sampleQ(c0, r0) * (1 - ax) + sampleQ(c0 + 1, r0) * ax) * (1 - ay) +
       (sampleQ(c0, r0 + 1) * (1 - ax) + sampleQ(c0 + 1, r0 + 1) * ax) * ay;
-    return q * M.heightScale;
+    const height = q * M.heightScale;
+    return Number.isFinite(height) ? height : M.heightMin;
   }
 
   function sampleSlopeDegrees(x: number, z: number): number {
@@ -432,7 +435,9 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   }
 
   const BUILTIN_LABEL: Record<BuiltinLayer, string> = {
-    imagery: "CTX Imagery (ortho)",
+    imagery: envConfig.terrain.imageryProduct.includes("MOLA")
+      ? "MOLA-derived hillshade (not optical imagery)"
+      : "CTX optical orthomosaic",
     hillshade: "Hillshade",
     elevation: "Elevation ramp",
     slope: "Slope",
@@ -1034,6 +1039,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
   let pendingSnap = 0;
 
   function teleport(col: number, row: number) {
+    if (!Number.isFinite(col) || !Number.isFinite(row)) return;
     col = Math.min(Math.max(col, validColMin + 4), validColMax - 4);
     row = Math.min(Math.max(row, validRowMin + 4), validRowMax - 4);
     player.pos.set(colToX(col), 0, rowToZ(row));
@@ -1514,7 +1520,21 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
 
     if (e.code === "KeyL" && M && !e.repeat) cycleSurfaceLayer();
 
-    if (e.code === "KeyE" && M) {
+    if (e.code === "Escape" && externalModalOpen) {
+      externalModalOpen = false;
+      window.parent.postMessage({ type: "marswalk:close-modal" }, "*");
+      controls.lock();
+      e.preventDefault();
+      return;
+    }
+
+    if (e.code === "KeyE" && M && !e.repeat) {
+      if (externalModalOpen) {
+        externalModalOpen = false;
+        window.parent.postMessage({ type: "marswalk:close-modal" }, "*");
+        controls.lock();
+        return;
+      }
       externalModalOpen = true;
       keys.clear();
       overlay.classList.add("hidden");
@@ -1524,7 +1544,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       if (window.parent && window.parent !== window) {
         const { lon, lat } = colRowToLonLat(xToCol(player.pos.x), zToRow(player.pos.z));
         window.parent.postMessage({
-          type: "marswalk:open-fieldwork",
+          type: "marswalk:toggle-fieldwork",
           latitude: Number(lat.toFixed(5)),
           longitude: Number(lon.toFixed(5)),
           targetId: nearestBeacon && !nearestBeacon.beacon.isBase ? nearestBeacon.beacon.id : undefined,
@@ -1677,6 +1697,8 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
         overlay.classList.add("hidden");
         closeMap();
         controls.unlock();
+      } else if (!controls.isLocked && mapPanel.classList.contains("hidden")) {
+        overlay.classList.remove("hidden");
       }
       emitTelemetrySync();
       return;
@@ -1736,7 +1758,7 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
       M
     ) {
       if (isLonLatInsideManifest(data.longitude, data.latitude)) {
-        const c = lonLatToColRow(data.longitude, data.latitude);
+        const c = lonLatToColRow(normalizeEastLongitude(data.longitude), data.latitude);
         teleport(c.col, c.row);
         emitTelemetrySync();
       }
@@ -1848,12 +1870,22 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const dt = Math.min(clock.getDelta(), 0.1);
 
     if (M && tiles.length) {
+      if (![player.pos.x, player.pos.y, player.pos.z, player.vel.x, player.vel.y, player.vel.z].every(Number.isFinite)) {
+        const base = lonLatToColRow(baseLatLon.lon, baseLatLon.lat);
+        teleport(base.col, base.row);
+      }
       if (controls.isLocked) {
         updatePlayer(dt);
       } else if (pendingSnap > 0) {
         player.pos.y = groundY(player.pos.x, player.pos.z) + CONFIG.eyeHeight;
         camera.position.copy(player.pos);
         if (activeLoads === 0) pendingSnap--;
+      }
+      if (![player.pos.x, player.pos.y, player.pos.z].every(Number.isFinite)) {
+        player.pos.set(baseWorldPos.x, baseWorldPos.y, baseWorldPos.z);
+        player.vel.set(0, 0, 0);
+        player.horizVel.set(0, 0);
+        camera.position.copy(player.pos);
       }
       updateStreaming(dt);
     }

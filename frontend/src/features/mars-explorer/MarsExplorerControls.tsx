@@ -26,6 +26,8 @@ export default function MarsExplorerControls() {
 
   const {
     selectedLayerId,
+    viewMode,
+    selectedStudyRegionId,
     setSelectedLayerId,
     opacity,
     setOpacity,
@@ -350,13 +352,16 @@ export default function MarsExplorerControls() {
                 />
               </>
             )}
+            {overlayLayerId && viewMode === "globe" && (
+              <p className="m-0 text-[10px] text-amber-300">Comparative overlays are currently rendered in the 2D map only; the selected layer and opacity are saved.</p>
+            )}
           </div>
 
           {/* USGS Geologic Units Vector Layer */}
           <div className="mt-3.5 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-mx-text">
-                USGS Jezero Geology (SIM 3464)
+                {selectedStudyRegionId === "jezero" ? "USGS Jezero Geology (SIM 3464)" : "Jezero geology (SIM 3464)"}
               </span>
               <button
                 type="button"
@@ -365,9 +370,10 @@ export default function MarsExplorerControls() {
                     ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
                     : "mx-btn--secondary"
                 }`}
-                onClick={() => setShowGeologyOverlay(!showGeologyOverlay)}
+                disabled={selectedStudyRegionId !== "jezero"}
+                onClick={() => selectedStudyRegionId === "jezero" && setShowGeologyOverlay(!showGeologyOverlay)}
               >
-                {showGeologyOverlay ? "Active" : "Disabled"}
+                {selectedStudyRegionId !== "jezero" ? "Jezero only" : showGeologyOverlay ? "Active" : "Disabled"}
               </button>
             </div>
 
@@ -484,8 +490,8 @@ export default function MarsExplorerControls() {
         {temporal.mode === "past" && (
           <div className="mx-temporal-content">
             <p className="mx-temporal-description m-0">
-              Choose an Earth date to define the historical period
-              you want to investigate.
+              Choose an Earth date for mission records. Historical rasters and
+              telemetry are unavailable; displayed map layers are unchanged.
             </p>
             <div className="mx-temporal-control">
               <label htmlFor="mars-past-date">Date</label>

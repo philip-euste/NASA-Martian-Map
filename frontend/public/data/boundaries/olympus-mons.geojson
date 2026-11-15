@@ -1,0 +1,1 @@
+{"type":"Feature","properties":{"region_id":"olympus-mons","boundary_status":"offline_dem_coverage_approximation","boundary_accuracy":"DEM coverage extent; not a geological boundary"},"geometry":{"type":"Polygon","coordinates":[[[-135.5,17.0],[-132.0,17.0],[-132.0,20.2],[-135.5,20.2],[-135.5,17.0]]]}}

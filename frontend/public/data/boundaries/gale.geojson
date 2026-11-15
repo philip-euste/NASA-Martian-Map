@@ -1,0 +1,1 @@
+{"type":"Feature","properties":{"region_id":"gale","boundary_status":"offline_dem_coverage_approximation","boundary_accuracy":"DEM coverage extent; not a geological boundary"},"geometry":{"type":"Polygon","coordinates":[[[136.9,-5.85],[138.6,-5.85],[138.6,-4.85],[136.9,-4.85],[136.9,-5.85]]]}}

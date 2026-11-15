@@ -58,8 +58,8 @@ export const EXPLORATION_SITES: ExplorationSite[] = [
   {
     id: "valles-marineris",
     name: "Valles Marineris",
-    latitude: -13.9,
-    longitude: -59.2,
+    latitude: -9.8,
+    longitude: 283.6,
     description: "A vast canyon system near the Martian equator.",
     regionLabel: "Equatorial Mars",
     terrainType: "Canyon system",

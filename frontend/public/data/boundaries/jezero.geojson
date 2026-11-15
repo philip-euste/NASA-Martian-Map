@@ -1,0 +1,1 @@
+{"type":"Feature","properties":{"region_id":"jezero","boundary_status":"offline_dem_coverage_approximation","boundary_accuracy":"DEM coverage extent; not a geological boundary"},"geometry":{"type":"Polygon","coordinates":[[[76.99,17.5805],[78.4935,17.5805],[78.4935,19.2902],[76.99,19.2902],[76.99,17.5805]]]}}

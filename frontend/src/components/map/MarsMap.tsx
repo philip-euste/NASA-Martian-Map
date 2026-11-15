@@ -73,13 +73,14 @@ interface WmtsTileLayerProps {
 interface StudyRegion {
   readonly id: string;
   readonly name: string;
+  readonly fallbackUrl: string;
 }
 
 const SUPPORTED_STUDY_REGIONS: readonly StudyRegion[] = [
-  { id: "jezero", name: "Jezero Crater" },
-  { id: "gale", name: "Gale Crater" },
-  { id: "valles-marineris", name: "Valles Marineris" },
-  { id: "olympus-mons", name: "Olympus Mons" },
+  { id: "jezero", name: "Jezero Crater", fallbackUrl: "/data/boundaries/jezero.geojson" },
+  { id: "gale", name: "Gale Crater", fallbackUrl: "/data/boundaries/gale.geojson" },
+  { id: "valles-marineris", name: "Valles Marineris", fallbackUrl: "/data/boundaries/valles-marineris.geojson" },
+  { id: "olympus-mons", name: "Olympus Mons", fallbackUrl: "/data/boundaries/olympus-mons.geojson" },
 ];
 
 const TRANSPARENT_PIXEL =
@@ -646,6 +647,16 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
           } catch (error: unknown) {
             if (controller.signal.aborted) return null;
 
+            try {
+              const response = await fetch(region.fallbackUrl, { signal: controller.signal });
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const payload: unknown = await response.json();
+              if (!isRegionFeature(payload)) throw new Error("Invalid offline GeoJSON");
+              return { id: region.id, feature: payload, error: `${region.name}: using approximate offline DEM coverage outline.` };
+            } catch {
+              if (controller.signal.aborted) return null;
+            }
+
             return {
               id: region.id,
               feature: null,
@@ -668,7 +679,8 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
 
         if (result.feature) {
           loadedFeatures[result.id] = result.feature;
-        } else if (result.error) {
+        }
+        if (result.error) {
           const region = SUPPORTED_STUDY_REGIONS.find(
             (item) => item.id === result.id
           );
@@ -683,7 +695,7 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
 
       setBoundaryError(
         failedRegions.length > 0
-          ? `Some study-region boundaries could not be loaded:\n${failedRegions.join("\n")}`
+          ? `Study-region boundary status:\n${failedRegions.join("\n")}`
           : null
       );
 

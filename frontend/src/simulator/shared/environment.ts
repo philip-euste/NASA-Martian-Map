@@ -162,10 +162,17 @@ export function isWithinBounds(
   point: { latitude: number; longitude: number } | null | undefined
 ): boolean {
   if (!point) return false;
+  const longitude = normalizeEastLongitude(point.longitude);
   return (
+    Number.isFinite(point.latitude) && Number.isFinite(point.longitude) &&
     point.latitude >= bounds.southLatDeg &&
     point.latitude <= bounds.northLatDeg &&
-    point.longitude >= bounds.westLonDeg &&
-    point.longitude <= bounds.eastLonDeg
+    longitude >= bounds.westLonDeg &&
+    longitude <= bounds.eastLonDeg
   );
+}
+
+/** Convert signed east longitude to the IAU 0–360° east convention. */
+export function normalizeEastLongitude(longitude: number): number {
+  return ((longitude % 360) + 360) % 360;
 }

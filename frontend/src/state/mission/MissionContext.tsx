@@ -287,14 +287,17 @@ export function MissionProvider({
       } else if (data.type === "marswalk:record-note" && typeof data.content === "string") {
         const noteContent = data.content.trim();
         if (!noteContent) return;
+        const latitude = data.latitude;
+        const longitude = data.longitude;
+        if (typeof latitude !== "number" || !Number.isFinite(latitude) || latitude < -90 || latitude > 90 || typeof longitude !== "number" || !Number.isFinite(longitude) || longitude < -180 || longitude > 360) return;
         setMission((current) => {
           const newNote: FieldNote = {
             id: `note-${crypto.randomUUID()}`,
             missionId: current.id,
             content: noteContent,
             coordinates: {
-              latitude: Number(data.latitude) || current.region?.coordinates.latitude || 18.4447,
-              longitude: Number(data.longitude) || current.region?.coordinates.longitude || 77.4508,
+              latitude,
+              longitude,
             },
             relatedTargetId: typeof data.targetId === "string" ? data.targetId : undefined,
             createdAt: new Date().toISOString(),
@@ -308,6 +311,9 @@ export function MissionProvider({
       } else if (data.type === "marswalk:record-observation" && typeof data.name === "string") {
         const obsName = data.name.trim();
         if (!obsName) return;
+        const latitude = data.latitude;
+        const longitude = data.longitude;
+        if (typeof latitude !== "number" || !Number.isFinite(latitude) || latitude < -90 || latitude > 90 || typeof longitude !== "number" || !Number.isFinite(longitude) || longitude < -180 || longitude > 360) return;
         setMission((current) => {
           const regionElevationDatasetId =
             (current.region as any)?.elevationDatasets?.[0]?.id ??
@@ -320,10 +326,11 @@ export function MissionProvider({
               ? `Marswalk Surface EVA · ${current.region.name}`
               : "Marswalk Surface EVA (Simulated In-Situ Observation)",
             coordinates: {
-              latitude: Number(data.latitude) || current.region?.coordinates.latitude || 18.4447,
-              longitude: Number(data.longitude) || current.region?.coordinates.longitude || 77.4508,
+              latitude,
+              longitude,
             },
             observationDate: current.temporal.selectedDate,
+            regionId: current.region?.id,
             description:
               typeof data.description === "string" && data.description.trim()
                 ? data.description.trim()
@@ -344,14 +351,17 @@ export function MissionProvider({
           };
         });
       } else if (data.type === "marswalk:collect-sample" && typeof data.name === "string") {
+        const latitude = data.latitude;
+        const longitude = data.longitude;
+        if (typeof latitude !== "number" || !Number.isFinite(latitude) || latitude < -90 || latitude > 90 || typeof longitude !== "number" || !Number.isFinite(longitude) || longitude < -180 || longitude > 360) return;
         setMission((current) => {
           const newSample: SimulatedSample = {
             id: `sample-${crypto.randomUUID()}`,
             name: data.name.trim() || "Simulated Core Sample",
             sampleType: data.sampleType || "Rock Core",
             coordinates: {
-              latitude: Number(data.latitude) || current.region?.coordinates.latitude || 18.4447,
-              longitude: Number(data.longitude) || current.region?.coordinates.longitude || 77.4508,
+              latitude,
+              longitude,
             },
             targetId: typeof data.targetId === "string" ? data.targetId : undefined,
             geologicalContext:
@@ -377,19 +387,19 @@ export function MissionProvider({
           simulation: {
             ...current.simulation,
             currentPosition:
-              typeof data.latitude === "number" && typeof data.longitude === "number"
+              typeof data.latitude === "number" && Number.isFinite(data.latitude) && data.latitude >= -90 && data.latitude <= 90 && typeof data.longitude === "number" && Number.isFinite(data.longitude) && data.longitude >= -180 && data.longitude <= 360
                 ? { latitude: data.latitude, longitude: data.longitude }
                 : current.simulation.currentPosition,
             elapsedTimeSeconds:
-              typeof data.elapsedTimeSeconds === "number"
+              typeof data.elapsedTimeSeconds === "number" && Number.isFinite(data.elapsedTimeSeconds) && data.elapsedTimeSeconds >= 0
                 ? data.elapsedTimeSeconds
                 : current.simulation.elapsedTimeSeconds,
             distanceFromBaseMeters:
-              typeof data.distanceFromBaseMeters === "number"
+              typeof data.distanceFromBaseMeters === "number" && Number.isFinite(data.distanceFromBaseMeters) && data.distanceFromBaseMeters >= 0
                 ? data.distanceFromBaseMeters
                 : current.simulation.distanceFromBaseMeters,
             totalTraverseMeters:
-              typeof data.totalTraverseMeters === "number"
+              typeof data.totalTraverseMeters === "number" && Number.isFinite(data.totalTraverseMeters) && data.totalTraverseMeters >= 0
                 ? data.totalTraverseMeters
                 : current.simulation.totalTraverseMeters,
             returnedToBase:
@@ -474,10 +484,17 @@ export function MissionProvider({
           ? {
               ...current.simulation,
               currentPosition: null,
+              visitedTargetIds: [],
+              simulatedSamples: [],
               distanceFromBaseMeters: 0,
               totalTraverseMeters: 0,
             }
           : current.simulation,
+        ...(isDifferentRegion ? {
+          selectedDatasets: [], scientificTargets: [],
+          knowledgeGaps: [], derivedAnalyses: [], interpretations: [], hypotheses: [],
+          candidateRoutes: [], selectedRouteId: null, fieldNotes: [],
+        } : {}),
         updatedAt: new Date().toISOString(),
       };
     });

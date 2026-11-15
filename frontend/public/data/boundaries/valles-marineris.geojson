@@ -1,0 +1,1 @@
+{"type":"Feature","properties":{"region_id":"valles-marineris","boundary_status":"offline_dem_coverage_approximation","boundary_accuracy":"DEM coverage extent; not a geological boundary"},"geometry":{"type":"Polygon","coordinates":[[[-78.5,-11.5],[-74.2,-11.5],[-74.2,-8.0],[-78.5,-8.0],[-78.5,-11.5]]]}}

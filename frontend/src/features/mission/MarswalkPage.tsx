@@ -45,6 +45,7 @@ import type {
   SimulatedSample,
 } from "../../types";
 import { identifyGeologicUnitAt } from "../../utils/jezeroStratigraphy";
+import type { GeologicUnitInfo } from "../../utils/jezeroStratigraphy";
 import MissionLayout from "./MissionLayout";
 import { toMutable } from "./missionHelpers";
 
@@ -67,6 +68,10 @@ type ContingencyPreset = {
   };
   iframeMode: "nominal" | "dust-squall";
 };
+
+function hasValidCoordinates(point: Coordinates | null | undefined): point is Coordinates {
+  return Boolean(point && Number.isFinite(point.latitude) && point.latitude >= -90 && point.latitude <= 90 && Number.isFinite(point.longitude) && point.longitude >= -180 && point.longitude <= 360);
+}
 
 const CONTINGENCY_PRESETS: ContingencyPreset[] = [
   {
@@ -358,7 +363,7 @@ export default function MarswalkPage() {
             : typeof msg.slopeDeg === "number"
               ? msg.slopeDeg
               : null;
-        if (nextSlope !== null) {
+        if (nextSlope !== null && Number.isFinite(nextSlope)) {
           setLiveSlopeDeg(nextSlope);
         }
         const nextElev =
@@ -367,10 +372,10 @@ export default function MarswalkPage() {
             : typeof msg.elevation === "number"
               ? msg.elevation
               : null;
-        if (nextElev !== null) {
+        if (nextElev !== null && Number.isFinite(nextElev)) {
           setLiveElevationM(nextElev);
         }
-        if (typeof msg.headingDegrees === "number") {
+        if (typeof msg.headingDegrees === "number" && Number.isFinite(msg.headingDegrees)) {
           setLiveHeadingDeg(msg.headingDegrees);
         }
         if (typeof msg.flyMode === "boolean") {
@@ -380,8 +385,8 @@ export default function MarswalkPage() {
           setLiveMapOpen(msg.mapOpen);
         }
         if (
-          typeof msg.latitude === "number" &&
-          typeof msg.longitude === "number"
+          typeof msg.latitude === "number" && Number.isFinite(msg.latitude) && msg.latitude >= -90 && msg.latitude <= 90 &&
+          typeof msg.longitude === "number" && Number.isFinite(msg.longitude) && msg.longitude >= -180 && msg.longitude <= 360
         ) {
           updateSimulation({
             currentPosition: {
@@ -415,11 +420,13 @@ export default function MarswalkPage() {
             isActive: true,
           });
         }
-      } else if (msg.type === "marswalk:open-fieldwork") {
+      } else if (msg.type === "marswalk:open-fieldwork" || msg.type === "marswalk:toggle-fieldwork") {
         if (typeof msg.targetId === "string" && msg.targetId) {
           setSelectedTargetId(msg.targetId);
         }
         setShowFieldworkDrawer(true);
+      } else if (msg.type === "marswalk:close-modal") {
+        setShowFieldworkDrawer(false);
       } else if (
         msg.type === "marswalk:return-to-base" ||
         msg.type === "marswalk:returned-to-base"
@@ -472,7 +479,7 @@ export default function MarswalkPage() {
         return;
       }
 
-      if (!isInput && (e.key === "e" || e.key === "E")) {
+      if (!isInput && !e.repeat && (e.key === "e" || e.key === "E")) {
         e.preventDefault();
         setShowFieldworkDrawer((prev) => !prev);
       }
@@ -516,31 +523,22 @@ export default function MarswalkPage() {
     longitude: number,
     label: string
   ) => {
+    if (!isWithinBounds(activeEnv.bounds, { latitude, longitude })) {
+      showTransientFeedback(`${label} is outside the active ${activeEnv.displayName} terrain coverage.`);
+      return;
+    }
     const win = iframeRef.current?.contentWindow;
     if (win) {
       win.postMessage(
         {
-          type: "mars-explorer:expedition",
-          name: label,
-          regionId: activeEnv.id,
+          type: "mars-explorer:teleport",
           latitude,
           longitude,
-          withinDem: true,
-          targets: mission.scientificTargets.map((t) => ({
-            id: t.id,
-            name: t.name,
-            latitude: t.coordinates.latitude,
-            longitude: t.coordinates.longitude,
-            kind: "target",
-          })),
         },
         "*"
       );
     }
-    updateSimulation({
-      currentPosition: { latitude, longitude },
-      isActive: true,
-    });
+    updateSimulation({ currentPosition: { latitude, longitude }, isActive: true });
     showTransientFeedback(
       `Translated astronaut position to ${label} (${formatCoordinates(latitude, longitude)})`
     );
@@ -568,6 +566,7 @@ export default function MarswalkPage() {
       target?.coordinates ??
       mission.simulation.currentPosition ??
       baseCoordinates;
+    if (!hasValidCoordinates(coords)) return;
 
     if (target) {
       const nextVisited = mission.simulation.visitedTargetIds.includes(
@@ -692,13 +691,23 @@ export default function MarswalkPage() {
     return "Current Astronaut Surface Station";
   }, [activeTargetObj, isApproachingBeacon, nearestBeacon]);
 
-  const currentGeologicUnit = useMemo(
-    () => identifyGeologicUnitAt(inspectionCoords),
-    [inspectionCoords]
-  );
+  const currentGeologicUnit = useMemo<GeologicUnitInfo>(() => activeEnv.id === "jezero-crater"
+    ? identifyGeologicUnitAt(inspectionCoords)
+    : {
+        unit_code: "Unavailable", unit_name: "Regional geology not loaded",
+        stratigraphic_age: "Unavailable", lithology: "No region-specific geology dataset is configured.",
+        interpretation: "Do not infer a geological unit from Jezero data.", dominant_minerals: [],
+        trafficability: "Unavailable", thermalInertiaJm2Ks05: 0, hasLooseSandHazard: false,
+        color: "#94a3b8", stroke_color: "#64748b",
+      }, [activeEnv.id, inspectionCoords]);
 
   // Correlate active target / beacon coordinates with verified Perseverance Sols (Sol 1, 420, 2024, 2031)
   const groundTruthCorrelation = useMemo(() => {
+    if (activeEnv.id !== "jezero-crater") return {
+      sol: 0, altSol: 0, zoneLabel: "No rover ground-truth available",
+      rationale: activeEnv.id === "gale-crater" ? "Curiosity and REMS context is available through the Gale datasets; Perseverance imagery does not apply." : "No rover telemetry is available for this region; use orbital and regional context.",
+      orbitalLink: "Region-specific orbital references only.",
+    };
     const lowerLabel = inspectionLabel.toLowerCase();
     const unitCode = currentGeologicUnit.unit_code;
     const distFromLanding = greatCircleDistanceMeters(
@@ -762,6 +771,7 @@ export default function MarswalkPage() {
         "Bundled Séítah olivine reference profile. The referenced observation FRT0000B204 and the profile extraction remain unverified.",
     };
   }, [
+    activeEnv.id,
     activeEnv.defaultBase.latitude,
     activeEnv.defaultBase.longitude,
     currentGeologicUnit.unit_code,
@@ -790,6 +800,10 @@ export default function MarswalkPage() {
   useEffect(() => {
     let cancelled = false;
     setGroundTruthImgError(false);
+    if (activeEnv.id !== "jezero-crater") {
+      setGroundTruthImages([]);
+      return () => { cancelled = true; };
+    }
     perseveranceImageryProvider
       .queryImages({
         sol: activeGroundTruthSol,
@@ -810,7 +824,7 @@ export default function MarswalkPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeGroundTruthSol]);
+  }, [activeEnv.id, activeGroundTruthSol]);
 
   const activeGroundTruthImage =
     groundTruthImages[groundTruthIdx] ?? groundTruthImages[0] ?? null;
@@ -894,6 +908,7 @@ export default function MarswalkPage() {
     if (!obsTitle.trim()) return;
     const coords =
       mission.simulation.currentPosition ?? baseCoordinates;
+    if (!hasValidCoordinates(coords)) return;
     const obs: Observation = {
       id: `obs-eva-${Date.now()}`,
       datasetId:
@@ -901,9 +916,10 @@ export default function MarswalkPage() {
       name: `${obsTitle.trim()} (${obsCategory})`,
       coordinates: { ...coords },
       observationDate: new Date().toISOString().slice(0, 10),
+      regionId: activeEnv.id,
       description:
         obsDescription.trim() ||
-        `In-situ Marswalk EVA surface observation recorded at ${formatCoordinates(coords.latitude, coords.longitude)} in USGS unit ${currentGeologicUnit.unit_code} (Elev ${liveElevationM.toFixed(0)} m, Slope ${liveSlopeDeg.toFixed(1)}°).`,
+        `In-situ Marswalk EVA surface observation recorded at ${formatCoordinates(coords.latitude, coords.longitude)} in ${activeEnv.id === "jezero-crater" ? `USGS unit ${currentGeologicUnit.unit_code}` : "unclassified regional geology"} (Elev ${liveElevationM.toFixed(0)} m, Slope ${liveSlopeDeg.toFixed(1)}°).`,
       source: "Marswalk In-Situ EVA Observation (User Recorded)",
       provenance: {
         source: `Simulated Astronaut EVA Fieldwork (${activeEnv.displayName} Reference DEM)`,
@@ -952,6 +968,7 @@ export default function MarswalkPage() {
     }
     const coords =
       mission.simulation.currentPosition ?? baseCoordinates;
+    if (!hasValidCoordinates(coords)) return;
     const rawName = sampleName.trim();
     const formattedName = rawName
       ? rawName.startsWith(`${activeEnv.sampleIdPrefix}-`)
@@ -969,7 +986,7 @@ export default function MarswalkPage() {
       geologicUnitCode: currentGeologicUnit.unit_code,
       geologicalContext:
         sampleContext.trim() ||
-        `Collected in USGS unit ${currentGeologicUnit.unit_code} (${currentGeologicUnit.unit_name}) at ${formatCoordinates(coords.latitude, coords.longitude)} (Slope ${liveSlopeDeg.toFixed(1)}°).`,
+        `${activeEnv.id === "jezero-crater" ? `Collected in USGS unit ${currentGeologicUnit.unit_code} (${currentGeologicUnit.unit_name})` : "Regional geology classification unavailable"} at ${formatCoordinates(coords.latitude, coords.longitude)} (Slope ${liveSlopeDeg.toFixed(1)}°).`,
       collectedAt: new Date().toISOString(),
       isSimulated: true,
       provenanceTier: "SIMULATED_EVA_ACTIVITY",
@@ -1555,7 +1572,7 @@ export default function MarswalkPage() {
                     )}
 
                     {/* Phase 5: Perseverance Ground-Truth Outcrop Preview + Orbital CRISM/HiRISE Telemetry */}
-                    <div className="rounded-lg border border-cyan-500/35 bg-mx-surface/80 p-3">
+                    {activeEnv.id === "jezero-crater" && <div className="rounded-lg border border-cyan-500/35 bg-mx-surface/80 p-3">
                       <div className="flex flex-wrap items-center justify-between gap-1.5">
                         <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-cyan-300">
                           <Camera size={12} />
@@ -1703,7 +1720,7 @@ export default function MarswalkPage() {
                           {groundTruthCorrelation.orbitalLink}
                         </p>
                       </div>
-                    </div>
+                    </div>}
 
                     {/* Linked Orbital Datasets & Open Gaps Context */}
                     <div className="rounded-lg border border-mx-border bg-mx-surface/50 p-3">

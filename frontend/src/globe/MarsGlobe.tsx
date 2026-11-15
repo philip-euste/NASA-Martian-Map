@@ -47,13 +47,14 @@ import { apiUrl } from "../lib/api";
 type StudyRegion = {
   readonly id: string;
   readonly name: string;
+  readonly fallbackUrl: string;
 };
 
 const SUPPORTED_STUDY_REGIONS: readonly StudyRegion[] = [
-  { id: "jezero", name: "Jezero Crater" },
-  { id: "gale", name: "Gale Crater" },
-  { id: "valles-marineris", name: "Valles Marineris" },
-  { id: "olympus-mons", name: "Olympus Mons" },
+  { id: "jezero", name: "Jezero Crater", fallbackUrl: "/data/boundaries/jezero.geojson" },
+  { id: "gale", name: "Gale Crater", fallbackUrl: "/data/boundaries/gale.geojson" },
+  { id: "valles-marineris", name: "Valles Marineris", fallbackUrl: "/data/boundaries/valles-marineris.geojson" },
+  { id: "olympus-mons", name: "Olympus Mons", fallbackUrl: "/data/boundaries/olympus-mons.geojson" },
 ];
 
 type GeoJSONPosition = [number, number, ...number[]];
@@ -542,6 +543,16 @@ function GlobeScene({
           } catch (error) {
             if (controller.signal.aborted) return null;
 
+            try {
+              const response = await fetch(region.fallbackUrl, { signal: controller.signal });
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const payload: unknown = await response.json();
+              if (!isRegionFeature(payload)) throw new Error("Invalid offline GeoJSON");
+              return { region, feature: payload, error: "Using approximate offline DEM coverage outline." };
+            } catch {
+              if (controller.signal.aborted) return null;
+            }
+
             return {
               region,
               feature: null,
@@ -564,7 +575,8 @@ function GlobeScene({
 
         if (result.feature) {
           features[result.region.id] = result.feature;
-        } else if (result.error) {
+        }
+        if (result.error) {
           errors.push(
             `${result.region.name}: ${result.error}`
           );

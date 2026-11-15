@@ -41,6 +41,7 @@ import { createId, toMutable } from "./missionHelpers";
 
 export default function ExpeditionReviewPage() {
   const { mission, updateMission, updateSimulation } = useMission();
+  const isJezero = mission.region?.id === "jezero-crater";
 
   const [noteContent, setNoteContent] = useState("");
   const [noteTargetId, setNoteTargetId] = useState<string>("");
@@ -278,7 +279,7 @@ export default function ExpeditionReviewPage() {
               <div className="flex flex-col gap-2.5">
                 {mission.scientificTargets.map((target) => {
                   const visited = visitedSet.has(target.id);
-                  const targetUnit = identifyGeologicUnitAt(target.coordinates);
+                  const targetUnit = isJezero ? identifyGeologicUnitAt(target.coordinates) : null;
                   return (
                     <div
                       key={target.id}
@@ -293,7 +294,7 @@ export default function ExpeditionReviewPage() {
                           <h3 className="mx-heading m-0 text-sm">
                             {target.name}
                           </h3>
-                          <span
+                          {targetUnit && <span
                             className="rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold"
                             style={{
                               borderColor: targetUnit.color,
@@ -303,7 +304,7 @@ export default function ExpeditionReviewPage() {
                             title={targetUnit.unit_name}
                           >
                             {targetUnit.unit_code}
-                          </span>
+                          </span>}
                           <span className="mx-badge text-[10px]">
                             {visited ? "EVA Visited" : "Pending Visit"}
                           </span>
@@ -313,7 +314,7 @@ export default function ExpeditionReviewPage() {
                             target.coordinates.latitude,
                             target.coordinates.longitude
                           )}{" "}
-                          · {targetUnit.unit_name}
+                          {targetUnit ? ` · ${targetUnit.unit_name}` : " · Regional geology unavailable"}
                         </p>
                         {target.description && (
                           <p className="m-0 mt-1 text-xs text-mx-muted">
@@ -372,7 +373,7 @@ export default function ExpeditionReviewPage() {
                   )?.name;
                   const unitCode =
                     sample.geologicUnitCode ??
-                    identifyGeologicUnitAt(sample.coordinates).unit_code;
+                    (isJezero ? identifyGeologicUnitAt(sample.coordinates).unit_code : "Unavailable");
                   const tubeSerial =
                     sample.tubeId ??
                     `JZ-EVA-${String(idx + 1).padStart(2, "0")}`;

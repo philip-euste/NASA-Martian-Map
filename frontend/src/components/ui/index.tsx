@@ -128,8 +128,11 @@ export function SectionHeading({
    --------------------------------------------------------- */
 
 export function formatCoordinates(latitude: number, longitude: number): string {
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 360) return "Coordinates unavailable";
   const lat = `${Math.abs(latitude).toFixed(2)}°${latitude >= 0 ? "N" : "S"}`;
-  const lon = `${Math.abs(longitude).toFixed(2)}°${longitude >= 0 ? "E" : "W"}`;
+  const lon = longitude > 180
+    ? `${(360 - longitude).toFixed(2)}°W`
+    : `${Math.abs(longitude).toFixed(2)}°${longitude >= 0 ? "E" : "W"}`;
   return `${lat} ${lon}`;
 }
 
