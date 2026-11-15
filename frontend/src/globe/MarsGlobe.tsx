@@ -46,6 +46,7 @@ import type { TileLayerConfig } from "../services/dataProviders";
 import "./MarsGlobe.css";
 import type { Mesh } from "three";
 import { apiUrl } from "../lib/api";
+import { FALLBACK_STUDY_REGION_BOUNDARIES } from "../data/fallbackBoundaries";
 
 type StudyRegion = {
   readonly id: string;
@@ -245,13 +246,73 @@ function buildFillGeometry(feature: RegionFeature): THREE.BufferGeometry | null 
   return geometry;
 }
 
+export interface RegionClassInfo {
+  readonly provinceName: string;
+  readonly classification: "Crater / Fluvial Delta" | "Tectonic Rift / Chasma" | "Volcanic Shield / Caldera";
+  readonly color: string;
+  readonly fillColor: string;
+  readonly cssClass: string;
+}
+
+export function getRegionGeologicalClass(regionId: string): RegionClassInfo {
+  switch (regionId) {
+    case "jezero":
+    case "jezero-crater":
+      return {
+        provinceName: "Isidis Planitia / Nili Planum",
+        classification: "Crater / Fluvial Delta",
+        color: "#38bdf8",
+        fillColor: "#0284c7",
+        cssClass: "geo-class-crater",
+      };
+    case "gale":
+    case "gale-crater":
+      return {
+        provinceName: "Aeolis Palus / Mount Sharp",
+        classification: "Crater / Fluvial Delta",
+        color: "#34d399",
+        fillColor: "#059669",
+        cssClass: "geo-class-crater",
+      };
+    case "valles":
+    case "valles-marineris":
+      return {
+        provinceName: "Melas Chasma / Coprates",
+        classification: "Tectonic Rift / Chasma",
+        color: "#f59e0b",
+        fillColor: "#d97706",
+        cssClass: "geo-class-chasma",
+      };
+    case "olympus":
+    case "olympus-mons":
+      return {
+        provinceName: "Tharsis Montes / Olympus Caldera",
+        classification: "Volcanic Shield / Caldera",
+        color: "#ef4444",
+        fillColor: "#dc2626",
+        cssClass: "geo-class-volcanic",
+      };
+    default:
+      return {
+        provinceName: "Martian Surface Feature",
+        classification: "Crater / Fluvial Delta",
+        color: "#38bdf8",
+        fillColor: "#0284c7",
+        cssClass: "geo-class-crater",
+      };
+  }
+}
+
 function RegionBoundary({
   region,
   feature,
+  selected,
 }: {
   region: StudyRegion;
   feature: RegionFeature;
+  selected?: boolean;
 }) {
+  const geoClass = getRegionGeologicalClass(region.id);
   const rings = useMemo(
     () => getBoundaryRings(feature).map(densifyRing),
     [feature]
@@ -270,9 +331,9 @@ function RegionBoundary({
           raycast={() => null} // never block clicks on the surface underneath
         >
           <meshBasicMaterial
-            color={FILL_COLOR}
+            color={geoClass.fillColor}
             transparent
-            opacity={FILL_OPACITY}
+            opacity={selected ? 0.28 : 0.14}
             side={THREE.DoubleSide}
             depthWrite={false}
             polygonOffset
@@ -289,13 +350,13 @@ function RegionBoundary({
           <Line
             key={`${region.id}-${index}`}
             points={points}
-            color="#38bdf8"
-            lineWidth={2.5}
-            dashed
+            color={geoClass.color}
+            lineWidth={selected ? 3.5 : 2.2}
+            dashed={!selected}
             dashSize={0.025}
             gapSize={0.015}
             transparent
-            opacity={1}
+            opacity={selected ? 1.0 : 0.8}
             depthWrite={false}
             renderOrder={2}
           />
@@ -585,14 +646,13 @@ function GlobeScene({
           } catch (error) {
             if (controller.signal.aborted) return null;
 
-            try {
-              const response = await fetch(region.fallbackUrl, { signal: controller.signal });
-              if (!response.ok) throw new Error(`HTTP ${response.status}`);
-              const payload: unknown = await response.json();
-              if (!isRegionFeature(payload)) throw new Error("Invalid offline GeoJSON");
-              return { region, feature: payload, error: "Using approximate offline DEM coverage outline." };
-            } catch {
-              if (controller.signal.aborted) return null;
+            const fallback = FALLBACK_STUDY_REGION_BOUNDARIES[region.id];
+            if (fallback) {
+              return {
+                region,
+                feature: fallback,
+                error: null,
+              };
             }
 
             return {
@@ -829,7 +889,7 @@ function GlobeScene({
       />
 
       {SUPPORTED_STUDY_REGIONS.map((region) => {
-        const feature = showStudyRegionBoundary && region.id === selectedStudyRegionId
+        const feature = showStudyRegionBoundary
           ? boundaryFeatures[region.id]
           : null;
 
@@ -842,6 +902,7 @@ function GlobeScene({
             <RegionBoundary
               region={region}
               feature={feature}
+              selected={selected}
             />
           </group>
         );

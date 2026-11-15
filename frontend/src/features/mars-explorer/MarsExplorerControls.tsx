@@ -196,15 +196,6 @@ export default function MarsExplorerControls() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span
-            className="mx-chip min-w-0 flex-1 truncate"
-            title={selectedLayer.name}
-          >
-            {selectedLayer.name}
-          </span>
-        </div>
-
         {savedOpen && (
           <div className="mx-panel mx-panel--floating mx-explorer-floating-panel">
             <div className="mx-panel__header !py-3">
@@ -372,68 +363,87 @@ export default function MarsExplorerControls() {
             )}
           </div>
 
-          {/* USGS Geologic Units Vector Layer */}
-          {/* USGS Geologic Units Vector Layer */}
-          <div className="mt-3.5 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-mx-text">
-                {selectedStudyRegionId === "jezero" ? "USGS Jezero Geology (SIM 3464)" : "Jezero geology (SIM 3464)"}
-              </span>
-              <button
-                type="button"
-                className={`mx-btn mx-btn--xs ${
-                  showGeologyOverlay
-                    ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
-                    : "mx-btn--secondary"
-                }`}
-                disabled={selectedStudyRegionId !== "jezero"}
-                onClick={() => selectedStudyRegionId === "jezero" && setShowGeologyOverlay(!showGeologyOverlay)}
-              >
-                {selectedStudyRegionId !== "jezero" ? "Jezero only" : showGeologyOverlay ? "Active" : "Disabled"}
-              </button>
-            </div>
-
-            {showGeologyOverlay && (
-              <div className="space-y-2 rounded border border-mx-border bg-mx-surface/60 p-2 text-xs">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-mx-muted">Polygon Fill Opacity</span>
-                  <span className="mx-mono text-mx-text">
-                    {Math.round(geologyOpacity * 100)}%
+          {/* Geological Units Vector Layer — Contextual to Active Region */}
+          <div className="mt-3.5 space-y-2 border-t border-mx-border pt-3">
+            {selectedStudyRegionId === "jezero" ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-mx-text">
+                    USGS Jezero Geology (SIM 3464)
                   </span>
+                  <button
+                    type="button"
+                    className={`mx-btn mx-btn--xs ${
+                      showGeologyOverlay
+                        ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
+                        : "mx-btn--secondary"
+                    }`}
+                    onClick={() => setShowGeologyOverlay(!showGeologyOverlay)}
+                  >
+                    {showGeologyOverlay ? "Active" : "Disabled"}
+                  </button>
                 </div>
-                <input
-                  className="mx-range"
-                  type="range"
-                  min="0.1"
-                  max="0.9"
-                  step="0.05"
-                  value={geologyOpacity}
-                  onChange={(event) => setGeologyOpacity(Number(event.target.value))}
-                />
 
-                <div className="mt-2 space-y-1 text-[11px]">
-                  <span className="mx-eyebrow text-[10px]">Stratigraphic Legend</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-                    <span>HpHd_scarp: Western Delta Scarp (Lacustrine Mudstone)</span>
+                {showGeologyOverlay && (
+                  <div className="space-y-2 rounded border border-mx-border bg-mx-surface/60 p-2 text-xs">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-mx-muted">Polygon Fill Opacity</span>
+                      <span className="mx-mono text-mx-text">
+                        {Math.round(geologyOpacity * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      className="mx-range"
+                      type="range"
+                      min="0.1"
+                      max="0.9"
+                      step="0.05"
+                      value={geologyOpacity}
+                      onChange={(event) => setGeologyOpacity(Number(event.target.value))}
+                    />
+
+                    <div className="mt-2 space-y-1 text-[11px]">
+                      <span className="mx-eyebrow text-[10px]">Stratigraphic Legend</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                        <span>HpHd_scarp: Western Delta Scarp (Lacustrine Mudstone)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full bg-blue-300" />
+                        <span>HpHd_top: Western Delta Topset (Fluvial Sandstone)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full bg-amber-600" />
+                        <span>HNcf_f: Crater Floor Fractured / Séítah (Olivine Cumulate)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full bg-purple-500" />
+                        <span>Cc_b: Belva Impact Ejecta Breccia</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full bg-pink-500" />
+                        <span>Hcf_m: Marginal Carbonate Bench</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-blue-300" />
-                    <span>HpHd_top: Western Delta Topset (Fluvial Sandstone)</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-amber-600" />
-                    <span>HNcf_f: Crater Floor Fractured / Séítah (Olivine Cumulate)</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-purple-500" />
-                    <span>Cc_b: Belva Impact Ejecta Breccia</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-pink-500" />
-                    <span>Hcf_m: Marginal Carbonate Bench</span>
-                  </div>
-                </div>
+                )}
+              </>
+            ) : (
+              <div className="rounded border border-mx-border bg-mx-surface/40 p-2.5 text-xs text-mx-muted">
+                <span className="block font-medium text-mx-text">
+                  {selectedStudyRegionId === "gale"
+                    ? "Curiosity Mount Sharp Stratigraphy"
+                    : selectedStudyRegionId === "valles-marineris"
+                      ? "Valles Marineris Chasma Geology"
+                      : "Olympus Mons Volcanic Construct"}
+                </span>
+                <p className="mt-1 mb-0 text-[11px] leading-relaxed">
+                  {selectedStudyRegionId === "gale"
+                    ? "Aeolis Mons sedimentary succession (Bradbury Group & Murray Formation mudstones). Regional vector overlays are mapped from Curiosity rover traverse observations."
+                    : selectedStudyRegionId === "valles-marineris"
+                      ? "Melas Chasma interior layered deposits (ILDs), canyon wall spur-and-gully fault scarps, and chaotic floor collapse materials."
+                      : "Tharsis basaltic flood lavas, summit multi-ring collapse calderas, and surrounding basal scarp aureole deposits."}
+                </p>
               </div>
             )}
           </div>

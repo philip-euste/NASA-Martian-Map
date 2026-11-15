@@ -27,6 +27,8 @@ import type { Coordinates, Waypoint } from "../../types";
 import { useMission } from "../../state/mission/MissionContext";
 import { identifyGeologicUnitAt } from "../../utils/jezeroStratigraphy";
 import { formatCoordinates } from "../ui";
+import { getRegionGeologicalClass } from "../../globe/MarsGlobe";
+import { FALLBACK_STUDY_REGION_BOUNDARIES } from "../../data/fallbackBoundaries";
 import "./MarsMap.css";
 import { apiUrl } from "../../lib/api";
 
@@ -221,26 +223,13 @@ export default function RouteMap({
               return null;
             }
 
-            try {
-              const fallbackRes = await fetch(region.fallbackUrl, {
-                signal: controller.signal,
-              });
-              if (fallbackRes.ok) {
-                const fallbackPayload = (await fallbackRes.json()) as Feature;
-                if (
-                  fallbackPayload &&
-                  fallbackPayload.type === "Feature" &&
-                  fallbackPayload.geometry
-                ) {
-                  return {
-                    id: region.id,
-                    feature: fallbackPayload,
-                    error: null,
-                  };
-                }
-              }
-            } catch {
-              if (controller.signal.aborted) return null;
+            const fallback = FALLBACK_STUDY_REGION_BOUNDARIES[region.id];
+            if (fallback) {
+              return {
+                id: region.id,
+                feature: fallback,
+                error: null,
+              };
             }
 
             return {
@@ -417,22 +406,24 @@ export default function RouteMap({
           if (!feature) return null;
 
           const isSelected = region.id === selectedStudyRegionId;
+          const geoClass = getRegionGeologicalClass(region.id);
 
           return (
             <GeoJSON
               key={`study-region-boundary-${region.id}`}
               data={feature}
               style={{
-                color: isSelected ? "#f4a261" : "#75b9c2",
+                color: geoClass.color,
                 weight: isSelected ? 3.5 : 2,
                 opacity: isSelected ? 1 : 0.85,
-                fill: false,
-                fillOpacity: 0,
-                dashArray: isSelected ? "7 5" : "4 6",
+                fill: true,
+                fillColor: geoClass.fillColor,
+                fillOpacity: isSelected ? 0.22 : 0.1,
+                dashArray: isSelected ? undefined : "6 6",
               }}
               onEachFeature={(_feature, featureLayer) => {
                 featureLayer.bindTooltip(
-                  `${region.name}${isSelected ? " — Selected study region" : " — Study region"}`,
+                  `<strong>${region.name}</strong> [${geoClass.classification}]${isSelected ? " — Active Study Region" : ""}`,
                   {
                     sticky: true,
                     className: "mx-site-label",
@@ -716,11 +707,21 @@ export default function RouteMap({
 
       {boundaryError && (
         <div
-          className="mx-map-overlay right-4 top-16 max-w-sm rounded-md border border-amber-400/50 bg-mx-bg/95 px-3 py-2 text-xs text-mx-text shadow-lg"
+          className="mx-map-overlay right-4 top-16 max-w-sm rounded-md border border-amber-400/50 bg-mx-bg/95 p-3 text-xs text-mx-text shadow-lg z-[1000]"
           role="alert"
         >
-          <strong>Some study-region boundaries are unavailable</strong>
-          <p className="mb-0 mt-1 whitespace-pre-line break-words">
+          <div className="flex items-start justify-between gap-2">
+            <strong className="text-amber-300">Some study-region boundaries are unavailable</strong>
+            <button
+              type="button"
+              onClick={() => setBoundaryError(null)}
+              className="text-mx-muted hover:text-mx-text"
+              aria-label="Dismiss boundary alert"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="mb-0 mt-1 whitespace-pre-line break-words text-mx-dim">
             {boundaryError}
           </p>
         </div>

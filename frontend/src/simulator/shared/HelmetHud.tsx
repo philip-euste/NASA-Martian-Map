@@ -16,6 +16,7 @@ import {
   ChevronRight,
   FlaskConical,
   Home,
+  Layers,
   MapPin,
   Navigation,
   ShieldAlert,
@@ -124,6 +125,10 @@ export interface HelmetHudProps {
   onOpenSuitCheck: () => void;
   onOpenContingency: () => void;
   onTriggerReturn: () => void;
+  userPreferredSlope?: number;
+  expeditionDurationSols?: number;
+  maxEvaHours?: number;
+  onCycleSurfaceOverlay?: () => void;
 }
 
 function provenanceTag(prov: DataProvenance): string {
@@ -222,6 +227,10 @@ export default function HelmetHud({
   onOpenSuitCheck,
   onOpenContingency,
   onTriggerReturn,
+  userPreferredSlope = 15,
+  expeditionDurationSols = 30,
+  maxEvaHours = 4,
+  onCycleSurfaceOverlay,
 }: HelmetHudProps) {
   // Yield the viewport when the Tactical Map [M] or any modal dialog is active
   // so no HUD panels overlap the map canvas, toolbar, or modal controls.
@@ -231,6 +240,10 @@ export default function HelmetHud({
 
   const elapsedMin = Math.floor(elapsedTimeSeconds / 60);
   const elapsedSec = elapsedTimeSeconds % 60;
+  const maxEvaSeconds = Math.max(1, maxEvaHours * 3600);
+  const remainingSeconds = Math.max(0, maxEvaSeconds - elapsedTimeSeconds);
+  const remMin = Math.floor(remainingSeconds / 60);
+  const remSec = remainingSeconds % 60;
 
   const slopeStatus = classifySlope(liveSlopeDeg, environment.hazards);
   const terrainConditionLabel =
@@ -518,6 +531,13 @@ export default function HelmetHud({
             </div>
           )}
 
+          {/* User-defined Terrain Slope Limit Warning */}
+          {liveSlopeDeg > userPreferredSlope && (
+            <div className="mt-1.5 rounded-lg border border-amber-500/80 bg-amber-950/85 px-3 py-1.5 font-mono text-[11px] font-bold text-amber-300 shadow backdrop-blur-md animate-pulse">
+              ⚠️ STEEP GRADE WARNING: Current terrain grade ({liveSlopeDeg.toFixed(1)}°) exceeds your configured mission limit ({userPreferredSlope.toFixed(0)}°)
+            </div>
+          )}
+
           {/* Transient Feedback Notification Banner */}
           {feedbackBanner && (
             <div
@@ -598,13 +618,20 @@ export default function HelmetHud({
             </span>
           </div>
 
-          <div className="mt-1.5 flex items-center justify-between gap-2 font-mono text-[11px] text-mx-muted">
-            <span>
-              EVA{" "}
-              <strong className="text-mx-text">
-                {String(elapsedMin).padStart(2, "0")}:
-                {String(elapsedSec).padStart(2, "0")}
-              </strong>
+          <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px] text-mx-muted">
+            <div className="flex items-center gap-1.5">
+              <span>
+                EVA{" "}
+                <strong className="text-mx-text">
+                  {String(elapsedMin).padStart(2, "0")}:{String(elapsedSec).padStart(2, "0")}
+                </strong>
+              </span>
+              <span className="text-[10px] text-mx-dim" title="Time remaining until maximum EVA threshold">
+                (Rem {String(remMin).padStart(2, "0")}:{String(remSec).padStart(2, "0")})
+              </span>
+            </div>
+            <span className="rounded px-1.5 py-0.2 border border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-300 font-semibold" title="Mission Sol counter">
+              SOL 01/{String(expeditionDurationSols).padStart(2, "0")}
             </span>
             <span title="Great-circle distance and bearing back to Habitat / Rover Base">
               Base{" "}
@@ -674,181 +701,13 @@ export default function HelmetHud({
       </div>
 
       {/* ================================================================
-          PROXIMITY CALLOUT CARD (<150 m to Target / Beacon)
-          Positioned above the bottom-right environment panel with clear margin
-          ================================================================ */}
-      {isApproachingBeacon && nearestBeacon &&
-        (nearestBeacon.distanceMeters > 1 || nearestBeacon.isMissionTarget) && (
-        <div className="visor-beacon pointer-events-auto absolute bottom-28 right-3 z-[25] max-w-[330px] rounded-xl border border-emerald-500/45 bg-[#141215]/92 p-3 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-              <Camera size={12} />
-              BEACON IN RANGE ({nearestBeacon.distanceMeters} m)
-            </span>
-            <span
-              className="rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold"
-              style={{
-                borderColor: currentGeologicUnit.color,
-                backgroundColor: `${currentGeologicUnit.color}28`,
-                color: "#f8fafc",
-              }}
-            >
-              {currentGeologicUnit.unit_code}
-            </span>
-          </div>
-          <p className="m-0 mt-1 text-xs font-semibold text-white">
-            {nearestBeacon.name}
-          </p>
-          <p className="m-0 mt-0.5 text-[10px] text-mx-muted">
-            Perseverance Sol {activeGroundTruthSol} Ground-Truth Outcrop &amp;
-            CRISM/HiRISE Orbital Telemetry ready.
-          </p>
-          <button
-            type="button"
-            onClick={onOpenBeaconFieldwork}
-            className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-200 transition hover:bg-emerald-500/30"
-          >
-            <Camera size={12} />
-            Open Fieldwork Terminal [E]
-          </button>
-        </div>
-      )}
-
-      {/* ================================================================
           ASTRONAUT HELMET HUD — BOTTOM PERIMETER
-          (Left: PLSS Suit, Loadout & Action Strip | Right: Environment Telemetry)
+          (Col 1: Minimap | Col 2: Environment Telemetry | Col 3: Beacon Callout + PLSS Suit & Actions)
           ================================================================ */}
-      <div className="visor-bottom pointer-events-none absolute inset-x-3 bottom-3 z-[25] flex flex-wrap items-end justify-between gap-2.5">
+      <div className="visor-bottom pointer-events-none absolute inset-x-3 bottom-3 z-[25]">
         <SurfaceMinimap environment={environment} currentPos={currentPos} baseCoordinates={baseCoordinates} heading={liveHeadingDeg} markers={compassMarkers} />
-        {/* BOTTOM LEFT: Suit Life-Support Systems, Equipment Status & Action Controls */}
-        <div className="visor-panel visor-suit pointer-events-auto flex max-w-full flex-col gap-1.5 rounded-xl border border-white/12 bg-[#141215]/90 px-3.5 py-2.5 text-xs shadow-xl backdrop-blur-md">
-          {/* Suit Life-Support Gauges (Explicitly labeled SIMULATED PLSS) */}
-          <div className="flex flex-wrap items-center gap-3 font-mono text-[11px]">
-            <span className="mx-eyebrow mx-eyebrow--accent">
-              PLSS SUIT (SIMULATED)
-            </span>
-            <span className="text-mx-muted">
-              O₂{" "}
-              <strong className="text-emerald-300">
-                {suit.oxygenPercent.toFixed(1)}%
-              </strong>
-            </span>
-            <span className="text-mx-muted">
-              Press{" "}
-              <strong className="text-mx-text">
-                {suit.suitPressureKpa.toFixed(1)} kPa
-              </strong>
-            </span>
-            <span className="text-mx-muted">
-              CO₂ Bed{" "}
-              <strong
-                className={
-                  suit.co2ScrubberPercent < 80
-                    ? "text-amber-300"
-                    : "text-emerald-300"
-                }
-              >
-                {suit.co2ScrubberPercent.toFixed(0)}%
-              </strong>
-            </span>
-            <span className="text-mx-muted">
-              Batt{" "}
-              <strong className="text-mx-text">
-                {suit.batteryPercent.toFixed(0)}%
-              </strong>
-            </span>
-            <span className="text-mx-muted">
-              Comms{" "}
-              <strong
-                className={
-                  suit.commsStatus === "Nominal"
-                    ? "text-emerald-300"
-                    : "text-amber-300"
-                }
-              >
-                {suit.commsStatus}
-              </strong>
-            </span>
-            <span className="hidden text-mx-border sm:inline">|</span>
-            <span
-              className="inline-flex items-center gap-1 text-[10.5px] text-mx-muted"
-              title="Assigned EVA field tools from Mission Builder"
-            >
-              <Wrench size={11} className="text-mx-accent" />
-              {equippedToolsCount} Tools (
-              <strong
-                className={
-                  isRotaryDrillEquipped ? "text-emerald-300" : "text-amber-300"
-                }
-              >
-                {isRotaryDrillEquipped ? "Core Drill Ready" : "No Core Drill"}
-              </strong>
-              )
-            </span>
-          </div>
 
-          {/* Interactive Visor Action Strip */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={onToggleFieldwork}
-              className="mx-btn mx-btn--secondary mx-btn--sm"
-            >
-              <FlaskConical size={13} className="text-mx-accent" />
-              Fieldwork &amp; Samples [E]
-              <span className="mx-badge ml-0.5">
-                {observationsCount + samplesCount}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onToggleMap}
-              className="mx-btn mx-btn--secondary mx-btn--sm"
-            >
-              <Navigation size={13} className="text-sky-300" />
-              Terrain Map [M]
-            </button>
-
-            <button
-              type="button"
-              onClick={onToggleFlight}
-              className={`mx-btn mx-btn--sm ${
-                liveFlyMode ? "mx-btn--primary" : "mx-btn--secondary"
-              }`}
-            >
-              Recon Flight [F]
-            </button>
-
-            <button
-              type="button"
-              onClick={onOpenSuitCheck}
-              className={`mx-btn mx-btn--sm ${
-                suit.readinessVerified
-                  ? "mx-btn--secondary border-emerald-500/40 text-emerald-200"
-                  : "mx-btn--secondary border-amber-400/50 text-amber-200"
-              }`}
-            >
-              {suit.readinessVerified ? (
-                <ShieldCheck size={13} className="text-emerald-400" />
-              ) : (
-                <ShieldAlert size={13} className="text-amber-400" />
-              )}
-              Suit Check
-            </button>
-
-            <button
-              type="button"
-              onClick={onTriggerReturn}
-              className="mx-btn mx-btn--primary mx-btn--sm"
-            >
-              <Home size={13} />
-              Return Base [R]
-            </button>
-          </div>
-        </div>
-
-        {/* BOTTOM RIGHT: Environmental Telemetry & Contingency Trigger */}
+        {/* BOTTOM CENTER: Environmental Telemetry & Contingency Trigger */}
         <div className="visor-panel visor-environment pointer-events-auto flex flex-col gap-1.5 rounded-xl border border-white/12 bg-[#141215]/90 px-3.5 py-2.5 text-xs shadow-xl backdrop-blur-md">
           <div className="visor-terrain-readout">
             <span className="visor-panel-title">TERRAIN DATA · DERIVED DEM</span>
@@ -932,6 +791,215 @@ export default function HelmetHud({
                   : `${envConditions.radiationDoseRateMicroSvPerHour} µSv/h`}
               </strong>
             </span>
+          </div>
+        </div>
+
+        {/* BOTTOM RIGHT: Proximity Beacon Callout (docked above) + Suit Life-Support & Actions */}
+        <div className="visor-column-suit pointer-events-none flex flex-col items-end gap-2.5">
+          {/* Proximity Callout Card (<150 m to Target / Beacon) */}
+          {isApproachingBeacon && nearestBeacon &&
+            (nearestBeacon.distanceMeters > 1 || nearestBeacon.isMissionTarget) && (
+            <div className="visor-beacon pointer-events-auto w-full max-w-[460px] rounded-xl border border-emerald-500/45 bg-[#141215]/92 p-3 shadow-2xl backdrop-blur-md">
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                  <Camera size={12} />
+                  BEACON IN RANGE ({nearestBeacon.distanceMeters} m)
+                </span>
+                <span
+                  className="rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold"
+                  style={{
+                    borderColor: currentGeologicUnit.color,
+                    backgroundColor: `${currentGeologicUnit.color}28`,
+                    color: "#f8fafc",
+                  }}
+                >
+                  {currentGeologicUnit.unit_code}
+                </span>
+              </div>
+              <p className="m-0 mt-1 text-xs font-semibold text-white">
+                {nearestBeacon.name}
+              </p>
+              <p className="m-0 mt-0.5 text-[10px] text-mx-muted">
+                Perseverance Sol {activeGroundTruthSol} Ground-Truth Outcrop &amp;
+                CRISM/HiRISE Orbital Telemetry ready.
+              </p>
+              <button
+                type="button"
+                onClick={onOpenBeaconFieldwork}
+                className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-200 transition hover:bg-emerald-500/30"
+              >
+                <Camera size={12} />
+                Open Fieldwork Terminal [E]
+              </button>
+            </div>
+          )}
+
+          {/* Suit Life-Support Systems, Equipment Status & Action Controls */}
+          <div className="visor-panel visor-suit pointer-events-auto flex w-full max-w-full flex-col gap-1.5 rounded-xl border border-white/12 bg-[#141215]/90 px-3.5 py-2.5 text-xs shadow-xl backdrop-blur-md">
+            {/* Suit Life-Support Gauges (Explicitly labeled SIMULATED PLSS) */}
+            <div className="flex flex-wrap items-center gap-3 font-mono text-[11px]">
+              <span className="mx-eyebrow mx-eyebrow--accent">
+                PLSS SUIT (SIMULATED)
+              </span>
+              <span className="text-mx-muted">
+                O₂{" "}
+                <strong
+                  className={
+                    suit.oxygenPercent < 10
+                      ? "text-red-400 animate-pulse font-bold"
+                      : suit.oxygenPercent < 20
+                        ? "text-amber-400 font-bold"
+                        : "text-emerald-300"
+                  }
+                >
+                  {suit.oxygenPercent.toFixed(1)}%
+                </strong>
+              </span>
+              <span className="text-mx-muted">
+                Press{" "}
+                <strong className="text-mx-text">
+                  {suit.suitPressureKpa.toFixed(1)} kPa
+                </strong>
+              </span>
+              <span className="text-mx-muted">
+                CO₂ Bed{" "}
+                <strong
+                  className={
+                    suit.co2ScrubberPercent < 80
+                      ? "text-amber-300"
+                      : "text-emerald-300"
+                  }
+                >
+                  {suit.co2ScrubberPercent.toFixed(0)}%
+                </strong>
+              </span>
+              <span className="text-mx-muted">
+                Batt{" "}
+                <strong
+                  className={
+                    suit.batteryPercent < 10
+                      ? "text-red-400 animate-pulse font-bold"
+                      : suit.batteryPercent < 20
+                        ? "text-amber-400 font-bold"
+                        : "text-mx-text"
+                  }
+                >
+                  {suit.batteryPercent.toFixed(0)}%
+                </strong>
+              </span>
+              <span className="text-mx-muted">
+                H₂O{" "}
+                <strong
+                  className={
+                    (suit.hydrationPercent ?? 95) < 20
+                      ? "text-amber-400 font-bold"
+                      : "text-cyan-300"
+                  }
+                >
+                  {(suit.hydrationPercent ?? 95).toFixed(0)}%
+                </strong>
+              </span>
+              <span className="text-mx-muted">
+                Comms{" "}
+                <strong
+                  className={
+                    suit.commsStatus === "Nominal"
+                      ? "text-emerald-300"
+                      : "text-amber-300"
+                  }
+                >
+                  {suit.commsStatus}
+                </strong>
+              </span>
+              <span className="hidden text-mx-border sm:inline">|</span>
+              <span
+                className="inline-flex items-center gap-1 text-[10.5px] text-mx-muted"
+                title="Assigned EVA field tools from Mission Builder"
+              >
+                <Wrench size={11} className="text-mx-accent" />
+                {equippedToolsCount} Tools (
+                <strong
+                  className={
+                    isRotaryDrillEquipped ? "text-emerald-300" : "text-amber-300"
+                  }
+                >
+                  {isRotaryDrillEquipped ? "Core Drill Ready" : "No Core Drill"}
+                </strong>
+                )
+              </span>
+            </div>
+
+            {/* Interactive Visor Action Strip */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onToggleFieldwork}
+                className="mx-btn mx-btn--secondary mx-btn--sm"
+              >
+                <FlaskConical size={13} className="text-mx-accent" />
+                Fieldwork &amp; Samples [E]
+                <span className="mx-badge ml-0.5">
+                  {observationsCount + samplesCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onToggleMap}
+                className="mx-btn mx-btn--secondary mx-btn--sm"
+              >
+                <Navigation size={13} className="text-sky-300" />
+                Terrain Map [M]
+              </button>
+
+              <button
+                type="button"
+                onClick={onToggleFlight}
+                className={`mx-btn mx-btn--sm ${
+                  liveFlyMode ? "mx-btn--primary" : "mx-btn--secondary"
+                }`}
+              >
+                Recon Flight [F]
+              </button>
+
+              {onCycleSurfaceOverlay && (
+                <button
+                  type="button"
+                  onClick={onCycleSurfaceOverlay}
+                  className="mx-btn mx-btn--secondary mx-btn--sm"
+                  title="Cycle surface texture layer (HiRISE, CTX, Hillshade, Thermal) [L]"
+                >
+                  <Layers size={13} className="text-amber-300" />
+                  Switch Layer [L]
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onOpenSuitCheck}
+                className={`mx-btn mx-btn--sm ${
+                  suit.readinessVerified
+                    ? "mx-btn--secondary border-emerald-500/40 text-emerald-200"
+                    : "mx-btn--secondary border-amber-400/50 text-amber-200"
+                }`}
+              >
+                {suit.readinessVerified ? (
+                  <ShieldCheck size={13} className="text-emerald-400" />
+                ) : (
+                  <ShieldAlert size={13} className="text-amber-400" />
+                )}
+                Suit Check
+              </button>
+
+              <button
+                type="button"
+                onClick={onTriggerReturn}
+                className="mx-btn mx-btn--primary mx-btn--sm"
+              >
+                <Home size={13} />
+                Return Base [R]
+              </button>
+            </div>
           </div>
         </div>
       </div>

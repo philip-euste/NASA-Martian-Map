@@ -627,12 +627,10 @@ async def get_region_geology(region_id: str):
         ) from error
 
     if data.get("error"):
+        err_msg = data["error"].get("message") if isinstance(data["error"], dict) else str(data["error"])
         raise HTTPException(
             status_code=502,
-            detail={
-                "message": "USGS rejected the geology query.",
-                "source_error": data["error"],
-            },
+            detail=f"USGS rejected the geology query: {err_msg}",
         )
 
     if data.get("type") != "FeatureCollection":

@@ -312,9 +312,20 @@ export default function LocationPage() {
           >
             <p className="mx-eyebrow">{selectedSite.regionLabel} / Mars</p>
 
-            <h1 className="mx-display m-0 mt-2 text-4xl sm:text-5xl">
-              {selectedSite.name}
-            </h1>
+            <div className="mt-2 flex flex-wrap items-center gap-2.5">
+              <h1 className="mx-display m-0 text-4xl sm:text-5xl">
+                {selectedSite.name}
+              </h1>
+              {selectedSite.id === "jezero-crater" || selectedSite.id === "gale-crater" || selectedSite.id === "valles-marineris" || selectedSite.id === "olympus-mons" ? (
+                <span className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider border border-emerald-500/40 bg-emerald-500/20 text-emerald-400">
+                  3D Simulation Ready
+                </span>
+              ) : (
+                <span className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider border border-zinc-700 bg-zinc-800 text-zinc-400">
+                  Orbital Map Only
+                </span>
+              )}
+            </div>
 
             <p className="mx-mono m-0 mt-3 inline-flex items-center gap-2 text-mx-muted">
               <MapPin

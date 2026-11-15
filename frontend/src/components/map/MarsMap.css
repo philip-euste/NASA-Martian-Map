@@ -12,6 +12,12 @@
   font-family: var(--font-sans);
 }
 
+/* Offset Leaflet zoom controls in top-left to avoid colliding with search and layer controls */
+.mx-map .leaflet-top.leaflet-left {
+  top: 130px;
+  left: 24px;
+}
+
 .mx-map-overlay {
   position: absolute;
   z-index: 1000;

@@ -46,7 +46,11 @@ export default function RouteStratigraphyProfile({
   regionId,
 }: RouteStratigraphyProfileProps) {
   const activeRegion = regionId ? getMarsRegionById(regionId) : null;
-  const isJezero = !regionId || regionId === "jezero-crater";
+  const isJezero = Boolean(
+    activeRegion?.id === "jezero-crater" ||
+    regionId === "jezero" ||
+    regionId === "jezero-crater"
+  );
 
   const [geoJsonFeatures, setGeoJsonFeatures] = useState<
     JezeroGeoJsonFeature[] | undefined
@@ -525,13 +529,21 @@ export default function RouteStratigraphyProfile({
               </h3>
               {analysis.contacts.length === 0 ? (
                 <p className="mx-body m-0 mt-2 text-xs text-mx-muted">
-                  All current waypoints lie within{" "}
-                  <strong className="text-mx-text">
-                    {analysis.nodes[0]?.unit.unit_name} (
-                    {analysis.nodes[0]?.unit.unit_code})
-                  </strong>
-                  . Plot waypoints across the Western Delta Scarp or Belva
-                  Crater to inspect geological unit transitions.
+                  {isJezero ? (
+                    <>
+                      All current waypoints lie within{" "}
+                      <strong className="text-mx-text">
+                        {analysis.nodes[0]?.unit.unit_name} (
+                        {analysis.nodes[0]?.unit.unit_code})
+                      </strong>
+                      . Plot waypoints across the Western Delta Scarp or Belva
+                      Crater to inspect geological unit transitions.
+                    </>
+                  ) : (
+                    <>
+                      Traverse planned in <strong className="text-mx-text">{activeRegion?.name ?? "selected region"}</strong>. High-resolution USGS chronostratigraphic contact crossings (SIM 3464) are Jezero-specific; regional elevation profiles and slope hazard analysis are fully active.
+                    </>
+                  )}
                 </p>
               ) : (
                 <ul className="m-0 mt-2.5 list-none space-y-2 p-0 text-xs">

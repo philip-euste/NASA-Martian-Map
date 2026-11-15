@@ -38,11 +38,17 @@
   gap: 10px;
 }
 
+.visor-column-suit {
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 0;
+  width: 100%;
+}
+
 .visor-suit,
 .visor-environment { min-width: 0; }
 .visor-suit {
-  grid-column: 3;
-  grid-row: 1;
+  width: 100%;
   border-radius: 18px 18px 8px 8px;
   border-top-color: rgb(155 224 244 / .78);
   padding: 12px 14px;
@@ -64,7 +70,15 @@
 .visor-terrain-readout { padding-bottom: 7px; border-bottom: 1px solid rgb(154 216 232 / .25); }
 .visor-terrain-readout > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; color: #a9c3cb; font: 10px var(--font-mono); text-transform: uppercase; }
 .visor-terrain-readout strong { display: block; margin-top: 3px; color: #e5f9fe; font: 600 16px var(--font-display); text-transform: none; }
-.visor-beacon { bottom: 205px; max-width: 290px; padding: 9px; background: rgb(10 30 30 / .78); border-color: rgb(111 210 170 / .52); }
+.visor-beacon {
+  position: static;
+  width: 100%;
+  max-width: 100%;
+  padding: 9px 12px;
+  background: rgb(10 30 30 / .88);
+  border-color: rgb(111 210 170 / .52);
+  box-shadow: 0 10px 25px rgb(0 0 0 / .45);
+}
 .visor-beacon button { margin-top: 6px; }
 
 .visor-minimap {
@@ -125,10 +139,9 @@
 @media (max-width: 1150px) {
   .visor-bottom { grid-template-columns: 150px minmax(0, 1fr); }
   .visor-environment { grid-column: 2; grid-row: 1; }
-  .visor-suit { grid-column: 2; grid-row: 2; }
+  .visor-column-suit { grid-column: 2; grid-row: 2; }
   .visor-minimap { grid-row: span 2; }
   .visor-minimap svg { max-height: 120px; }
-  .visor-beacon { bottom: 176px; }
 }
 
 @media (max-width: 900px) {
@@ -148,7 +161,8 @@
   .visor-minimap { grid-column: 1; grid-row: 1; min-width: 0; padding: 5px; overflow: hidden; }
   .visor-minimap svg { max-height: 76px; margin-top: 2px; }
   .visor-panel-title span, .visor-minimap-caption { display: none; }
-  .visor-suit { grid-column: 1 / -1; grid-row: 2; padding: 9px; }
+  .visor-column-suit { grid-column: 1 / -1; grid-row: 2; }
+  .visor-suit { padding: 9px; }
   .visor-suit > div:first-child { gap: 5px 9px; font-size: 10px; }
   .visor-suit > div:first-child strong { font-size: 11px; }
   .visor-suit > div:last-child { flex-wrap: wrap; }
@@ -156,7 +170,6 @@
   .visor-environment { grid-column: 2; grid-row: 1; overflow: hidden; padding: 7px; }
   .visor-environment > div:last-child { max-height: 58px; overflow-y: auto; }
   .visor-terrain-readout { display: none; }
-  .visor-beacon { bottom: 225px; max-width: calc(100vw - 12px); padding: 6px; }
   .marswalk-settings { right: 6px; top: 150px; width: 250px; }
   .common-compass-marker { max-width: 58px; font-size: 7px; }
   .common-compass-marker span { display: none; }

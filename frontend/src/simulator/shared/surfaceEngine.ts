@@ -76,6 +76,9 @@ interface ExpeditionTargetMessage {
   layer?: SurfaceLayer;
   overlayLayer?: MapLayerId | null;
   opacity?: number;
+  playerHeight?: number;
+  suitWeight?: number;
+  equipment?: readonly string[];
   targets?: { id: string; name: string; latitude: number; longitude: number; description?: string; visited?: boolean; kind?: string }[];
   contingency?: string | null;
 }
@@ -1820,6 +1823,14 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     }
 
     if (data.type === "mars-explorer:expedition") {
+      if (typeof data.playerHeight === "number" && data.playerHeight > 0) {
+        CONFIG.eyeHeight = data.playerHeight * 0.936;
+      }
+      if (typeof data.suitWeight === "number" && data.suitWeight > 0) {
+        const massFactor = data.suitWeight / 195;
+        CONFIG.jumpSpeed = 3.4 / Math.sqrt(massFactor);
+        CONFIG.suitAcceleration = 9.5 / massFactor;
+      }
       applyExpeditionSpawn(
         typeof data.latitude === "number" ? data.latitude : null,
         typeof data.longitude === "number" ? data.longitude : null,
@@ -1941,6 +1952,16 @@ export function mountSurfaceSimulator(envConfig: SimulatorEnvironmentConfig): vo
     const paramLat = params.has("lat") ? Number(params.get("lat")) : null;
     const paramLon = params.has("lon") ? Number(params.get("lon")) : null;
     const paramName = params.get("name");
+    const paramPlayerHeight = params.has("playerHeight") ? Number(params.get("playerHeight")) : null;
+    const paramSuitWeight = params.has("suitWeight") ? Number(params.get("suitWeight")) : null;
+    if (paramPlayerHeight && Number.isFinite(paramPlayerHeight) && paramPlayerHeight > 0) {
+      CONFIG.eyeHeight = paramPlayerHeight * 0.936;
+    }
+    if (paramSuitWeight && Number.isFinite(paramSuitWeight) && paramSuitWeight > 0) {
+      const massFactor = paramSuitWeight / 195;
+      CONFIG.jumpSpeed = 3.4 / Math.sqrt(massFactor);
+      CONFIG.suitAcceleration = 9.5 / massFactor;
+    }
     applyExpeditionSpawn(paramLat, paramLon, paramName);
 
     // Set initial horizontal viewing direction (315° NW toward the delta scarp)

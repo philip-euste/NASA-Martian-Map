@@ -56,8 +56,30 @@ DATASET_LOCK = RLock()
 # REMOTE DATASET ACCESS
 # ---------------------------------------------------------
 
+from urllib.parse import urlparse
+
+ALLOWED_REMOTE_DOMAINS = (
+    "amazonaws.com",
+    "wustl.edu",
+    "nasa.gov",
+    "usgs.gov",
+)
+
+def is_allowed_remote_url(url: str) -> bool:
+    try:
+        hostname = (urlparse(url).hostname or "").lower()
+        return any(
+            hostname == domain or hostname.endswith("." + domain)
+            for domain in ALLOWED_REMOTE_DOMAINS
+        )
+    except Exception:
+        return False
+
+
 @lru_cache(maxsize=24)
 def open_remote_dataset(url: str):
+    if not is_allowed_remote_url(url):
+        raise ValueError(f"Remote dataset domain not permitted: {url}")
     try:
         with rasterio.Env(**REMOTE_ENV_OPTIONS):
             return rasterio.open(f"/vsicurl/{url}")
@@ -603,24 +625,27 @@ def get_dem_info():
 
 @router.get("/elevation")
 def get_elevation(
-    longitude: float = Query(ge=-180, le=180),
+    longitude: float = Query(ge=-180, le=360),
     latitude: float = Query(ge=-90, le=90),
 ):
+    # Normalize longitude to signed -180..+180 for projection/STAC searches while preserving positive East
+    signed_lon = ((longitude + 180) % 360) - 180
     return get_best_elevation(
-        longitude,
+        signed_lon,
         latitude,
     )
 
 
 @router.get("/window")
 def get_elevation_window(
-    longitude: float = Query(ge=-180, le=180),
+    longitude: float = Query(ge=-180, le=360),
     latitude: float = Query(ge=-90, le=90),
     width: int = Query(default=32, ge=1, le=128),
     height: int = Query(default=32, ge=1, le=128),
 ):
+    signed_lon = ((longitude + 180) % 360) - 180
     selected = get_best_dataset(
-        longitude,
+        signed_lon,
         latitude,
     )
 

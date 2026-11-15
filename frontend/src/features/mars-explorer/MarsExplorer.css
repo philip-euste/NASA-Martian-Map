@@ -51,7 +51,7 @@
 /* Search and saved-location controls: upper-left */
 .mx-explorer-search-controls {
   position: absolute;
-  z-index: 1100;
+  z-index: 1350;
   top: 76px;
   left: 24px;
   display: flex;
@@ -64,7 +64,7 @@
 /* Dataset layer panel: left side, offset from navigation controls */
 .mx-explorer-layer-panel {
   position: absolute;
-  z-index: 1100;
+  z-index: 1250;
   top: 176px;
   left: 88px;
   display: flex;
@@ -79,7 +79,7 @@
 /* Shared floating panel behavior */
 .mx-explorer-floating-panel {
   position: relative;
-  z-index: 1100;
+  z-index: 1350;
   width: 100%;
   max-height: min(420px, calc(100vh - 180px));
   overflow: hidden;

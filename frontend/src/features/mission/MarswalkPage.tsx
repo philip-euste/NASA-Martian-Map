@@ -9,11 +9,13 @@ import {
   ChevronLeft,
   ChevronRight,
   FlaskConical,
+  Home,
   Layers,
   Loader2,
   MapPin,
   Navigation,
   Plus,
+  RotateCcw,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
@@ -48,7 +50,7 @@ import type {
 import { identifyGeologicUnitAt } from "../../utils/jezeroStratigraphy";
 import type { GeologicUnitInfo } from "../../utils/jezeroStratigraphy";
 import MissionLayout from "./MissionLayout";
-import { toMutable } from "./missionHelpers";
+import { createId, toMutable } from "./missionHelpers";
 
 type ContingencyPreset = {
   id: string;
@@ -214,7 +216,7 @@ export default function MarswalkPage() {
   const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
 
   const explorationMode = mission.simulation.mode ?? "mission";
-  const suit = mission.simulation.suit ?? {
+  const baseSuit = mission.simulation.suit ?? {
     oxygenPercent: 98,
     suitPressureKpa: 29.6,
     co2ScrubberPercent: 96,
@@ -226,6 +228,62 @@ export default function MarswalkPage() {
     dustExposureIndex: 12,
     readinessVerified: false,
   };
+  // Authentic NASA EMU/PLSS Life Support Telemetry Model
+  // Depletion rates scale deterministically with elapsed time and terrain slope metabolic strain
+  const elapsedHours = (mission.simulation.elapsedTimeSeconds || 0) / 3600;
+  const userPreferredSlope =
+    mission.configuration?.terrainPreferences?.preferredSlopeDegrees ?? 15;
+  const slopeStressFactor = liveSlopeDeg > userPreferredSlope ? 1.75 : 1.0;
+
+  // Oxygen: ~10% per hour baseline, accelerated on steep grades
+  const dynamicO2 = Math.max(
+    0,
+    Math.min(100, 100 - elapsedHours * (10 * slopeStressFactor))
+  );
+
+  // CO2 Scrubber: ~10% per hour (rated for 10-hour max emergency life)
+  const dynamicCO2 = Math.max(0, Math.min(100, 100 - elapsedHours * 10));
+
+  // Primary Battery: ~12.5% per hour for life support, sensors, fans & HUD
+  const dynamicBattery = Math.max(0, Math.min(100, 100 - elapsedHours * 12.5));
+
+  // In-suit Hydration Drink Bag: ~15% per hour of surface traverse
+  const dynamicHydration = Math.max(
+    0,
+    Math.min(100, (baseSuit.hydrationPercent ?? 95) - elapsedHours * 15)
+  );
+
+  // Regolith Dust Adhesion Index: rises with traverse duration & dust opacity
+  const dynamicDust = Math.min(
+    100,
+    Math.round(
+      (baseSuit.dustExposureIndex ?? 12) +
+        elapsedHours * 6 +
+        (mission.simulation.environment?.dustOpticalDepthTau ?? 0.45) * 10
+    )
+  );
+
+  // UHF Comms Link: line-of-sight attenuation based on distance from base
+  const dynamicComms: "Nominal" | "Degraded" | "Relay Only" =
+    (mission.simulation.distanceFromBaseMeters ?? 0) > 8000
+      ? "Relay Only"
+      : (mission.simulation.distanceFromBaseMeters ?? 0) > 4500
+        ? "Degraded"
+        : (baseSuit.commsStatus ?? "Nominal");
+
+  const suit = {
+    ...baseSuit,
+    oxygenPercent: dynamicO2,
+    co2ScrubberPercent: dynamicCO2,
+    batteryPercent: dynamicBattery,
+    hydrationPercent: dynamicHydration,
+    dustExposureIndex: dynamicDust,
+    commsStatus: dynamicComms,
+    suitPressureKpa: baseSuit.suitPressureKpa,
+  };
+
+  const isLifeSupportDepleted =
+    suit.oxygenPercent <= 0 || suit.batteryPercent <= 0;
   const env = mission.simulation.environment ?? {
     surfaceTempCelsius: -58,
     atmosphericPressurePa: 735,
@@ -290,6 +348,20 @@ export default function MarswalkPage() {
         : mission.region?.name ?? "Mars Surface"
       : mission.region?.name ?? activeEnv?.displayName ?? "Mars Surface";
 
+  const playerHeightStr = useMemo(
+    () => ((mission.configuration?.astronautHeightCm ?? 175) / 100).toFixed(2),
+    [mission.configuration?.astronautHeightCm]
+  );
+  const suitWeightStr = useMemo(
+    () =>
+      String(
+        (mission.configuration?.astronautWeightKg ?? 75) +
+          120 +
+          (mission.configuration?.equipment?.length ?? 3) * 3
+      ),
+    [mission.configuration?.astronautWeightKg, mission.configuration?.equipment]
+  );
+
   const simulatorSrc = useMemo(() => {
     if (!activeEnv) return "";
     const params = new URLSearchParams({
@@ -298,6 +370,8 @@ export default function MarswalkPage() {
       name: targetName,
       regionId: mission.region?.id ?? activeEnv.id,
       withinDem: withinEnvironmentDem ? "1" : "0",
+      playerHeight: playerHeightStr,
+      suitWeight: suitWeightStr,
     });
     return `${activeEnv.simulatorEntryUrl}?${params.toString()}`;
   }, [
@@ -307,6 +381,8 @@ export default function MarswalkPage() {
     mission.region?.id,
     targetName,
     withinEnvironmentDem,
+    playerHeightStr,
+    suitWeightStr,
   ]);
 
   const syncTargetsToIframe = () => {
@@ -336,6 +412,9 @@ export default function MarswalkPage() {
         latitude: baseCoordinates.latitude,
         longitude: baseCoordinates.longitude,
         withinDem: withinEnvironmentDem,
+        playerHeight: Number(playerHeightStr),
+        suitWeight: Number(suitWeightStr),
+        equipment: mission.configuration?.equipment ?? [],
         targets: beaconList,
       },
       "*"
@@ -347,6 +426,9 @@ export default function MarswalkPage() {
     const timer = window.setTimeout(() => setInitializing(false), 1800);
 
     function handleMessage(event: MessageEvent) {
+      if (iframeRef.current && event.source !== iframeRef.current.contentWindow) {
+        return;
+      }
       if (!event.data || typeof event.data !== "object") return;
       const msg = event.data as Record<string, unknown>;
 
@@ -502,11 +584,34 @@ export default function MarswalkPage() {
         e.preventDefault();
         setShowFieldworkDrawer((prev) => !prev);
       }
+
+      if (!isInput && !e.repeat && (e.key === "l" || e.key === "L")) {
+        e.preventDefault();
+        handleCycleSurfaceOverlay();
+      }
     }
 
     window.addEventListener("keydown", handleWindowKeyDown);
     return () => window.removeEventListener("keydown", handleWindowKeyDown);
-  }, [anyModalOpen]);
+  }, [anyModalOpen, surfaceOverlayLayer]);
+
+  const handleCycleSurfaceOverlay = () => {
+    const layers: (MapLayerId | "")[] = [
+      "",
+      "jezero_hirise",
+      "mars_mola_hrsc_color",
+      "mars_global_mola",
+      "mars_themis_night",
+    ];
+    const currentIndex = layers.indexOf(surfaceOverlayLayer);
+    const nextLayer = layers[(currentIndex + 1) % layers.length];
+    setSurfaceOverlayLayer(nextLayer);
+    showTransientFeedback(
+      nextLayer
+        ? `Surface overlay: ${nextLayer.toUpperCase().replace(/_/g, " ")}`
+        : "Surface overlay: Default Base Terrain"
+    );
+  };
 
   const handleToggleIframeMap = () => {
     setShowFieldworkDrawer(false);
@@ -1433,7 +1538,86 @@ export default function MarswalkPage() {
                 });
                 setShowReturnModal(true);
               }}
+              userPreferredSlope={userPreferredSlope}
+              expeditionDurationSols={mission.configuration?.missionDurationSols ?? 30}
+              maxEvaHours={mission.configuration?.hypotheticalEVADurationHours ?? 4}
+              onCycleSurfaceOverlay={handleCycleSurfaceOverlay}
             />
+
+            {/* Emergency EVA Abort Modal on Life Support Depletion */}
+            {isLifeSupportDepleted && !showReturnModal && (
+              <div
+                className="fixed inset-0 z-[1400] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Critical Life Support Depletion Alert"
+              >
+                <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-red-500/80 bg-[#160c0c] shadow-2xl">
+                  <div className="flex items-center gap-3 border-b border-red-500/40 bg-red-950/60 px-5 py-4">
+                    <AlertTriangle size={24} className="text-red-400 animate-pulse" />
+                    <div>
+                      <span className="font-mono text-xs font-bold uppercase tracking-wider text-red-400">
+                        EMERGENCY EVA TERMINATION
+                      </span>
+                      <h3 className="m-0 text-lg font-bold text-white">
+                        Life Support Consumables Depleted (0.0%)
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="p-5 text-sm space-y-3 text-red-100/90">
+                    <p className="m-0 leading-relaxed">
+                      Astronaut Primary PLSS {suit.oxygenPercent <= 0 ? "Oxygen Reserve" : "Avionics Battery"} has reached 0.0%. Secondary emergency bailout reserve has automatically engaged.
+                    </p>
+                    <div className="rounded border border-red-500/30 bg-red-950/30 p-3 font-mono text-xs text-red-200">
+                      Mission safety rules require immediate evacuation to Habitat airlock. A life-support constraint violation will be recorded in the expedition dossier.
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5 border-t border-red-500/30 bg-black/40 p-4 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateSimulation({
+                          elapsedTimeSeconds: 0,
+                        });
+                        showTransientFeedback("Emergency PLSS replenish applied (Educational Reset).");
+                      }}
+                      className="mx-btn mx-btn--secondary text-xs"
+                    >
+                      <RotateCcw size={13} className="mr-1" />
+                      Replenish PLSS (Educational Reset)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateSimulation({
+                          returnedToBase: true,
+                          completedAt: new Date().toISOString(),
+                        });
+                        updateMission({
+                          fieldNotes: [
+                            ...mission.fieldNotes,
+                            {
+                              id: createId("fn"),
+                              missionId: mission.id,
+                              content: "SAFETY CONSTRAINT VIOLATION: Emergency EVA abort initiated due to 0% life-support consumable depletion. Automated airlock homing triggered.",
+                              coordinates: baseCoordinates,
+                              createdAt: new Date().toISOString(),
+                            },
+                          ],
+                        });
+                        navigate("/mission/review");
+                      }}
+                      className="mx-btn border-red-500 bg-red-600 font-bold text-white hover:bg-red-700 text-xs"
+                    >
+                      <Home size={13} className="mr-1" />
+                      Emergency Airlock Return →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
 

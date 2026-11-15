@@ -297,7 +297,19 @@
     line-height: 1.65;
     color: var(--color-mx-muted);
     overflow-wrap: anywhere;
-    word-break: break-word;
+    word-break: normal;
+  }
+
+  /* Universal text wrapping guards to ensure long identifiers/URNs never pierce container borders */
+  .break-all,
+  [class*="break-all"] {
+    word-break: break-all !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .break-words,
+  [class*="break-words"] {
+    overflow-wrap: anywhere !important;
   }
 
   /* ---------- Buttons ---------- */

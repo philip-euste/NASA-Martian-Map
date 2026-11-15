@@ -36,6 +36,8 @@ import {
 import MarsExplorerControls from "../../features/mars-explorer/MarsExplorerControls";
 import { MarsExplorerLocationPanel } from "../../features/mars-explorer/MarsExplorerUI";
 import { formatCoordinates } from "../ui";
+import { getRegionGeologicalClass } from "../../globe/MarsGlobe";
+import { FALLBACK_STUDY_REGION_BOUNDARIES } from "../../data/fallbackBoundaries";
 
 
 import "./MarsMap.css";
@@ -655,14 +657,13 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
           } catch (error: unknown) {
             if (controller.signal.aborted) return null;
 
-            try {
-              const response = await fetch(region.fallbackUrl, { signal: controller.signal });
-              if (!response.ok) throw new Error(`HTTP ${response.status}`);
-              const payload: unknown = await response.json();
-              if (!isRegionFeature(payload)) throw new Error("Invalid offline GeoJSON");
-              return { id: region.id, feature: payload, error: `${region.name}: using approximate offline DEM coverage outline.` };
-            } catch {
-              if (controller.signal.aborted) return null;
+            const fallback = FALLBACK_STUDY_REGION_BOUNDARIES[region.id];
+            if (fallback) {
+              return {
+                id: region.id,
+                feature: fallback,
+                error: null,
+              };
             }
 
             return {
@@ -897,24 +898,27 @@ function MarsMapInner({ focusSiteId }: { focusSiteId?: string }) {
 
           {/* All supported study-region boundaries */}
           {SUPPORTED_STUDY_REGIONS.map((region) => {
-            const feature = showStudyRegionBoundary && region.id === selectedStudyRegionId
+            const feature = showStudyRegionBoundary
               ? boundaryFeatures[region.id]
               : null;
 
             if (!feature) return null;
+
+            const isSelected = selectedStudyRegionId === region.id;
+            const geoClass = getRegionGeologicalClass(region.id);
 
             return (
               <GeoJSON
                 key={`region-boundary-${region.id}`}
                 data={feature}
                 style={{
-                  color: "#38bdf8",
-                  weight: 3,
-                  opacity: 1,
+                  color: geoClass.color,
+                  weight: isSelected ? 3.5 : 2,
+                  opacity: isSelected ? 1 : 0.8,
                   fill: true,
-                  fillColor: "#75b9c2",
-                  fillOpacity: 0.16,
-                  dashArray: "7 5",
+                  fillColor: geoClass.fillColor,
+                  fillOpacity: isSelected ? 0.24 : 0.12,
+                  dashArray: isSelected ? undefined : "6 6",
                 }}
               />
             );

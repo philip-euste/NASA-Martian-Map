@@ -50,7 +50,11 @@ export default function RoutePlannerPage() {
   const activeRegion = mission.region
     ? getMarsRegionById(mission.region.id)
     : null;
-  const isJezero = !activeRegion || activeRegion.id === "jezero-crater";
+  const isJezero = Boolean(
+    activeRegion?.id === "jezero-crater" ||
+    mission.region?.id === "jezero" ||
+    mission.region?.id === "jezero-crater"
+  );
 
   const crossRegionAudit = useMemo(
     () =>
@@ -187,13 +191,19 @@ export default function RoutePlannerPage() {
 
     const dist = calculateRouteDistanceMeters(draftWaypoints, includeReturnLeg);
 
-    // Attempt to query real HiRISE DEM elevations at waypoints if inside Jezero bounds
+    // Sample the straight-line corridor between waypoints where the local Jezero
+    // DEM is available. This is a coarse slope screen, not obstacle-avoiding routing.
     let elevGain: number | undefined = undefined;
     let elevLoss: number | undefined = undefined;
     let maxSlopeDeg: number | undefined = undefined;
     let avgSlopeDeg: number | undefined = undefined;
     let demPointsSampled = 0;
     let usedLocalFallbackDem = false;
+    let corridorSamples = 0;
+    let corridorMaxSlope: number | undefined;
+    let corridorMissingSamples = 0;
+    let spacingExceeded = false;
+    let corridorRecommendation = "No nearby waypoint adjustment evaluated: no continuous sampled segment exceeded 12°.";
 
     const allWaypointsForProfile = includeReturnLeg
       ? [...draftWaypoints, draftWaypoints[0]]
@@ -225,6 +235,93 @@ export default function RoutePlannerPage() {
           }
         } else {
           elevations.push(null);
+        }
+      }
+
+      if (isJezero) {
+        const sampled: Array<{ coordinates: Coordinates; elevation: number; segment: number; step: number }> = [];
+        for (let segment = 0; segment < allWaypointsForProfile.length - 1; segment++) {
+          const from = allWaypointsForProfile[segment].coordinates;
+          const to = allWaypointsForProfile[segment + 1].coordinates;
+          const distance = calculateMarsSurfaceDistanceMeters(from, to);
+          const steps = Math.min(24, Math.max(1, Math.ceil(distance / 250)));
+          if (distance / steps > 250) spacingExceeded = true;
+          for (let step = 0; step <= steps; step++) {
+            if (segment > 0 && step === 0) continue;
+            const fraction = step / steps;
+            const coordinates = {
+              latitude: from.latitude + (to.latitude - from.latitude) * fraction,
+              longitude: from.longitude + (to.longitude - from.longitude) * fraction,
+            };
+            if (!isWithinJezeroDemBounds(coordinates)) {
+              corridorMissingSamples++;
+              continue;
+            }
+            try {
+              const result = await marsDemProvider.getElevation(coordinates);
+              if (result.isFallback) usedLocalFallbackDem = true;
+              if (Number.isFinite(result.elevation)) {
+                sampled.push({ coordinates, elevation: result.elevation, segment, step });
+                corridorSamples++;
+              } else {
+                corridorMissingSamples++;
+              }
+            } catch {
+              corridorMissingSamples++;
+            }
+          }
+        }
+        const slopes: number[] = [];
+        let steepestPair: [typeof sampled[number], typeof sampled[number]] | null = null;
+        let steepestSlope = 0;
+        for (let i = 1; i < sampled.length; i++) {
+          if (sampled[i].segment !== sampled[i - 1].segment || sampled[i].step !== sampled[i - 1].step + 1) continue;
+          const distance = calculateMarsSurfaceDistanceMeters(sampled[i - 1].coordinates, sampled[i].coordinates);
+          if (distance > 0) {
+            const slope = Math.atan(Math.abs(sampled[i].elevation - sampled[i - 1].elevation) / distance) * 180 / Math.PI;
+            slopes.push(slope);
+            if (slope > steepestSlope) {
+              steepestSlope = slope;
+              steepestPair = [sampled[i - 1], sampled[i]];
+            }
+          }
+        }
+        if (slopes.length) corridorMaxSlope = Number(Math.max(...slopes).toFixed(1));
+        if (steepestPair && corridorMaxSlope !== undefined && corridorMaxSlope > 12 && !spacingExceeded && corridorMissingSamples === 0) {
+          const [a, b] = steepestPair;
+          const directDistance = calculateMarsSurfaceDistanceMeters(a.coordinates, b.coordinates);
+          const directSlope = Math.atan(Math.abs(b.elevation - a.elevation) / Math.max(1, directDistance)) * 180 / Math.PI;
+          const midLat = (a.coordinates.latitude + b.coordinates.latitude) / 2;
+          const midLon = (a.coordinates.longitude + b.coordinates.longitude) / 2;
+          const metersPerDegree = 2 * Math.PI * 3_389_500 / 360;
+          const eastMeters = (b.coordinates.longitude - a.coordinates.longitude) * metersPerDegree * Math.cos(midLat * Math.PI / 180);
+          const northMeters = (b.coordinates.latitude - a.coordinates.latitude) * metersPerDegree;
+          const bearing = Math.atan2(eastMeters, northMeters);
+          let best: { coordinates: Coordinates; slope: number; offset: number } | null = null;
+          for (const offset of [150, 300]) {
+            for (const side of [-1, 1]) {
+              const candidate = {
+                latitude: midLat - side * Math.sin(bearing) * offset / metersPerDegree,
+                longitude: midLon + side * Math.cos(bearing) * offset / (metersPerDegree * Math.max(0.2, Math.cos(midLat * Math.PI / 180))),
+              };
+              if (!isWithinJezeroDemBounds(candidate)) continue;
+              try {
+                const sample = await marsDemProvider.getElevation(candidate);
+                if (sample.isFallback) usedLocalFallbackDem = true;
+                const candidateSlope = Math.max(
+                  Math.atan(Math.abs(sample.elevation - a.elevation) / Math.max(1, calculateMarsSurfaceDistanceMeters(a.coordinates, candidate))) * 180 / Math.PI,
+                  Math.atan(Math.abs(b.elevation - sample.elevation) / Math.max(1, calculateMarsSurfaceDistanceMeters(candidate, b.coordinates))) * 180 / Math.PI,
+                );
+                if (candidateSlope < directSlope - 2 && (!best || candidateSlope < best.slope)) best = { coordinates: candidate, slope: candidateSlope, offset };
+              } catch { /* An unsampled candidate cannot be recommended. */ }
+            }
+          }
+          corridorRecommendation = best
+            ? `Possible waypoint to investigate: ${best.coordinates.latitude.toFixed(5)}°N, ${best.coordinates.longitude.toFixed(5)}°E (${best.offset} m lateral offset). Endpoint-to-waypoint slope estimate ${best.slope.toFixed(1)}° versus ${directSlope.toFixed(1)}° on this short segment. The intervening ground has not been sampled; add it manually and reassess before considering a traverse.`
+            : "No supported nearby waypoint suggestion: sampled offsets did not improve the steepest segment or terrain coverage was missing.";
+        }
+        if (spacingExceeded || corridorMissingSamples > 0) {
+          corridorRecommendation = "No supported nearby waypoint suggestion: the route has missing DEM samples or segments too long for the 250 m screening interval.";
         }
       }
 
@@ -306,19 +403,20 @@ export default function RoutePlannerPage() {
           : "Spherical Geometry (Orbital Estimate)",
       terrainMetrics: {
         averageSlopeDegrees: avgSlopeDeg,
-        maximumSlopeDegrees: maxSlopeDeg,
+        maximumSlopeDegrees: corridorMaxSlope ?? maxSlopeDeg,
         dataCoverage: coverageRatio,
         knownObstacles: mission.configuration?.terrainPreferences
           .avoidKnownObstacles
           ? [
-              "Sub-meter boulders and unconsolidated drift pockets require in-situ visual avoidance during Marswalk.",
+              "Coarse DEM corridor slope screening only; boulders, sand traps, and other hazards are not mapped or avoided by this planner.",
             ]
-          : ["Obstacle avoidance disabled in Mission Builder."],
+          : ["No obstacle-avoidance pathfinding is implemented; review terrain manually."],
         uncertaintyNotes:
           demPointsSampled >= 2
             ? [
                 "Distances computed via spherical Mars geometry (R = 3,389.5 km); elevations sampled at waypoints from HiRISE DTM.",
-                "Intermediate slopes between waypoints are straight-line interpolations and do not certify astronaut path safety.",
+                `Straight-line corridor sampled at nominal 250 m spacing (${corridorSamples} valid DEM samples; ${corridorMissingSamples} unavailable${spacingExceeded ? "; at least one long segment exceeds 250 m spacing" : ""}). Maximum sampled slope: ${corridorMaxSlope === undefined ? "unavailable" : `${corridorMaxSlope}°`}. This screening does not route around obstacles or certify safety.`,
+                corridorRecommendation,
               ]
             : [
                 "Horizontal distance computed via spherical Mars geometry (R = 3,389.5 km).",

@@ -533,57 +533,38 @@ export default function InvestigationPage() {
                 </Link>
               </div>
 
-              <div className="grid gap-2.5 sm:grid-cols-2">
-                {MARS_REGION_LIST.map((reg) => {
-                  const active = mission.region?.id === reg.id;
-                  const isAvailable = reg.simulatorAvailability === "AVAILABLE";
-                  const isPlanned = reg.simulatorAvailability === "PLANNED";
-                  return (
-                    <button
-                      key={reg.id}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => setRegion(reg)}
-                      className={`flex flex-col items-start rounded-lg border p-3.5 text-left transition ${
-                        active
-                          ? "border-mx-accent bg-mx-panel-2"
-                          : "border-mx-border bg-mx-bg hover:border-mx-muted"
-                      }`}
+              <div className="space-y-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="relative min-w-0 flex-1">
+                    <select
+                      id="study-region-select"
+                      className="mx-input h-10 w-full text-sm font-medium"
+                      value={mission.region?.id ?? "jezero"}
+                      onChange={(e) => {
+                        const reg = MARS_REGION_LIST.find((r) => r.id === e.target.value);
+                        if (reg) setRegion(reg);
+                      }}
                     >
-                      <div className="flex w-full items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-display text-sm font-semibold text-mx-text">
-                            {reg.name}
-                          </span>
-                          <span
-                            className={`rounded px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider ${
-                              isAvailable
-                                ? "border border-emerald-500/40 bg-emerald-500/20 text-emerald-400"
-                                : isPlanned
-                                  ? "border border-amber-500/40 bg-amber-500/20 text-amber-400"
-                                  : "border border-zinc-700 bg-zinc-800 text-zinc-400"
-                            }`}
-                          >
-                            {isAvailable
-                              ? "3D Active"
-                              : isPlanned
-                                ? "3D Planned"
-                                : "2D Only"}
-                          </span>
-                        </div>
-                        <span className="mx-mono text-[11px] text-mx-accent">
-                          {formatCoordinates(
-                            reg.coordinates.latitude,
-                            reg.coordinates.longitude
-                          )}
-                        </span>
-                      </div>
-                      <span className="mx-body mt-1 text-xs line-clamp-2">
-                        {reg.description}
+                      {MARS_REGION_LIST.map((reg) => (
+                        <option key={reg.id} value={reg.id}>
+                          {reg.name} — {reg.simulatorAvailability === "AVAILABLE" ? "3D Active Simulation" : "Orbital GIS Map"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {mission.region && (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="rounded px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider border border-emerald-500/40 bg-emerald-500/20 text-emerald-400">
+                        3D Active
                       </span>
-                    </button>
-                  );
-                })}
+                    </div>
+                  )}
+                </div>
+                {mission.region && (
+                  <p className="m-0 text-xs text-mx-muted">
+                    {mission.region.description}
+                  </p>
+                )}
               </div>
 
               {mission.region && (

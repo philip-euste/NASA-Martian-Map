@@ -262,7 +262,7 @@ export default function ExpeditionReviewPage() {
 
       <div className="grid gap-8 lg:grid-cols-12">
         {/* Left 6 cols: Visited Targets, Simulated Samples & Field Notes */}
-        <div className="flex flex-col gap-8 lg:col-span-6">
+        <div className="flex flex-col gap-8 lg:col-span-6 min-w-0">
           {/* Completed objectives & visited targets */}
           <section className="mx-panel p-6" aria-label="Visited targets">
             <SectionHeading
@@ -549,7 +549,7 @@ export default function ExpeditionReviewPage() {
         </div>
 
         {/* Right 6 cols: Evidence Examined, Route & EVA Conditions, Knowledge Gaps */}
-        <div className="flex flex-col gap-8 lg:col-span-6">
+        <div className="flex flex-col gap-8 lg:col-span-6 min-w-0">
           {/* Evidence examined */}
           <section className="mx-panel p-6" aria-label="Evidence examined">
             <SectionHeading
