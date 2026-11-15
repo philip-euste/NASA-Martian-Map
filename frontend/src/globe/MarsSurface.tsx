@@ -680,7 +680,6 @@ export default function MarsSurface({
 
   const [previewTexture, setPreviewTexture] =
     useState<THREE.CanvasTexture | null>(null);
-  const [offlineTexture, setOfflineTexture] = useState<THREE.Texture | null>(null);
   const [overlayTexture, setOverlayTexture] = useState<THREE.CanvasTexture | null>(null);
 
   const [detailTiles, setDetailTiles] =
@@ -709,19 +708,6 @@ export default function MarsSurface({
   // Keep the latest callback without restarting the NASA loading effect.
   const onTextureLoadedRef = useRef(onTextureLoaded);
   onTextureLoadedRef.current = onTextureLoaded;
-
-  useEffect(() => {
-    const loader = new THREE.TextureLoader();
-    let active = true;
-    let loadedTexture: THREE.Texture | null = null;
-    loader.load("/textures/mars-color.png", (texture) => {
-      if (!active) { texture.dispose(); return; }
-      loadedTexture = texture;
-      texture.colorSpace = THREE.SRGBColorSpace;
-      setOfflineTexture(texture);
-    });
-    return () => { active = false; loadedTexture?.dispose(); };
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1082,9 +1068,9 @@ export default function MarsSurface({
         />
 
         <meshBasicMaterial
-          key={previewTexture ? "preview" : offlineTexture ? "offline" : "flat"}
-          map={previewTexture ?? offlineTexture}
-          color={previewTexture || offlineTexture ? "#ffffff" : "#b75c35"}
+          key={previewTexture ? "preview" : "flat"}
+          map={previewTexture ?? undefined}
+          color={previewTexture ? "#ffffff" : "#b75c35"}
           side={THREE.FrontSide}
           toneMapped={false}
         />
