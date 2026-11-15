@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter
 
-from ..services.mars_region_service import (
+from services.mars_region_service import (
     MARS_REGIONS,
     build_study_area_geojson,
     get_region,
