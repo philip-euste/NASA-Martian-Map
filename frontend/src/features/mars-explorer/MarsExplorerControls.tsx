@@ -184,6 +184,16 @@ export default function MarsExplorerControls() {
           >
             <Layers size={17} />
           </button>
+          <button
+            type="button"
+            className={`mx-icon-btn shrink-0 ${showStudyRegionBoundary ? "text-mx-accent" : ""}`}
+            aria-label="Toggle regional boundary"
+            aria-pressed={showStudyRegionBoundary}
+            title={`${showStudyRegionBoundary ? "Hide" : "Show"} regional boundary`}
+            onClick={() => setShowStudyRegionBoundary(!showStudyRegionBoundary)}
+          >
+            <span aria-hidden="true" className="text-xs font-bold">B</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -363,11 +373,6 @@ export default function MarsExplorerControls() {
           </div>
 
           {/* USGS Geologic Units Vector Layer */}
-          <label className="mt-3.5 flex items-center gap-2 border-t border-mx-border pt-3 text-xs">
-            <input type="checkbox" checked={showStudyRegionBoundary} onChange={(event) => setShowStudyRegionBoundary(event.target.checked)} />
-            Show {selectedStudyRegionId} coverage outline
-          </label>
-
           {/* USGS Geologic Units Vector Layer */}
           <div className="mt-3.5 space-y-2">
             <div className="flex items-center justify-between">

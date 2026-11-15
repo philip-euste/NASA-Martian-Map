@@ -167,13 +167,14 @@ export default function MarsExplorer() {
       )}
 
       <div className={`mx-explorer-stage h-full w-full ${transitionClass}`}>
-        {viewMode === "globe" ? (
+        <div className={`absolute inset-0 ${viewMode === "globe" ? "" : "invisible pointer-events-none"}`} aria-hidden={viewMode !== "globe"}>
           <MarsGlobe />
-        ) : viewMode === "map" ? (
+        </div>
+        {viewMode === "map" ? (
           <MarsMap />
-        ) : (
+        ) : viewMode === "jezero" ? (
           <JezeroExpeditionView />
-        )}
+        ) : null}
       </div>
     </div>
   );
