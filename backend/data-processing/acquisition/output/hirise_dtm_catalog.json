@@ -1,0 +1,2828 @@
+{
+  "generated": "2026-11-15T04:02:25.913209+00:00",
+  "api": "https://stac.astrogeology.usgs.gov/api",
+  "search_settings": {
+    "collections": [
+      "mro_hirise_socet_dtms",
+      "mro_hirise_socet_dtms_test"
+    ],
+    "page_limit": 100,
+    "product_filter": "HiRISE DTM metadata and asset keywords"
+  },
+  "regions": {
+    "jezero": {
+      "name": "Jezero Crater",
+      "search_bbox": [
+        77.2229,
+        18.3068,
+        77.584,
+        18.6693
+      ],
+      "product_count": 6,
+      "products": [
+        {
+          "id": "DTEEC_048842_1985_048908_1985_U01",
+          "region": "jezero",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.4615,
+            18.3372,
+            77.5841,
+            18.5883
+          ],
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  77.4615,
+                  18.5785
+                ],
+                [
+                  77.5522,
+                  18.5883
+                ],
+                [
+                  77.5841,
+                  18.3472
+                ],
+                [
+                  77.4935,
+                  18.3372
+                ],
+                [
+                  77.4615,
+                  18.5785
+                ]
+              ]
+            ]
+          },
+          "datetime": "2006-09-29T00:00:00Z",
+          "start_datetime": "2006-09-29T00:00:00.000000Z",
+          "end_datetime": "2006-09-29T00:00:00.000000Z",
+          "properties": {
+            "start_datetime": "2006-09-29T00:00:00.000000Z",
+            "end_datetime": "2006-09-29T00:00:00.000000Z",
+            "title": "MRO HiRISE DTM; ESP_048842_1985_ESP_048908_1985",
+            "description": "This product is a Mars Reconnaissance Orbiter (MRO) High Resolution Imaging Experiment (HiRISE) Digital Terrain Model (DTM). This product was created and edited using BAE Systems Set or BAE Systems GXP. This product's rationale for creation was: Candidate landing site for 2020 mission in Jezero Crater. This DTM was created by University Of Arizona.",
+            "missions": [
+              "Mars Reconnaissance Orbiter (MRO)"
+            ],
+            "instruments": [
+              "High Resolution Imaging Science Experiment"
+            ],
+            "gsd": 1.0166207954197803,
+            "license": "CC0-1.0",
+            "proj:epsg": null,
+            "proj:wkt2": "\"PROJCS[\\\"Mars (2015) - Sphere / Ocentric / Equirectangular, clon = 0\\\",GEOGCS[\\\"Mars (2015) - Sphere / Ocentric\\\",DATUM[\\\"Mars (2015) - Sphere\\\",SPHEROID[\\\"Mars (2015) - Sphere\\\",3396190,0]],PRIMEM[\\\"Reference Meridian\\\",0],UNIT[\\\"degree\\\",0.0174532925199433,AUTHORITY[\\\"EPSG\\\",\\\"9122\\\"]]],PROJECTION[\\\"Equirectangular\\\"],PARAMETER[\\\"standard_parallel_1\\\",0],PARAMETER[\\\"central_meridian\\\",0],PARAMETER[\\\"false_easting\\\",0],PARAMETER[\\\"false_northing\\\",0],UNIT[\\\"metre\\\",1,AUTHORITY[\\\"EPSG\\\",\\\"9001\\\"]],AXIS[\\\"Easting\\\",EAST],AXIS[\\\"Northing\\\",NORTH]]\"",
+            "proj:projjson": {
+              "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
+              "type": "ProjectedCRS",
+              "name": "Mars (2015) - Sphere / Ocentric / Equirectangular, clon = 0",
+              "base_crs": {
+                "name": "Mars (2015) - Sphere / Ocentric",
+                "datum": {
+                  "type": "GeodeticReferenceFrame",
+                  "name": "Mars (2015) - Sphere",
+                  "ellipsoid": {
+                    "name": "Mars (2015) - Sphere",
+                    "radius": 3396190
+                  },
+                  "prime_meridian": {
+                    "name": "Reference Meridian",
+                    "longitude": 0
+                  }
+                },
+                "coordinate_system": {
+                  "subtype": "ellipsoidal",
+                  "axis": [
+                    {
+                      "name": "Latitude",
+                      "abbreviation": "lat",
+                      "direction": "north",
+                      "unit": "degree"
+                    },
+                    {
+                      "name": "Longitude",
+                      "abbreviation": "lon",
+                      "direction": "east",
+                      "unit": "degree"
+                    }
+                  ]
+                }
+              },
+              "conversion": {
+                "name": "Equidistant Cylindrical",
+                "method": {
+                  "name": "Equidistant Cylindrical",
+                  "id": {
+                    "authority": "EPSG",
+                    "code": 1028
+                  }
+                },
+                "parameters": [
+                  {
+                    "name": "Latitude of 1st standard parallel",
+                    "value": 0,
+                    "unit": "degree",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8823
+                    }
+                  },
+                  {
+                    "name": "Latitude of natural origin",
+                    "value": 0,
+                    "unit": {
+                      "type": "Unit",
+                      "name": "",
+                      "conversion_factor": 1
+                    },
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8801
+                    }
+                  },
+                  {
+                    "name": "Longitude of natural origin",
+                    "value": 0,
+                    "unit": "degree",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8802
+                    }
+                  },
+                  {
+                    "name": "False easting",
+                    "value": 0,
+                    "unit": "metre",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8806
+                    }
+                  },
+                  {
+                    "name": "False northing",
+                    "value": 0,
+                    "unit": "metre",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8807
+                    }
+                  }
+                ]
+              },
+              "coordinate_system": {
+                "subtype": "Cartesian",
+                "axis": [
+                  {
+                    "name": "Easting",
+                    "abbreviation": "",
+                    "direction": "east",
+                    "unit": "metre"
+                  },
+                  {
+                    "name": "Northing",
+                    "abbreviation": "",
+                    "direction": "north",
+                    "unit": "metre"
+                  }
+                ]
+              }
+            },
+            "proj:bbox": [
+              77.4615,
+              18.3372,
+              77.5841,
+              18.5883
+            ],
+            "proj:centroid": {
+              "lat": 18.462815355380492,
+              "lon": 77.52281636012545
+            },
+            "proj:shape": [
+              14680,
+              7154
+            ],
+            "proj:transform": [
+              4591503.886588774,
+              1.0166207954197803,
+              0,
+              1101835.3429085817,
+              0,
+              -1.0166207954197803
+            ],
+            "cube:dimensions": {
+              "x": {
+                "type": "spatial",
+                "axis": "x",
+                "extent": [
+                  77.4615,
+                  77.5841
+                ]
+              },
+              "y": {
+                "type": "spatial",
+                "axis": "y",
+                "extent": [
+                  18.3372,
+                  18.5883
+                ]
+              }
+            },
+            "ssys:targets": [
+              "Mars"
+            ],
+            "datetime": "2006-09-29T00:00:00Z",
+            "created": "2023-07-09T01:40:21.020Z",
+            "updated": "2023-07-09T01:40:21.020Z"
+          },
+          "assets": {
+            "thumbnail": {
+              "category": "preview",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/DTEEC_048842_1985_048908_1985_U01.jpg",
+              "type": "image/jpeg",
+              "title": "DTEEC_048842_1985_048908_1985_U01 Thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "dtm": {
+              "category": "terrain",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/DTEEC_048842_1985_048908_1985_U01.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "DTEEC_048842_1985_048908_1985_U01",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "hillshade": {
+              "category": "other",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/DTEEC_048842_1985_048908_1985_U01_hillshade.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Hillshade: DTEEC_048842_1985_048908_1985_U01",
+              "description": null,
+              "roles": [
+                "data",
+                "overview"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "provenance": {
+              "category": "metadata",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/provenance.txt",
+              "type": "text/plain",
+              "title": "Provenance",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/ESP_048842_1985_RED_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_048842_1985_RED_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/ESP_048842_1985_RED_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_048842_1985_RED_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/ESP_048842_1985_RED_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_048842_1985_RED_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/ESP_048908_1985_RED_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_048908_1985_RED_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/ESP_048908_1985_RED_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_048908_1985_RED_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/ESP_048908_1985_RED_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_048908_1985_RED_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/ESP_048842_1985_RED_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_048842_1985_RED_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/ESP_048842_1985_RED_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_048842_1985_RED_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/ESP_048842_1985_RED_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_048842_1985_RED_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/ESP_048908_1985_RED_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_048908_1985_RED_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/ESP_048908_1985_RED_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_048908_1985_RED_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/ESP_048908_1985_RED_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_048908_1985_RED_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "fom": {
+              "category": "other",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/DTFEC_048842_1985_048908_1985_U01.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "FOM: DTFEC_048842_1985_048908_1985_U01",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "fom_thumbnail": {
+              "category": "preview",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_048842_1985_ESP_048908_1985/DTFEC_048842_1985_048908_1985_U01.jpg",
+              "type": "image/jpeg",
+              "title": "FOM: DTFEC_048842_1985_048908_1985_U01 browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            }
+          },
+          "links": [
+            {
+              "rel": "self",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms/items/DTEEC_048842_1985_048908_1985_U01",
+              "type": "application/geo+json"
+            },
+            {
+              "rel": "parent",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms",
+              "type": "application/json"
+            },
+            {
+              "rel": "collection",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms",
+              "type": "application/json"
+            },
+            {
+              "rel": "root",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod",
+              "type": "application/json"
+            }
+          ]
+        },
+        {
+          "id": "DTEEC_045994_1985_046060_1985_U01",
+          "region": "jezero",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.3834,
+            18.3055,
+            77.5008,
+            18.548
+          ],
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  77.3834,
+                  18.5385
+                ],
+                [
+                  77.4727,
+                  18.548
+                ],
+                [
+                  77.5008,
+                  18.3151
+                ],
+                [
+                  77.412,
+                  18.3055
+                ],
+                [
+                  77.3834,
+                  18.5385
+                ]
+              ]
+            ]
+          },
+          "datetime": "2006-09-29T00:00:00Z",
+          "start_datetime": "2006-09-29T00:00:00.000000Z",
+          "end_datetime": "2006-09-29T00:00:00.000000Z",
+          "properties": {
+            "start_datetime": "2006-09-29T00:00:00.000000Z",
+            "end_datetime": "2006-09-29T00:00:00.000000Z",
+            "title": "MRO HiRISE DTM; ESP_045994_1985_ESP_046060_1985",
+            "description": "This product is a Mars Reconnaissance Orbiter (MRO) High Resolution Imaging Experiment (HiRISE) Digital Terrain Model (DTM). This product was created and edited using BAE Systems Set or BAE Systems GXP. This product's rationale for creation was: Candidate landing site for 2020 mission in Jezero Crater. This DTM was created by University Of Arizona.",
+            "missions": [
+              "Mars Reconnaissance Orbiter (MRO)"
+            ],
+            "instruments": [
+              "High Resolution Imaging Science Experiment"
+            ],
+            "gsd": 1.0165533020257713,
+            "license": "CC0-1.0",
+            "proj:epsg": null,
+            "proj:wkt2": "\"PROJCS[\\\"Mars (2015) - Sphere / Ocentric / Equirectangular, clon = 0\\\",GEOGCS[\\\"Mars (2015) - Sphere / Ocentric\\\",DATUM[\\\"Mars (2015) - Sphere\\\",SPHEROID[\\\"Mars (2015) - Sphere\\\",3396190,0]],PRIMEM[\\\"Reference Meridian\\\",0],UNIT[\\\"degree\\\",0.0174532925199433,AUTHORITY[\\\"EPSG\\\",\\\"9122\\\"]]],PROJECTION[\\\"Equirectangular\\\"],PARAMETER[\\\"standard_parallel_1\\\",0],PARAMETER[\\\"central_meridian\\\",0],PARAMETER[\\\"false_easting\\\",0],PARAMETER[\\\"false_northing\\\",0],UNIT[\\\"metre\\\",1,AUTHORITY[\\\"EPSG\\\",\\\"9001\\\"]],AXIS[\\\"Easting\\\",EAST],AXIS[\\\"Northing\\\",NORTH]]\"",
+            "proj:projjson": {
+              "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
+              "type": "ProjectedCRS",
+              "name": "Mars (2015) - Sphere / Ocentric / Equirectangular, clon = 0",
+              "base_crs": {
+                "name": "Mars (2015) - Sphere / Ocentric",
+                "datum": {
+                  "type": "GeodeticReferenceFrame",
+                  "name": "Mars (2015) - Sphere",
+                  "ellipsoid": {
+                    "name": "Mars (2015) - Sphere",
+                    "radius": 3396190
+                  },
+                  "prime_meridian": {
+                    "name": "Reference Meridian",
+                    "longitude": 0
+                  }
+                },
+                "coordinate_system": {
+                  "subtype": "ellipsoidal",
+                  "axis": [
+                    {
+                      "name": "Latitude",
+                      "abbreviation": "lat",
+                      "direction": "north",
+                      "unit": "degree"
+                    },
+                    {
+                      "name": "Longitude",
+                      "abbreviation": "lon",
+                      "direction": "east",
+                      "unit": "degree"
+                    }
+                  ]
+                }
+              },
+              "conversion": {
+                "name": "Equidistant Cylindrical",
+                "method": {
+                  "name": "Equidistant Cylindrical",
+                  "id": {
+                    "authority": "EPSG",
+                    "code": 1028
+                  }
+                },
+                "parameters": [
+                  {
+                    "name": "Latitude of 1st standard parallel",
+                    "value": 0,
+                    "unit": "degree",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8823
+                    }
+                  },
+                  {
+                    "name": "Latitude of natural origin",
+                    "value": 0,
+                    "unit": {
+                      "type": "Unit",
+                      "name": "",
+                      "conversion_factor": 1
+                    },
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8801
+                    }
+                  },
+                  {
+                    "name": "Longitude of natural origin",
+                    "value": 0,
+                    "unit": "degree",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8802
+                    }
+                  },
+                  {
+                    "name": "False easting",
+                    "value": 0,
+                    "unit": "metre",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8806
+                    }
+                  },
+                  {
+                    "name": "False northing",
+                    "value": 0,
+                    "unit": "metre",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8807
+                    }
+                  }
+                ]
+              },
+              "coordinate_system": {
+                "subtype": "Cartesian",
+                "axis": [
+                  {
+                    "name": "Easting",
+                    "abbreviation": "",
+                    "direction": "east",
+                    "unit": "metre"
+                  },
+                  {
+                    "name": "Northing",
+                    "abbreviation": "",
+                    "direction": "north",
+                    "unit": "metre"
+                  }
+                ]
+              }
+            },
+            "proj:bbox": [
+              77.3834,
+              18.3055,
+              77.5008,
+              18.548
+            ],
+            "proj:centroid": {
+              "lat": 18.426879456615158,
+              "lon": 77.44220739388265
+            },
+            "proj:shape": [
+              14175,
+              6864
+            ],
+            "proj:transform": [
+              4586874.845967728,
+              1.0165533020257713,
+              0,
+              1099451.5897741036,
+              0,
+              -1.0165533020257713
+            ],
+            "cube:dimensions": {
+              "x": {
+                "type": "spatial",
+                "axis": "x",
+                "extent": [
+                  77.3834,
+                  77.5008
+                ]
+              },
+              "y": {
+                "type": "spatial",
+                "axis": "y",
+                "extent": [
+                  18.3055,
+                  18.548
+                ]
+              }
+            },
+            "ssys:targets": [
+              "Mars"
+            ],
+            "datetime": "2006-09-29T00:00:00Z",
+            "created": "2023-07-09T01:29:09.186Z",
+            "updated": "2023-07-09T01:29:09.186Z"
+          },
+          "assets": {
+            "thumbnail": {
+              "category": "preview",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/DTEEC_045994_1985_046060_1985_U01.jpg",
+              "type": "image/jpeg",
+              "title": "DTEEC_045994_1985_046060_1985_U01 Thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "dtm": {
+              "category": "terrain",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/DTEEC_045994_1985_046060_1985_U01.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "DTEEC_045994_1985_046060_1985_U01",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "hillshade": {
+              "category": "other",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/DTEEC_045994_1985_046060_1985_U01_hillshade.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Hillshade: DTEEC_045994_1985_046060_1985_U01",
+              "description": null,
+              "roles": [
+                "data",
+                "overview"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "provenance": {
+              "category": "metadata",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/provenance.txt",
+              "type": "text/plain",
+              "title": "Provenance",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/ESP_045994_1985_RED_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_045994_1985_RED_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/ESP_045994_1985_RED_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_045994_1985_RED_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/ESP_045994_1985_RED_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_045994_1985_RED_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/ESP_046060_1985_RED_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_046060_1985_RED_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/ESP_046060_1985_RED_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_046060_1985_RED_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/ESP_046060_1985_RED_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_046060_1985_RED_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/ESP_045994_1985_RED_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_045994_1985_RED_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/ESP_045994_1985_RED_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_045994_1985_RED_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/ESP_045994_1985_RED_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_045994_1985_RED_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/ESP_046060_1985_RED_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_046060_1985_RED_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/ESP_046060_1985_RED_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_046060_1985_RED_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/ESP_046060_1985_RED_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_046060_1985_RED_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "fom": {
+              "category": "other",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/DTFEC_045994_1985_046060_1985_U01.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "FOM: DTFEC_045994_1985_046060_1985_U01",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "fom_thumbnail": {
+              "category": "preview",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_045994_1985_ESP_046060_1985/DTFEC_045994_1985_046060_1985_U01.jpg",
+              "type": "image/jpeg",
+              "title": "FOM: DTFEC_045994_1985_046060_1985_U01 browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            }
+          },
+          "links": [
+            {
+              "rel": "self",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms/items/DTEEC_045994_1985_046060_1985_U01",
+              "type": "application/geo+json"
+            },
+            {
+              "rel": "parent",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms",
+              "type": "application/json"
+            },
+            {
+              "rel": "collection",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms",
+              "type": "application/json"
+            },
+            {
+              "rel": "root",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod",
+              "type": "application/json"
+            }
+          ]
+        },
+        {
+          "id": "DTEEC_023524_1985_023379_1985_U01",
+          "region": "jezero",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.453,
+            18.16,
+            77.5981,
+            18.521
+          ],
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  77.453,
+                  18.5099
+                ],
+                [
+                  77.5464,
+                  18.521
+                ],
+                [
+                  77.5981,
+                  18.1714
+                ],
+                [
+                  77.4993,
+                  18.16
+                ],
+                [
+                  77.453,
+                  18.5099
+                ]
+              ]
+            ]
+          },
+          "datetime": "2006-09-29T00:00:00Z",
+          "start_datetime": "2006-09-29T00:00:00.000000Z",
+          "end_datetime": "2006-09-29T00:00:00.000000Z",
+          "properties": {
+            "start_datetime": "2006-09-29T00:00:00.000000Z",
+            "end_datetime": "2006-09-29T00:00:00.000000Z",
+            "title": "MRO HiRISE DTM; ESP_023524_1985_ESP_023379_1985",
+            "description": "This product is a Mars Reconnaissance Orbiter (MRO) High Resolution Imaging Experiment (HiRISE) Digital Terrain Model (DTM). This product was created and edited using BAE Systems Set or BAE Systems GXP. This product's rationale for creation was: Proposed landing site in Jezero Crater. This DTM was created by University Of Arizona.",
+            "missions": [
+              "Mars Reconnaissance Orbiter (MRO)"
+            ],
+            "instruments": [
+              "High Resolution Imaging Science Experiment"
+            ],
+            "gsd": 1.0147851940441874,
+            "license": "CC0-1.0",
+            "proj:epsg": null,
+            "proj:wkt2": "\"PROJCS[\\\"Mars (2015) - Sphere / Ocentric / Equirectangular, clon = 0\\\",GEOGCS[\\\"Mars (2015) - Sphere / Ocentric\\\",DATUM[\\\"Mars (2015) - Sphere\\\",SPHEROID[\\\"Mars (2015) - Sphere\\\",3396190,0]],PRIMEM[\\\"Reference Meridian\\\",0],UNIT[\\\"degree\\\",0.0174532925199433,AUTHORITY[\\\"EPSG\\\",\\\"9122\\\"]]],PROJECTION[\\\"Equirectangular\\\"],PARAMETER[\\\"standard_parallel_1\\\",0],PARAMETER[\\\"central_meridian\\\",0],PARAMETER[\\\"false_easting\\\",0],PARAMETER[\\\"false_northing\\\",0],UNIT[\\\"metre\\\",1,AUTHORITY[\\\"EPSG\\\",\\\"9001\\\"]],AXIS[\\\"Easting\\\",EAST],AXIS[\\\"Northing\\\",NORTH]]\"",
+            "proj:projjson": {
+              "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
+              "type": "ProjectedCRS",
+              "name": "Mars (2015) - Sphere / Ocentric / Equirectangular, clon = 0",
+              "base_crs": {
+                "name": "Mars (2015) - Sphere / Ocentric",
+                "datum": {
+                  "type": "GeodeticReferenceFrame",
+                  "name": "Mars (2015) - Sphere",
+                  "ellipsoid": {
+                    "name": "Mars (2015) - Sphere",
+                    "radius": 3396190
+                  },
+                  "prime_meridian": {
+                    "name": "Reference Meridian",
+                    "longitude": 0
+                  }
+                },
+                "coordinate_system": {
+                  "subtype": "ellipsoidal",
+                  "axis": [
+                    {
+                      "name": "Latitude",
+                      "abbreviation": "lat",
+                      "direction": "north",
+                      "unit": "degree"
+                    },
+                    {
+                      "name": "Longitude",
+                      "abbreviation": "lon",
+                      "direction": "east",
+                      "unit": "degree"
+                    }
+                  ]
+                }
+              },
+              "conversion": {
+                "name": "Equidistant Cylindrical",
+                "method": {
+                  "name": "Equidistant Cylindrical",
+                  "id": {
+                    "authority": "EPSG",
+                    "code": 1028
+                  }
+                },
+                "parameters": [
+                  {
+                    "name": "Latitude of 1st standard parallel",
+                    "value": 0,
+                    "unit": "degree",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8823
+                    }
+                  },
+                  {
+                    "name": "Latitude of natural origin",
+                    "value": 0,
+                    "unit": {
+                      "type": "Unit",
+                      "name": "",
+                      "conversion_factor": 1
+                    },
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8801
+                    }
+                  },
+                  {
+                    "name": "Longitude of natural origin",
+                    "value": 0,
+                    "unit": "degree",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8802
+                    }
+                  },
+                  {
+                    "name": "False easting",
+                    "value": 0,
+                    "unit": "metre",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8806
+                    }
+                  },
+                  {
+                    "name": "False northing",
+                    "value": 0,
+                    "unit": "metre",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8807
+                    }
+                  }
+                ]
+              },
+              "coordinate_system": {
+                "subtype": "Cartesian",
+                "axis": [
+                  {
+                    "name": "Easting",
+                    "abbreviation": "",
+                    "direction": "east",
+                    "unit": "metre"
+                  },
+                  {
+                    "name": "Northing",
+                    "abbreviation": "",
+                    "direction": "north",
+                    "unit": "metre"
+                  }
+                ]
+              }
+            },
+            "proj:bbox": [
+              77.453,
+              18.16,
+              77.5981,
+              18.521
+            ],
+            "proj:centroid": {
+              "lat": 18.3389520144692,
+              "lon": 77.52443498582132
+            },
+            "proj:shape": [
+              21159,
+              8486
+            ],
+            "proj:transform": [
+              4590995.515551028,
+              1.0147851940441874,
+              0,
+              1097860.7375764067,
+              0,
+              -1.0147851940441874
+            ],
+            "cube:dimensions": {
+              "x": {
+                "type": "spatial",
+                "axis": "x",
+                "extent": [
+                  77.453,
+                  77.5981
+                ]
+              },
+              "y": {
+                "type": "spatial",
+                "axis": "y",
+                "extent": [
+                  18.16,
+                  18.521
+                ]
+              }
+            },
+            "ssys:targets": [
+              "Mars"
+            ],
+            "datetime": "2006-09-29T00:00:00Z",
+            "created": "2023-07-08T22:34:49.684Z",
+            "updated": "2023-07-08T22:34:49.684Z"
+          },
+          "assets": {
+            "thumbnail": {
+              "category": "preview",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/DTEEC_023524_1985_023379_1985_U01.jpg",
+              "type": "image/jpeg",
+              "title": "DTEEC_023524_1985_023379_1985_U01 Thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "dtm": {
+              "category": "terrain",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/DTEEC_023524_1985_023379_1985_U01.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "DTEEC_023524_1985_023379_1985_U01",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "hillshade": {
+              "category": "other",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/DTEEC_023524_1985_023379_1985_U01_hillshade.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Hillshade: DTEEC_023524_1985_023379_1985_U01",
+              "description": null,
+              "roles": [
+                "data",
+                "overview"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "provenance": {
+              "category": "metadata",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/provenance.txt",
+              "type": "text/plain",
+              "title": "Provenance",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/ESP_023379_1985_RED_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_023379_1985_RED_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/ESP_023379_1985_RED_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_023379_1985_RED_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/ESP_023379_1985_RED_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_023379_1985_RED_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/ESP_023524_1985_RED_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_023524_1985_RED_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/ESP_023524_1985_RED_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_023524_1985_RED_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/ESP_023524_1985_RED_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_023524_1985_RED_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/ESP_023379_1985_RED_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_023379_1985_RED_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/ESP_023379_1985_RED_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_023379_1985_RED_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/ESP_023379_1985_RED_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_023379_1985_RED_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/ESP_023524_1985_RED_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_023524_1985_RED_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/ESP_023524_1985_RED_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_023524_1985_RED_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/ESP_023524_1985_RED_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_023524_1985_RED_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "fom": {
+              "category": "other",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/DTFEC_023524_1985_023379_1985_U01.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "FOM: DTFEC_023524_1985_023379_1985_U01",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "fom_thumbnail": {
+              "category": "preview",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023524_1985_ESP_023379_1985/DTFEC_023524_1985_023379_1985_U01.jpg",
+              "type": "image/jpeg",
+              "title": "FOM: DTFEC_023524_1985_023379_1985_U01 browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            }
+          },
+          "links": [
+            {
+              "rel": "self",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms/items/DTEEC_023524_1985_023379_1985_U01",
+              "type": "application/geo+json"
+            },
+            {
+              "rel": "parent",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms",
+              "type": "application/json"
+            },
+            {
+              "rel": "collection",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms",
+              "type": "application/json"
+            },
+            {
+              "rel": "root",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod",
+              "type": "application/json"
+            }
+          ]
+        },
+        {
+          "id": "DTEEC_023247_1985_022957_1985_U01",
+          "region": "jezero",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.5485,
+            18.18,
+            77.69,
+            18.5205
+          ],
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  77.5485,
+                  18.5093
+                ],
+                [
+                  77.6485,
+                  18.5205
+                ],
+                [
+                  77.69,
+                  18.1918
+                ],
+                [
+                  77.5897,
+                  18.18
+                ],
+                [
+                  77.5485,
+                  18.5093
+                ]
+              ]
+            ]
+          },
+          "datetime": "2006-09-29T00:00:00Z",
+          "start_datetime": "2006-09-29T00:00:00.000000Z",
+          "end_datetime": "2006-09-29T00:00:00.000000Z",
+          "properties": {
+            "start_datetime": "2006-09-29T00:00:00.000000Z",
+            "end_datetime": "2006-09-29T00:00:00.000000Z",
+            "title": "MRO HiRISE DTM; ESP_023247_1985_ESP_022957_1985",
+            "description": "This product is a Mars Reconnaissance Orbiter (MRO) High Resolution Imaging Experiment (HiRISE) Digital Terrain Model (DTM). This product was created and edited using BAE Systems Set or BAE Systems GXP. This product's rationale for creation was: Proposed MSR landing site in Jezero Crater. This DTM was created by University Of Arizona.",
+            "missions": [
+              "Mars Reconnaissance Orbiter (MRO)"
+            ],
+            "instruments": [
+              "High Resolution Imaging Science Experiment"
+            ],
+            "gsd": 1.0150917197116411,
+            "license": "CC0-1.0",
+            "proj:epsg": null,
+            "proj:wkt2": "\"PROJCS[\\\"Mars (2015) - Sphere / Ocentric / Equirectangular, clon = 0\\\",GEOGCS[\\\"Mars (2015) - Sphere / Ocentric\\\",DATUM[\\\"Mars (2015) - Sphere\\\",SPHEROID[\\\"Mars (2015) - Sphere\\\",3396190,0]],PRIMEM[\\\"Reference Meridian\\\",0],UNIT[\\\"degree\\\",0.0174532925199433,AUTHORITY[\\\"EPSG\\\",\\\"9122\\\"]]],PROJECTION[\\\"Equirectangular\\\"],PARAMETER[\\\"standard_parallel_1\\\",0],PARAMETER[\\\"central_meridian\\\",0],PARAMETER[\\\"false_easting\\\",0],PARAMETER[\\\"false_northing\\\",0],UNIT[\\\"metre\\\",1,AUTHORITY[\\\"EPSG\\\",\\\"9001\\\"]],AXIS[\\\"Easting\\\",EAST],AXIS[\\\"Northing\\\",NORTH]]\"",
+            "proj:projjson": {
+              "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
+              "type": "ProjectedCRS",
+              "name": "Mars (2015) - Sphere / Ocentric / Equirectangular, clon = 0",
+              "base_crs": {
+                "name": "Mars (2015) - Sphere / Ocentric",
+                "datum": {
+                  "type": "GeodeticReferenceFrame",
+                  "name": "Mars (2015) - Sphere",
+                  "ellipsoid": {
+                    "name": "Mars (2015) - Sphere",
+                    "radius": 3396190
+                  },
+                  "prime_meridian": {
+                    "name": "Reference Meridian",
+                    "longitude": 0
+                  }
+                },
+                "coordinate_system": {
+                  "subtype": "ellipsoidal",
+                  "axis": [
+                    {
+                      "name": "Latitude",
+                      "abbreviation": "lat",
+                      "direction": "north",
+                      "unit": "degree"
+                    },
+                    {
+                      "name": "Longitude",
+                      "abbreviation": "lon",
+                      "direction": "east",
+                      "unit": "degree"
+                    }
+                  ]
+                }
+              },
+              "conversion": {
+                "name": "Equidistant Cylindrical",
+                "method": {
+                  "name": "Equidistant Cylindrical",
+                  "id": {
+                    "authority": "EPSG",
+                    "code": 1028
+                  }
+                },
+                "parameters": [
+                  {
+                    "name": "Latitude of 1st standard parallel",
+                    "value": 0,
+                    "unit": "degree",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8823
+                    }
+                  },
+                  {
+                    "name": "Latitude of natural origin",
+                    "value": 0,
+                    "unit": {
+                      "type": "Unit",
+                      "name": "",
+                      "conversion_factor": 1
+                    },
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8801
+                    }
+                  },
+                  {
+                    "name": "Longitude of natural origin",
+                    "value": 0,
+                    "unit": "degree",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8802
+                    }
+                  },
+                  {
+                    "name": "False easting",
+                    "value": 0,
+                    "unit": "metre",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8806
+                    }
+                  },
+                  {
+                    "name": "False northing",
+                    "value": 0,
+                    "unit": "metre",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8807
+                    }
+                  }
+                ]
+              },
+              "coordinate_system": {
+                "subtype": "Cartesian",
+                "axis": [
+                  {
+                    "name": "Easting",
+                    "abbreviation": "",
+                    "direction": "east",
+                    "unit": "metre"
+                  },
+                  {
+                    "name": "Northing",
+                    "abbreviation": "",
+                    "direction": "north",
+                    "unit": "metre"
+                  }
+                ]
+              }
+            },
+            "proj:bbox": [
+              77.5485,
+              18.18,
+              77.69,
+              18.5205
+            ],
+            "proj:centroid": {
+              "lat": 18.350297067303917,
+              "lon": 77.61917359047716
+            },
+            "proj:shape": [
+              19888,
+              8272
+            ],
+            "proj:transform": [
+              4596658.586909394,
+              1.0150917197116411,
+              0,
+              1097804.173942707,
+              0,
+              -1.0150917197116411
+            ],
+            "cube:dimensions": {
+              "x": {
+                "type": "spatial",
+                "axis": "x",
+                "extent": [
+                  77.5485,
+                  77.69
+                ]
+              },
+              "y": {
+                "type": "spatial",
+                "axis": "y",
+                "extent": [
+                  18.18,
+                  18.5205
+                ]
+              }
+            },
+            "ssys:targets": [
+              "Mars"
+            ],
+            "datetime": "2006-09-29T00:00:00Z",
+            "created": "2023-07-08T22:30:19.011Z",
+            "updated": "2023-07-08T22:30:19.011Z"
+          },
+          "assets": {
+            "thumbnail": {
+              "category": "preview",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/DTEEC_023247_1985_022957_1985_U01.jpg",
+              "type": "image/jpeg",
+              "title": "DTEEC_023247_1985_022957_1985_U01 Thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "dtm": {
+              "category": "terrain",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/DTEEC_023247_1985_022957_1985_U01.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "DTEEC_023247_1985_022957_1985_U01",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "hillshade": {
+              "category": "other",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/DTEEC_023247_1985_022957_1985_U01_hillshade.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Hillshade: DTEEC_023247_1985_022957_1985_U01",
+              "description": null,
+              "roles": [
+                "data",
+                "overview"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "provenance": {
+              "category": "metadata",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/provenance.txt",
+              "type": "text/plain",
+              "title": "Provenance",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/ESP_022957_1985_RED_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_022957_1985_RED_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/ESP_022957_1985_RED_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_022957_1985_RED_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/ESP_022957_1985_RED_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_022957_1985_RED_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/ESP_023247_1985_RED_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_023247_1985_RED_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/ESP_023247_1985_RED_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_023247_1985_RED_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/ESP_023247_1985_RED_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_023247_1985_RED_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/ESP_022957_1985_RED_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_022957_1985_RED_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/ESP_022957_1985_RED_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_022957_1985_RED_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/ESP_022957_1985_RED_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_022957_1985_RED_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/ESP_023247_1985_RED_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_023247_1985_RED_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/ESP_023247_1985_RED_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_023247_1985_RED_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/ESP_023247_1985_RED_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_023247_1985_RED_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "fom": {
+              "category": "other",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/DTFEC_023247_1985_022957_1985_U01.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "FOM: DTFEC_023247_1985_022957_1985_U01",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "fom_thumbnail": {
+              "category": "preview",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_023247_1985_ESP_022957_1985/DTFEC_023247_1985_022957_1985_U01.jpg",
+              "type": "image/jpeg",
+              "title": "FOM: DTFEC_023247_1985_022957_1985_U01 browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            }
+          },
+          "links": [
+            {
+              "rel": "self",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms/items/DTEEC_023247_1985_022957_1985_U01",
+              "type": "application/geo+json"
+            },
+            {
+              "rel": "parent",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms",
+              "type": "application/json"
+            },
+            {
+              "rel": "collection",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms",
+              "type": "application/json"
+            },
+            {
+              "rel": "root",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod",
+              "type": "application/json"
+            }
+          ]
+        },
+        {
+          "id": "DTEEC_022680_1985_022746_1985_A01",
+          "region": "jezero",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.3709,
+            18.0965,
+            77.5029,
+            18.3686
+          ],
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  77.3709,
+                  18.3562
+                ],
+                [
+                  77.4689,
+                  18.3686
+                ],
+                [
+                  77.5029,
+                  18.1141
+                ],
+                [
+                  77.4065,
+                  18.0965
+                ],
+                [
+                  77.3709,
+                  18.3562
+                ]
+              ]
+            ]
+          },
+          "datetime": "2006-09-29T00:00:00Z",
+          "start_datetime": "2006-09-29T00:00:00.000000Z",
+          "end_datetime": "2006-09-29T00:00:00.000000Z",
+          "properties": {
+            "start_datetime": "2006-09-29T00:00:00.000000Z",
+            "end_datetime": "2006-09-29T00:00:00.000000Z",
+            "title": "MRO HiRISE DTM; ESP_022680_1985_ESP_022746_1985",
+            "description": "This product is a Mars Reconnaissance Orbiter (MRO) High Resolution Imaging Experiment (HiRISE) Digital Terrain Model (DTM). This product was created and edited using BAE Systems Set or BAE Systems GXP. This product's rationale for creation was: Possible MSL rover landing site near Jezero Crater. This DTM was created by University Of Arizona.",
+            "missions": [
+              "Mars Reconnaissance Orbiter (MRO)"
+            ],
+            "instruments": [
+              "High Resolution Imaging Science Experiment"
+            ],
+            "gsd": 1.0166585625971127,
+            "license": "CC0-1.0",
+            "proj:epsg": null,
+            "proj:wkt2": "\"PROJCS[\\\"Mars (2015) - Sphere / Ocentric / Equirectangular, clon = 0\\\",GEOGCS[\\\"Mars (2015) - Sphere / Ocentric\\\",DATUM[\\\"Mars (2015) - Sphere\\\",SPHEROID[\\\"Mars (2015) - Sphere\\\",3396190,0]],PRIMEM[\\\"Reference Meridian\\\",0],UNIT[\\\"degree\\\",0.0174532925199433,AUTHORITY[\\\"EPSG\\\",\\\"9122\\\"]]],PROJECTION[\\\"Equirectangular\\\"],PARAMETER[\\\"standard_parallel_1\\\",0],PARAMETER[\\\"central_meridian\\\",0],PARAMETER[\\\"false_easting\\\",0],PARAMETER[\\\"false_northing\\\",0],UNIT[\\\"metre\\\",1,AUTHORITY[\\\"EPSG\\\",\\\"9001\\\"]],AXIS[\\\"Easting\\\",EAST],AXIS[\\\"Northing\\\",NORTH]]\"",
+            "proj:projjson": {
+              "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
+              "type": "ProjectedCRS",
+              "name": "Mars (2015) - Sphere / Ocentric / Equirectangular, clon = 0",
+              "base_crs": {
+                "name": "Mars (2015) - Sphere / Ocentric",
+                "datum": {
+                  "type": "GeodeticReferenceFrame",
+                  "name": "Mars (2015) - Sphere",
+                  "ellipsoid": {
+                    "name": "Mars (2015) - Sphere",
+                    "radius": 3396190
+                  },
+                  "prime_meridian": {
+                    "name": "Reference Meridian",
+                    "longitude": 0
+                  }
+                },
+                "coordinate_system": {
+                  "subtype": "ellipsoidal",
+                  "axis": [
+                    {
+                      "name": "Latitude",
+                      "abbreviation": "lat",
+                      "direction": "north",
+                      "unit": "degree"
+                    },
+                    {
+                      "name": "Longitude",
+                      "abbreviation": "lon",
+                      "direction": "east",
+                      "unit": "degree"
+                    }
+                  ]
+                }
+              },
+              "conversion": {
+                "name": "Equidistant Cylindrical",
+                "method": {
+                  "name": "Equidistant Cylindrical",
+                  "id": {
+                    "authority": "EPSG",
+                    "code": 1028
+                  }
+                },
+                "parameters": [
+                  {
+                    "name": "Latitude of 1st standard parallel",
+                    "value": 0,
+                    "unit": "degree",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8823
+                    }
+                  },
+                  {
+                    "name": "Latitude of natural origin",
+                    "value": 0,
+                    "unit": {
+                      "type": "Unit",
+                      "name": "",
+                      "conversion_factor": 1
+                    },
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8801
+                    }
+                  },
+                  {
+                    "name": "Longitude of natural origin",
+                    "value": 0,
+                    "unit": "degree",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8802
+                    }
+                  },
+                  {
+                    "name": "False easting",
+                    "value": 0,
+                    "unit": "metre",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8806
+                    }
+                  },
+                  {
+                    "name": "False northing",
+                    "value": 0,
+                    "unit": "metre",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8807
+                    }
+                  }
+                ]
+              },
+              "coordinate_system": {
+                "subtype": "Cartesian",
+                "axis": [
+                  {
+                    "name": "Easting",
+                    "abbreviation": "",
+                    "direction": "east",
+                    "unit": "metre"
+                  },
+                  {
+                    "name": "Northing",
+                    "abbreviation": "",
+                    "direction": "north",
+                    "unit": "metre"
+                  }
+                ]
+              }
+            },
+            "proj:bbox": [
+              77.3709,
+              18.0965,
+              77.5029,
+              18.3686
+            ],
+            "proj:centroid": {
+              "lat": 18.23401754860043,
+              "lon": 77.4371057149308
+            },
+            "proj:shape": [
+              15864,
+              7729
+            ],
+            "proj:transform": [
+              4586136.420257437,
+              1.0166585625971127,
+              0,
+              1088795.6317019507,
+              0,
+              -1.0166585625971127
+            ],
+            "cube:dimensions": {
+              "x": {
+                "type": "spatial",
+                "axis": "x",
+                "extent": [
+                  77.3709,
+                  77.5029
+                ]
+              },
+              "y": {
+                "type": "spatial",
+                "axis": "y",
+                "extent": [
+                  18.0965,
+                  18.3686
+                ]
+              }
+            },
+            "ssys:targets": [
+              "Mars"
+            ],
+            "datetime": "2006-09-29T00:00:00Z",
+            "created": "2023-07-08T22:25:08.361Z",
+            "updated": "2023-07-08T22:25:08.361Z"
+          },
+          "assets": {
+            "thumbnail": {
+              "category": "preview",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/DTEEC_022680_1985_022746_1985_A01.jpg",
+              "type": "image/jpeg",
+              "title": "DTEEC_022680_1985_022746_1985_A01 Thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "dtm": {
+              "category": "terrain",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/DTEEC_022680_1985_022746_1985_A01.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "DTEEC_022680_1985_022746_1985_A01",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "hillshade": {
+              "category": "other",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/DTEEC_022680_1985_022746_1985_A01_hillshade.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Hillshade: DTEEC_022680_1985_022746_1985_A01",
+              "description": null,
+              "roles": [
+                "data",
+                "overview"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "provenance": {
+              "category": "metadata",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/provenance.txt",
+              "type": "text/plain",
+              "title": "Provenance",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022746_1985_IRB_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_022746_1985_IRB_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022746_1985_IRB_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_022746_1985_IRB_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022746_1985_IRB_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_022746_1985_IRB_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022746_1985_IRB_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_022746_1985_IRB_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022746_1985_IRB_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_022746_1985_IRB_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022746_1985_IRB_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_022746_1985_IRB_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022680_1985_RED_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_022680_1985_RED_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022680_1985_RED_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_022680_1985_RED_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022680_1985_RED_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_022680_1985_RED_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022746_1985_RED_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_022746_1985_RED_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022746_1985_RED_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_022746_1985_RED_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022746_1985_RED_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_022746_1985_RED_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_4": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022680_1985_RED_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_022680_1985_RED_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_4": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022680_1985_RED_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_022680_1985_RED_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_4": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022680_1985_RED_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_022680_1985_RED_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_5": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022746_1985_RED_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: ESP_022746_1985_RED_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_5": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022746_1985_RED_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: ESP_022746_1985_RED_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_5": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/ESP_022746_1985_RED_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: ESP_022746_1985_RED_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "fom": {
+              "category": "other",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/DTFEC_022680_1985_022746_1985_A01.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "FOM: DTFEC_022680_1985_022746_1985_A01",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "fom_thumbnail": {
+              "category": "preview",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/ESP_022680_1985_ESP_022746_1985/DTFEC_022680_1985_022746_1985_A01.jpg",
+              "type": "image/jpeg",
+              "title": "FOM: DTFEC_022680_1985_022746_1985_A01 browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            }
+          },
+          "links": [
+            {
+              "rel": "self",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms/items/DTEEC_022680_1985_022746_1985_A01",
+              "type": "application/geo+json"
+            },
+            {
+              "rel": "parent",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms",
+              "type": "application/json"
+            },
+            {
+              "rel": "collection",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms",
+              "type": "application/json"
+            },
+            {
+              "rel": "root",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod",
+              "type": "application/json"
+            }
+          ]
+        },
+        {
+          "id": "DTEEC_002387_1985_003798_1985_A01",
+          "region": "jezero",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.3441,
+            18.3923,
+            77.4661,
+            18.5886
+          ],
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  77.3441,
+                  18.5781
+                ],
+                [
+                  77.442,
+                  18.5886
+                ],
+                [
+                  77.4661,
+                  18.4035
+                ],
+                [
+                  77.368,
+                  18.3923
+                ],
+                [
+                  77.3441,
+                  18.5781
+                ]
+              ]
+            ]
+          },
+          "datetime": "2006-09-29T00:00:00Z",
+          "start_datetime": "2006-09-29T00:00:00.000000Z",
+          "end_datetime": "2006-09-29T00:00:00.000000Z",
+          "properties": {
+            "start_datetime": "2006-09-29T00:00:00.000000Z",
+            "end_datetime": "2006-09-29T00:00:00.000000Z",
+            "title": "MRO HiRISE DTM; PSP_002387_1985_PSP_003798_1985",
+            "description": "This product is a Mars Reconnaissance Orbiter (MRO) High Resolution Imaging Experiment (HiRISE) Digital Terrain Model (DTM). This product was created and edited using BAE Systems Set or BAE Systems GXP. This product's rationale for creation was: Depositional fan in Jezero Crater. This DTM was created by University Of Arizona.",
+            "missions": [
+              "Mars Reconnaissance Orbiter (MRO)"
+            ],
+            "instruments": [
+              "High Resolution Imaging Science Experiment"
+            ],
+            "gsd": 1.0196246530775452,
+            "license": "CC0-1.0",
+            "proj:epsg": null,
+            "proj:wkt2": "\"PROJCS[\\\"Mars (2015) - Sphere / Ocentric / Equirectangular, clon = 0\\\",GEOGCS[\\\"Mars (2015) - Sphere / Ocentric\\\",DATUM[\\\"Mars (2015) - Sphere\\\",SPHEROID[\\\"Mars (2015) - Sphere\\\",3396190,0]],PRIMEM[\\\"Reference Meridian\\\",0],UNIT[\\\"degree\\\",0.0174532925199433,AUTHORITY[\\\"EPSG\\\",\\\"9122\\\"]]],PROJECTION[\\\"Equirectangular\\\"],PARAMETER[\\\"standard_parallel_1\\\",0],PARAMETER[\\\"central_meridian\\\",0],PARAMETER[\\\"false_easting\\\",0],PARAMETER[\\\"false_northing\\\",0],UNIT[\\\"metre\\\",1,AUTHORITY[\\\"EPSG\\\",\\\"9001\\\"]],AXIS[\\\"Easting\\\",EAST],AXIS[\\\"Northing\\\",NORTH]]\"",
+            "proj:projjson": {
+              "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
+              "type": "ProjectedCRS",
+              "name": "Mars (2015) - Sphere / Ocentric / Equirectangular, clon = 0",
+              "base_crs": {
+                "name": "Mars (2015) - Sphere / Ocentric",
+                "datum": {
+                  "type": "GeodeticReferenceFrame",
+                  "name": "Mars (2015) - Sphere",
+                  "ellipsoid": {
+                    "name": "Mars (2015) - Sphere",
+                    "radius": 3396190
+                  },
+                  "prime_meridian": {
+                    "name": "Reference Meridian",
+                    "longitude": 0
+                  }
+                },
+                "coordinate_system": {
+                  "subtype": "ellipsoidal",
+                  "axis": [
+                    {
+                      "name": "Latitude",
+                      "abbreviation": "lat",
+                      "direction": "north",
+                      "unit": "degree"
+                    },
+                    {
+                      "name": "Longitude",
+                      "abbreviation": "lon",
+                      "direction": "east",
+                      "unit": "degree"
+                    }
+                  ]
+                }
+              },
+              "conversion": {
+                "name": "Equidistant Cylindrical",
+                "method": {
+                  "name": "Equidistant Cylindrical",
+                  "id": {
+                    "authority": "EPSG",
+                    "code": 1028
+                  }
+                },
+                "parameters": [
+                  {
+                    "name": "Latitude of 1st standard parallel",
+                    "value": 0,
+                    "unit": "degree",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8823
+                    }
+                  },
+                  {
+                    "name": "Latitude of natural origin",
+                    "value": 0,
+                    "unit": {
+                      "type": "Unit",
+                      "name": "",
+                      "conversion_factor": 1
+                    },
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8801
+                    }
+                  },
+                  {
+                    "name": "Longitude of natural origin",
+                    "value": 0,
+                    "unit": "degree",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8802
+                    }
+                  },
+                  {
+                    "name": "False easting",
+                    "value": 0,
+                    "unit": "metre",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8806
+                    }
+                  },
+                  {
+                    "name": "False northing",
+                    "value": 0,
+                    "unit": "metre",
+                    "id": {
+                      "authority": "EPSG",
+                      "code": 8807
+                    }
+                  }
+                ]
+              },
+              "coordinate_system": {
+                "subtype": "Cartesian",
+                "axis": [
+                  {
+                    "name": "Easting",
+                    "abbreviation": "",
+                    "direction": "east",
+                    "unit": "metre"
+                  },
+                  {
+                    "name": "Northing",
+                    "abbreviation": "",
+                    "direction": "north",
+                    "unit": "metre"
+                  }
+                ]
+              }
+            },
+            "proj:bbox": [
+              77.3441,
+              18.3923,
+              77.4661,
+              18.5886
+            ],
+            "proj:centroid": {
+              "lat": 18.49057656425,
+              "lon": 77.40502641749617
+            },
+            "proj:shape": [
+              11430,
+              7111
+            ],
+            "proj:transform": [
+              4584537.2184529845,
+              1.0196246530775452,
+              0,
+              1101843.482442864,
+              0,
+              -1.0196246530775452
+            ],
+            "cube:dimensions": {
+              "x": {
+                "type": "spatial",
+                "axis": "x",
+                "extent": [
+                  77.3441,
+                  77.4661
+                ]
+              },
+              "y": {
+                "type": "spatial",
+                "axis": "y",
+                "extent": [
+                  18.3923,
+                  18.5886
+                ]
+              }
+            },
+            "ssys:targets": [
+              "Mars"
+            ],
+            "datetime": "2006-09-29T00:00:00Z",
+            "created": "2023-07-09T02:49:01.466Z",
+            "updated": "2023-07-09T02:49:01.466Z"
+          },
+          "assets": {
+            "thumbnail": {
+              "category": "preview",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/DTEEC_002387_1985_003798_1985_A01.jpg",
+              "type": "image/jpeg",
+              "title": "DTEEC_002387_1985_003798_1985_A01 Thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "dtm": {
+              "category": "terrain",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/DTEEC_002387_1985_003798_1985_A01.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "DTEEC_002387_1985_003798_1985_A01",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "hillshade": {
+              "category": "other",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/DTEEC_002387_1985_003798_1985_A01_hillshade.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Hillshade: DTEEC_002387_1985_003798_1985_A01",
+              "description": null,
+              "roles": [
+                "data",
+                "overview"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "provenance": {
+              "category": "metadata",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/provenance.txt",
+              "type": "text/plain",
+              "title": "Provenance",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/PSP_002387_1985_RED_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: PSP_002387_1985_RED_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/PSP_002387_1985_RED_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: PSP_002387_1985_RED_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_0": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/PSP_002387_1985_RED_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: PSP_002387_1985_RED_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/PSP_003798_1985_RED_C_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: PSP_003798_1985_RED_C_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/PSP_003798_1985_RED_C_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: PSP_003798_1985_RED_C_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_1": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/PSP_003798_1985_RED_C_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: PSP_003798_1985_RED_C_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/PSP_002387_1985_RED_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: PSP_002387_1985_RED_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/PSP_002387_1985_RED_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: PSP_002387_1985_RED_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_2": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/PSP_002387_1985_RED_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: PSP_002387_1985_RED_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/PSP_003798_1985_RED_A_01_ORTHO.tif",
+              "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+              "title": "Orthoimage: PSP_003798_1985_RED_A_01_ORTHO",
+              "description": null,
+              "roles": [
+                "data"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_thumbnail_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/PSP_003798_1985_RED_A_01_ORTHO.jpg",
+              "type": "image/jpeg",
+              "title": "Orthoimage: PSP_003798_1985_RED_A_01_ORTHO browse thumbnail",
+              "description": null,
+              "roles": [
+                "thumbnail"
+              ],
+              "file_size": null,
+              "checksum": null
+            },
+            "ortho_label_3": {
+              "category": "orthophoto",
+              "href": "https://astrogeo-ard.s3-us-west-2.amazonaws.com/mars/mro/hirise/controlled/dtm/PSP_002387_1985_PSP_003798_1985/PSP_003798_1985_RED_A_01_ORTHO.LBL",
+              "type": "application/text",
+              "title": "Orthoimage: PSP_003798_1985_RED_A_01_ORTHO PDS3 label",
+              "description": null,
+              "roles": [
+                "metadata"
+              ],
+              "file_size": null,
+              "checksum": null
+            }
+          },
+          "links": [
+            {
+              "rel": "self",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms/items/DTEEC_002387_1985_003798_1985_A01",
+              "type": "application/geo+json"
+            },
+            {
+              "rel": "parent",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms",
+              "type": "application/json"
+            },
+            {
+              "rel": "collection",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod/collections/mro_hirise_socet_dtms",
+              "type": "application/json"
+            },
+            {
+              "rel": "root",
+              "href": "https://g6goyz4w56.execute-api.us-west-2.amazonaws.com/prod",
+              "type": "application/json"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

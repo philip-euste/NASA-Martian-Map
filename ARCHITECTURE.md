@@ -46,12 +46,12 @@ NASAMartianMap
     |   │   └── AppRoutes.tsx
     |   ├── components
     |   │   |── layout
-    |   |   |   |── AppLayout.tsx
-    |   │   |   └── Header.tsx
+    |   |   |   |── AppLayout.tsx - Defines shared page layouts with optional fullscreen mode and configurable footer.
+    |   │   |   └── Header.tsx - Provides responsive navigation, authentication controls, branding, and live connection status.
     |   │   |── map
-    |   |   |   |── MarsMap.css
-    |   |   |   |── MarsMap.tsx
-    |   |   |   └── RouteMap.tsx
+    |   |   |   |── MarsMap.css -
+    |   |   |   |── MarsMap.tsx -
+    |   |   |   └── RouteMap.tsx -
     |   │   └── ui
     |   |       └── index.tsx - Provides reusable UI components and formatting helpers across explorer and mission pages.
     |   ├── data
@@ -65,7 +65,7 @@ NASAMartianMap
     |   │   │   |── LoginPage.tsx
     |   │   │   |── ProtectedRoute.tsx
     |   │   │   └── RegisterPage.tsx
-    |   |   ├── mission
+    |   |   ├── mars-explorer
     |   │   │   |── MarsExplorer.css
     |   │   │   |── MarsExplorer.tsx
     |   │   │   |── marsExplorer.types.ts
@@ -116,9 +116,12 @@ NASAMartianMap
     |   │   └── dataProviders.ts - Defines tile layer and data provider interfaces, registers NASA Trek, and exposes provider lookup functions.
     |   ├── simulator
     |   |       |── environments
-    |   │       |   ├── catalog.ts - Registers simulator environments and resolves region-specific terrain configurations.
-    |   │       |   └── jezero.ts - Defines Jezero Crater’s coordinates, landmarks, terrain, atmosphere, hazards, and datasets.
+    |   |       |── gale_crater
+    |   |       |── olympus_mons
+    |   |       |── valles_merineris
     |   |       |── jezero_crater
+    |   │       |   ├── catalog.ts - Registers simulator environments and resolves region-specific terrain configurations.
+    |   │       |   |── jezero.ts - Defines Jezero Crater’s coordinates, landmarks, terrain, atmosphere, hazards, and datasets.
     |   │       |   |── scripts
     |   │       |   |   ├── build-jezero.mjs - Downloads NASA/USGS Jezero terrain data and generates georeferenced 3D terrain tiles and textures.
     |   │       |   |   └── jezero-simulator.html - 

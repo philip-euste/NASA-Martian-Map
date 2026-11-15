@@ -1,0 +1,733 @@
+{
+  "generated": "2026-11-15T04:02:37.562523+00:00",
+  "validator_version": "2.0.0",
+  "boundary_source": {
+    "name": "USGS Gazetteer of Planetary Nomenclature",
+    "endpoint": "https://planetarynames.wr.usgs.gov/Feature",
+    "coordinate_system": "Planetocentric, +East, 0-360",
+    "longitude_convention": "-180 to 180 degrees",
+    "disclaimer": "The Gazetteer describes these boundaries as approximate representations of named-feature locations and rough extents. They should not be interpreted as precise geological boundaries."
+  },
+  "source": {
+    "catalog_generated": "2026-11-15T04:02:25.913209+00:00",
+    "api": "https://stac.astrogeology.usgs.gov/api",
+    "input_product_filter": "HiRISE DTM metadata and asset keywords"
+  },
+  "settings": {
+    "include_test_collections": false,
+    "selected_regions": [
+      "jezero"
+    ],
+    "boundary_method": "USGS Gazetteer named-feature polygon",
+    "area_calculation": {
+      "method": "Local Mars-centered equirectangular projection",
+      "mars_sphere_radius_m": 3396190.0,
+      "units": "square metres, converted to square kilometres"
+    },
+    "ranking_weights": {
+      "coverage": 0.45,
+      "resolution": 0.25,
+      "dtm_evidence": 0.25,
+      "orthophoto_evidence": 0.05
+    },
+    "top_candidates_limit": 20,
+    "asset_classification": "Heuristic STAC metadata and filename inspection"
+  },
+  "summary": {
+    "products_inspected": 6,
+    "products_excluded": 0,
+    "asset_classification_totals": {
+      "dtm": 11,
+      "orthophoto": 26,
+      "ambiguous_raster": 0,
+      "preview": 43,
+      "metadata": 32,
+      "unknown": 0
+    }
+  },
+  "excluded_products": [],
+  "regions": {
+    "jezero": {
+      "name": "Jezero Crater",
+      "discovery_search_bbox": [
+        77.2229,
+        18.3068,
+        77.584,
+        18.6693
+      ],
+      "boundary": {
+        "region_id": "jezero",
+        "region_name": "Jezero Crater",
+        "feature_id": 14300,
+        "source": "USGS Gazetteer of Planetary Nomenclature",
+        "feature_url": "https://planetarynames.wr.usgs.gov/Feature/14300",
+        "coordinate_system": "Planetocentric, +East, 0-360",
+        "output_longitude_convention": "-180 to 180 degrees",
+        "geometry_type": "MultiPolygon",
+        "boundary_status": "gazetteer_named_feature_geometry",
+        "boundary_accuracy": "approximate_named_feature_extent",
+        "disclaimer": "The Gazetteer describes these boundaries as approximate representations of named-feature locations and rough extents. They should not be interpreted as precise geological boundaries.",
+        "geometry_area_km2": 1773.5574,
+        "coverage_calculation": "Product footprint intersection with the USGS Gazetteer named-feature polygon."
+      },
+      "discovered_product_count": 6,
+      "validated_product_count": 6,
+      "eligible_candidate_count": 6,
+      "products_with_dtm_assets": 6,
+      "products_with_orthophoto_assets": 6,
+      "top_candidates": [
+        {
+          "id": "DTEEC_023524_1985_023379_1985_U01",
+          "region": "jezero",
+          "region_name": "Jezero Crater",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.453,
+            18.16,
+            77.5981,
+            18.521
+          ],
+          "datetime": "2006-09-29T00:00:00Z",
+          "gsd_m_per_pixel": 1.0147851940441874,
+          "overlap": {
+            "region_coverage_fraction": 0.06421364,
+            "region_coverage_percent": 6.4214,
+            "product_inside_region_fraction": 1.0,
+            "intersection_area_km2": 113.886579,
+            "method": "shapely_intersection_local_mars_equirectangular"
+          },
+          "assets": {
+            "total": 18,
+            "dtm": 2,
+            "orthophoto": 4,
+            "ambiguous_raster": 0,
+            "preview": 7,
+            "metadata": 5,
+            "unknown": 0
+          },
+          "has_confident_dtm": true,
+          "has_confident_orthophoto": true,
+          "scores": {
+            "coverage": 6.42,
+            "resolution": 98.54,
+            "dtm_evidence": 100.0,
+            "orthophoto_evidence": 100.0,
+            "ranking": 57.53
+          },
+          "status": "candidate"
+        },
+        {
+          "id": "DTEEC_023247_1985_022957_1985_U01",
+          "region": "jezero",
+          "region_name": "Jezero Crater",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.5485,
+            18.18,
+            77.69,
+            18.5205
+          ],
+          "datetime": "2006-09-29T00:00:00Z",
+          "gsd_m_per_pixel": 1.0150917197116411,
+          "overlap": {
+            "region_coverage_fraction": 0.06282767,
+            "region_coverage_percent": 6.2828,
+            "product_inside_region_fraction": 1.0,
+            "intersection_area_km2": 111.428476,
+            "method": "shapely_intersection_local_mars_equirectangular"
+          },
+          "assets": {
+            "total": 18,
+            "dtm": 2,
+            "orthophoto": 4,
+            "ambiguous_raster": 0,
+            "preview": 7,
+            "metadata": 5,
+            "unknown": 0
+          },
+          "has_confident_dtm": true,
+          "has_confident_orthophoto": true,
+          "scores": {
+            "coverage": 6.28,
+            "resolution": 98.51,
+            "dtm_evidence": 100.0,
+            "orthophoto_evidence": 100.0,
+            "ranking": 57.46
+          },
+          "status": "candidate"
+        },
+        {
+          "id": "DTEEC_022680_1985_022746_1985_A01",
+          "region": "jezero",
+          "region_name": "Jezero Crater",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.3709,
+            18.0965,
+            77.5029,
+            18.3686
+          ],
+          "datetime": "2006-09-29T00:00:00Z",
+          "gsd_m_per_pixel": 1.0166585625971127,
+          "overlap": {
+            "region_coverage_fraction": 0.04774517,
+            "region_coverage_percent": 4.7745,
+            "product_inside_region_fraction": 0.99563857,
+            "intersection_area_km2": 84.678794,
+            "method": "shapely_intersection_local_mars_equirectangular"
+          },
+          "assets": {
+            "total": 24,
+            "dtm": 2,
+            "orthophoto": 6,
+            "ambiguous_raster": 0,
+            "preview": 9,
+            "metadata": 7,
+            "unknown": 0
+          },
+          "has_confident_dtm": true,
+          "has_confident_orthophoto": true,
+          "scores": {
+            "coverage": 4.77,
+            "resolution": 98.36,
+            "dtm_evidence": 100.0,
+            "orthophoto_evidence": 100.0,
+            "ranking": 56.74
+          },
+          "status": "candidate"
+        },
+        {
+          "id": "DTEEC_048842_1985_048908_1985_U01",
+          "region": "jezero",
+          "region_name": "Jezero Crater",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.4615,
+            18.3372,
+            77.5841,
+            18.5883
+          ],
+          "datetime": "2006-09-29T00:00:00Z",
+          "gsd_m_per_pixel": 1.0166207954197803,
+          "overlap": {
+            "region_coverage_fraction": 0.04169308,
+            "region_coverage_percent": 4.1693,
+            "product_inside_region_fraction": 1.0,
+            "intersection_area_km2": 73.945063,
+            "method": "shapely_intersection_local_mars_equirectangular"
+          },
+          "assets": {
+            "total": 18,
+            "dtm": 2,
+            "orthophoto": 4,
+            "ambiguous_raster": 0,
+            "preview": 7,
+            "metadata": 5,
+            "unknown": 0
+          },
+          "has_confident_dtm": true,
+          "has_confident_orthophoto": true,
+          "scores": {
+            "coverage": 4.17,
+            "resolution": 98.37,
+            "dtm_evidence": 100.0,
+            "orthophoto_evidence": 100.0,
+            "ranking": 56.47
+          },
+          "status": "candidate"
+        },
+        {
+          "id": "DTEEC_045994_1985_046060_1985_U01",
+          "region": "jezero",
+          "region_name": "Jezero Crater",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.3834,
+            18.3055,
+            77.5008,
+            18.548
+          ],
+          "datetime": "2006-09-29T00:00:00Z",
+          "gsd_m_per_pixel": 1.0165533020257713,
+          "overlap": {
+            "region_coverage_fraction": 0.03950111,
+            "region_coverage_percent": 3.9501,
+            "product_inside_region_fraction": 1.0,
+            "intersection_area_km2": 70.057487,
+            "method": "shapely_intersection_local_mars_equirectangular"
+          },
+          "assets": {
+            "total": 18,
+            "dtm": 2,
+            "orthophoto": 4,
+            "ambiguous_raster": 0,
+            "preview": 7,
+            "metadata": 5,
+            "unknown": 0
+          },
+          "has_confident_dtm": true,
+          "has_confident_orthophoto": true,
+          "scores": {
+            "coverage": 3.95,
+            "resolution": 98.37,
+            "dtm_evidence": 100.0,
+            "orthophoto_evidence": 100.0,
+            "ranking": 56.37
+          },
+          "status": "candidate"
+        },
+        {
+          "id": "DTEEC_002387_1985_003798_1985_A01",
+          "region": "jezero",
+          "region_name": "Jezero Crater",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.3441,
+            18.3923,
+            77.4661,
+            18.5886
+          ],
+          "datetime": "2006-09-29T00:00:00Z",
+          "gsd_m_per_pixel": 1.0196246530775452,
+          "overlap": {
+            "region_coverage_fraction": 0.03465074,
+            "region_coverage_percent": 3.4651,
+            "product_inside_region_fraction": 1.0,
+            "intersection_area_km2": 61.455076,
+            "method": "shapely_intersection_local_mars_equirectangular"
+          },
+          "assets": {
+            "total": 16,
+            "dtm": 1,
+            "orthophoto": 4,
+            "ambiguous_raster": 0,
+            "preview": 6,
+            "metadata": 5,
+            "unknown": 0
+          },
+          "has_confident_dtm": true,
+          "has_confident_orthophoto": true,
+          "scores": {
+            "coverage": 3.47,
+            "resolution": 98.08,
+            "dtm_evidence": 100.0,
+            "orthophoto_evidence": 100.0,
+            "ranking": 56.08
+          },
+          "status": "candidate"
+        }
+      ],
+      "all_candidates": [
+        {
+          "id": "DTEEC_023524_1985_023379_1985_U01",
+          "region": "jezero",
+          "region_name": "Jezero Crater",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.453,
+            18.16,
+            77.5981,
+            18.521
+          ],
+          "datetime": "2006-09-29T00:00:00Z",
+          "gsd_m_per_pixel": 1.0147851940441874,
+          "overlap": {
+            "region_coverage_fraction": 0.06421364,
+            "region_coverage_percent": 6.4214,
+            "product_inside_region_fraction": 1.0,
+            "intersection_area_km2": 113.886579,
+            "method": "shapely_intersection_local_mars_equirectangular"
+          },
+          "assets": {
+            "total": 18,
+            "dtm": 2,
+            "orthophoto": 4,
+            "ambiguous_raster": 0,
+            "preview": 7,
+            "metadata": 5,
+            "unknown": 0
+          },
+          "has_confident_dtm": true,
+          "has_confident_orthophoto": true,
+          "scores": {
+            "coverage": 6.42,
+            "resolution": 98.54,
+            "dtm_evidence": 100.0,
+            "orthophoto_evidence": 100.0,
+            "ranking": 57.53
+          },
+          "status": "candidate"
+        },
+        {
+          "id": "DTEEC_023247_1985_022957_1985_U01",
+          "region": "jezero",
+          "region_name": "Jezero Crater",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.5485,
+            18.18,
+            77.69,
+            18.5205
+          ],
+          "datetime": "2006-09-29T00:00:00Z",
+          "gsd_m_per_pixel": 1.0150917197116411,
+          "overlap": {
+            "region_coverage_fraction": 0.06282767,
+            "region_coverage_percent": 6.2828,
+            "product_inside_region_fraction": 1.0,
+            "intersection_area_km2": 111.428476,
+            "method": "shapely_intersection_local_mars_equirectangular"
+          },
+          "assets": {
+            "total": 18,
+            "dtm": 2,
+            "orthophoto": 4,
+            "ambiguous_raster": 0,
+            "preview": 7,
+            "metadata": 5,
+            "unknown": 0
+          },
+          "has_confident_dtm": true,
+          "has_confident_orthophoto": true,
+          "scores": {
+            "coverage": 6.28,
+            "resolution": 98.51,
+            "dtm_evidence": 100.0,
+            "orthophoto_evidence": 100.0,
+            "ranking": 57.46
+          },
+          "status": "candidate"
+        },
+        {
+          "id": "DTEEC_022680_1985_022746_1985_A01",
+          "region": "jezero",
+          "region_name": "Jezero Crater",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.3709,
+            18.0965,
+            77.5029,
+            18.3686
+          ],
+          "datetime": "2006-09-29T00:00:00Z",
+          "gsd_m_per_pixel": 1.0166585625971127,
+          "overlap": {
+            "region_coverage_fraction": 0.04774517,
+            "region_coverage_percent": 4.7745,
+            "product_inside_region_fraction": 0.99563857,
+            "intersection_area_km2": 84.678794,
+            "method": "shapely_intersection_local_mars_equirectangular"
+          },
+          "assets": {
+            "total": 24,
+            "dtm": 2,
+            "orthophoto": 6,
+            "ambiguous_raster": 0,
+            "preview": 9,
+            "metadata": 7,
+            "unknown": 0
+          },
+          "has_confident_dtm": true,
+          "has_confident_orthophoto": true,
+          "scores": {
+            "coverage": 4.77,
+            "resolution": 98.36,
+            "dtm_evidence": 100.0,
+            "orthophoto_evidence": 100.0,
+            "ranking": 56.74
+          },
+          "status": "candidate"
+        },
+        {
+          "id": "DTEEC_048842_1985_048908_1985_U01",
+          "region": "jezero",
+          "region_name": "Jezero Crater",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.4615,
+            18.3372,
+            77.5841,
+            18.5883
+          ],
+          "datetime": "2006-09-29T00:00:00Z",
+          "gsd_m_per_pixel": 1.0166207954197803,
+          "overlap": {
+            "region_coverage_fraction": 0.04169308,
+            "region_coverage_percent": 4.1693,
+            "product_inside_region_fraction": 1.0,
+            "intersection_area_km2": 73.945063,
+            "method": "shapely_intersection_local_mars_equirectangular"
+          },
+          "assets": {
+            "total": 18,
+            "dtm": 2,
+            "orthophoto": 4,
+            "ambiguous_raster": 0,
+            "preview": 7,
+            "metadata": 5,
+            "unknown": 0
+          },
+          "has_confident_dtm": true,
+          "has_confident_orthophoto": true,
+          "scores": {
+            "coverage": 4.17,
+            "resolution": 98.37,
+            "dtm_evidence": 100.0,
+            "orthophoto_evidence": 100.0,
+            "ranking": 56.47
+          },
+          "status": "candidate"
+        },
+        {
+          "id": "DTEEC_045994_1985_046060_1985_U01",
+          "region": "jezero",
+          "region_name": "Jezero Crater",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.3834,
+            18.3055,
+            77.5008,
+            18.548
+          ],
+          "datetime": "2006-09-29T00:00:00Z",
+          "gsd_m_per_pixel": 1.0165533020257713,
+          "overlap": {
+            "region_coverage_fraction": 0.03950111,
+            "region_coverage_percent": 3.9501,
+            "product_inside_region_fraction": 1.0,
+            "intersection_area_km2": 70.057487,
+            "method": "shapely_intersection_local_mars_equirectangular"
+          },
+          "assets": {
+            "total": 18,
+            "dtm": 2,
+            "orthophoto": 4,
+            "ambiguous_raster": 0,
+            "preview": 7,
+            "metadata": 5,
+            "unknown": 0
+          },
+          "has_confident_dtm": true,
+          "has_confident_orthophoto": true,
+          "scores": {
+            "coverage": 3.95,
+            "resolution": 98.37,
+            "dtm_evidence": 100.0,
+            "orthophoto_evidence": 100.0,
+            "ranking": 56.37
+          },
+          "status": "candidate"
+        },
+        {
+          "id": "DTEEC_002387_1985_003798_1985_A01",
+          "region": "jezero",
+          "region_name": "Jezero Crater",
+          "collection": "mro_hirise_socet_dtms",
+          "bbox": [
+            77.3441,
+            18.3923,
+            77.4661,
+            18.5886
+          ],
+          "datetime": "2006-09-29T00:00:00Z",
+          "gsd_m_per_pixel": 1.0196246530775452,
+          "overlap": {
+            "region_coverage_fraction": 0.03465074,
+            "region_coverage_percent": 3.4651,
+            "product_inside_region_fraction": 1.0,
+            "intersection_area_km2": 61.455076,
+            "method": "shapely_intersection_local_mars_equirectangular"
+          },
+          "assets": {
+            "total": 16,
+            "dtm": 1,
+            "orthophoto": 4,
+            "ambiguous_raster": 0,
+            "preview": 6,
+            "metadata": 5,
+            "unknown": 0
+          },
+          "has_confident_dtm": true,
+          "has_confident_orthophoto": true,
+          "scores": {
+            "coverage": 3.47,
+            "resolution": 98.08,
+            "dtm_evidence": 100.0,
+            "orthophoto_evidence": 100.0,
+            "ranking": 56.08
+          },
+          "status": "candidate"
+        }
+      ],
+      "potential_mosaic_overlaps": [
+        {
+          "product_a": "DTEEC_023524_1985_023379_1985_U01",
+          "product_b": "DTEEC_023247_1985_022957_1985_U01",
+          "intersection_bbox": [
+            77.5485,
+            18.18,
+            77.5981,
+            18.5205
+          ],
+          "intersection_area_sq_degrees": 0.0168888,
+          "product_a_overlap_fraction": 0.322422,
+          "product_b_overlap_fraction": 0.35053,
+          "interpretation": "Potential overlapping bounding boxes. Check actual raster footprints and alignment before mosaicking."
+        },
+        {
+          "product_a": "DTEEC_023524_1985_023379_1985_U01",
+          "product_b": "DTEEC_022680_1985_022746_1985_A01",
+          "intersection_bbox": [
+            77.453,
+            18.16,
+            77.5029,
+            18.3686
+          ],
+          "intersection_area_sq_degrees": 0.01040914,
+          "product_a_overlap_fraction": 0.198719,
+          "product_b_overlap_fraction": 0.289809,
+          "interpretation": "Potential overlapping bounding boxes. Check actual raster footprints and alignment before mosaicking."
+        },
+        {
+          "product_a": "DTEEC_023524_1985_023379_1985_U01",
+          "product_b": "DTEEC_048842_1985_048908_1985_U01",
+          "intersection_bbox": [
+            77.4615,
+            18.3372,
+            77.5841,
+            18.521
+          ],
+          "intersection_area_sq_degrees": 0.02253388,
+          "product_a_overlap_fraction": 0.430191,
+          "product_b_overlap_fraction": 0.731979,
+          "interpretation": "Potential overlapping bounding boxes. Check actual raster footprints and alignment before mosaicking."
+        },
+        {
+          "product_a": "DTEEC_023524_1985_023379_1985_U01",
+          "product_b": "DTEEC_045994_1985_046060_1985_U01",
+          "intersection_bbox": [
+            77.453,
+            18.3055,
+            77.5008,
+            18.521
+          ],
+          "intersection_area_sq_degrees": 0.0103009,
+          "product_a_overlap_fraction": 0.196653,
+          "product_b_overlap_fraction": 0.361822,
+          "interpretation": "Potential overlapping bounding boxes. Check actual raster footprints and alignment before mosaicking."
+        },
+        {
+          "product_a": "DTEEC_023524_1985_023379_1985_U01",
+          "product_b": "DTEEC_002387_1985_003798_1985_A01",
+          "intersection_bbox": [
+            77.453,
+            18.3923,
+            77.4661,
+            18.521
+          ],
+          "intersection_area_sq_degrees": 0.00168597,
+          "product_a_overlap_fraction": 0.032187,
+          "product_b_overlap_fraction": 0.0704,
+          "interpretation": "Potential overlapping bounding boxes. Check actual raster footprints and alignment before mosaicking."
+        },
+        {
+          "product_a": "DTEEC_023247_1985_022957_1985_U01",
+          "product_b": "DTEEC_048842_1985_048908_1985_U01",
+          "intersection_bbox": [
+            77.5485,
+            18.3372,
+            77.5841,
+            18.5205
+          ],
+          "intersection_area_sq_degrees": 0.00652548,
+          "product_a_overlap_fraction": 0.135437,
+          "product_b_overlap_fraction": 0.21197,
+          "interpretation": "Potential overlapping bounding boxes. Check actual raster footprints and alignment before mosaicking."
+        },
+        {
+          "product_a": "DTEEC_022680_1985_022746_1985_A01",
+          "product_b": "DTEEC_048842_1985_048908_1985_U01",
+          "intersection_bbox": [
+            77.4615,
+            18.3372,
+            77.5029,
+            18.3686
+          ],
+          "intersection_area_sq_degrees": 0.00129996,
+          "product_a_overlap_fraction": 0.036193,
+          "product_b_overlap_fraction": 0.042227,
+          "interpretation": "Potential overlapping bounding boxes. Check actual raster footprints and alignment before mosaicking."
+        },
+        {
+          "product_a": "DTEEC_022680_1985_022746_1985_A01",
+          "product_b": "DTEEC_045994_1985_046060_1985_U01",
+          "intersection_bbox": [
+            77.3834,
+            18.3055,
+            77.5008,
+            18.3686
+          ],
+          "intersection_area_sq_degrees": 0.00740794,
+          "product_a_overlap_fraction": 0.20625,
+          "product_b_overlap_fraction": 0.260206,
+          "interpretation": "Potential overlapping bounding boxes. Check actual raster footprints and alignment before mosaicking."
+        },
+        {
+          "product_a": "DTEEC_048842_1985_048908_1985_U01",
+          "product_b": "DTEEC_045994_1985_046060_1985_U01",
+          "intersection_bbox": [
+            77.4615,
+            18.3372,
+            77.5008,
+            18.548
+          ],
+          "intersection_area_sq_degrees": 0.00828444,
+          "product_a_overlap_fraction": 0.269108,
+          "product_b_overlap_fraction": 0.290994,
+          "interpretation": "Potential overlapping bounding boxes. Check actual raster footprints and alignment before mosaicking."
+        },
+        {
+          "product_a": "DTEEC_048842_1985_048908_1985_U01",
+          "product_b": "DTEEC_002387_1985_003798_1985_A01",
+          "intersection_bbox": [
+            77.4615,
+            18.3923,
+            77.4661,
+            18.5883
+          ],
+          "intersection_area_sq_degrees": 0.0009016,
+          "product_a_overlap_fraction": 0.029287,
+          "product_b_overlap_fraction": 0.037647,
+          "interpretation": "Potential overlapping bounding boxes. Check actual raster footprints and alignment before mosaicking."
+        },
+        {
+          "product_a": "DTEEC_045994_1985_046060_1985_U01",
+          "product_b": "DTEEC_002387_1985_003798_1985_A01",
+          "intersection_bbox": [
+            77.3834,
+            18.3923,
+            77.4661,
+            18.548
+          ],
+          "intersection_area_sq_degrees": 0.01287639,
+          "product_a_overlap_fraction": 0.452287,
+          "product_b_overlap_fraction": 0.537668,
+          "interpretation": "Potential overlapping bounding boxes. Check actual raster footprints and alignment before mosaicking."
+        }
+      ]
+    }
+  },
+  "interpretation_notes": [
+    "Regional coverage is calculated against the coded USGS Gazetteer named-feature polygon, not the rectangular discovery search extent.",
+    "Gazetteer boundaries are approximate named-feature extents, not precise geological boundaries.",
+    "The discovery search bounding boxes remain useful for product discovery but are not used for final regional coverage.",
+    "Mars area calculations use a local equirectangular projection centered on each Gazetteer boundary. Area results are approximate.",
+    "STAC and Gazetteer geometries are normalized to the -180 to 180 longitude convention before intersection.",
+    "Asset classification uses STAC metadata and filename keywords. It does not verify raster contents.",
+    "A DTM classification is a candidate identification, not proof that the remote file is a valid elevation raster.",
+    "Product-level GSD is nominal pixel spacing. It does not establish effective terrain accuracy.",
+    "Overlapping bounding boxes do not guarantee that products can be mosaicked together.",
+    "Orthophoto assets are not automatically paired with DTM assets. Pairing requires product-specific verification.",
+    "No remote raster asset was downloaded or opened by this validator."
+  ]
+}
